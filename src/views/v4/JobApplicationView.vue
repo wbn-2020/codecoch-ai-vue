@@ -53,7 +53,7 @@
       <template v-else>
       <section class="cc-metric-grid application-metrics" aria-label="投递统计">
         <MetricCard label="进行中" :value="statsNumber(applicationStats?.activeCount)" detail="仍在推进的求职机会。" />
-        <MetricCard label="今日跟进" :value="statsNumber(applicationStats?.dueTodayFollowUpCount)" detail="需要在今天处理的事项。" tone="warning" />
+        <MetricCard label="今日必处理" :value="statsNumber(todayActionCount)" detail="逾期或今天到期的跟进事项。" tone="warning" />
         <MetricCard label="面试中" :value="statsNumber(applicationStats?.interviewCount)" detail="处于面试阶段的机会。" tone="info" />
         <MetricCard label="Offer" :value="statsNumber(applicationStats?.offerCount)" detail="当前已获得的 Offer。" tone="success" />
       </section>
@@ -121,7 +121,7 @@
           </div>
           <div v-else class="today-empty">
             <CheckCircle2 :size="18" />
-            <span>今天没有待处理的跟进事项。</span>
+            <span>今天没有逾期或到期跟进事项。</span>
           </div>
         </div>
 
@@ -1024,12 +1024,18 @@ const byNextFollowUp = (left: JobApplicationVO, right: JobApplicationVO) => {
   const rightTime = right.nextFollowUpAt || '9999-12-31 23:59:59'
   return leftTime.localeCompare(rightTime)
 }
-const todayFocusApplications = computed(() =>
+const todayActionApplications = computed(() =>
   rawApplications.value
     .filter((item) => !item.archivedAt)
     .filter((item) => isApplicationActiveStatus(item.status))
+    .filter((item) => ['overdue', 'due-today'].includes(followUpState(item).key))
     .sort((left, right) => focusPriority(left) - focusPriority(right) || byNextFollowUp(left, right))
-    .slice(0, 3)
+)
+const todayFocusApplications = computed(() => todayActionApplications.value.slice(0, 3))
+const todayActionCount = computed(
+  () => applicationStats.value
+    ? statsNumber(applicationStats.value.overdueFollowUpCount) + statsNumber(applicationStats.value.dueTodayFollowUpCount)
+    : todayActionApplications.value.length
 )
 const upcomingScheduleApplications = computed(() =>
   rawApplications.value

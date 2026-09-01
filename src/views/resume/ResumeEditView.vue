@@ -1741,8 +1741,9 @@ const resumeAutosave = useResumeAutosave({
   run: () => handleSave('draft', { silent: true })
 })
 
+let suppressResumeAutosave = false
 watch(resumeDraftSignature, () => {
-  if (isEdit.value) resumeAutosave.schedule()
+  if (isEdit.value && !suppressResumeAutosave) resumeAutosave.schedule()
 })
 
 const documentSaveStatus = computed(() => {
@@ -2214,6 +2215,9 @@ const persistDraftProjects = async (
       const payload = toProjectPayload(project)
       if (project.projectId < 0) {
         const createdProject = await createResumeProjectApi(createdResumeId, payload)
+        if (!createdProject?.projectId) {
+          throw new Error('创建项目未返回项目 ID')
+        }
         createdProjects.push({ draftId: project.projectId, project: createdProject })
       } else {
         await updateResumeProjectApi(createdResumeId, project.projectId, payload)
@@ -2226,6 +2230,67 @@ const persistDraftProjects = async (
     }
   }
   return { failedCount, failedProjects, createdProjects, stale: !isCurrentOperation() }
+}
+
+const bindCreatedProjectIds = (
+  document: ResumeDocumentV2,
+  createdProjects: Array<{ draftId: number; project: ResumeProjectVO }>
+): ResumeDocumentV2 => {
+  if (!createdProjects.length) return document
+  const idByDraft = new Map(createdProjects.map(({ draftId, project }) => [draftId, project.projectId]))
+  return {
+    ...document,
+    sections: document.sections.map((section) => {
+      if (section.kind !== 'project' || section.builtinKey !== 'projects') return section
+      return {
+        ...section,
+        content: {
+          items: section.content.items.map((item) => {
+            const draftId = item.serverId && item.serverId < 0
+              ? item.serverId
+              : createdProjects.find(({ draftId: candidate }) => item.id === `prj-${candidate}`)?.draftId
+            const serverId = draftId === undefined ? undefined : idByDraft.get(draftId)
+            return serverId
+              ? {
+                  ...item,
+                  id: item.id === `prj-${draftId}` ? `prj-${serverId}` : item.id,
+                  serverId
+                }
+              : item
+          })
+        }
+      }
+    })
+  }
+}
+
+const reconcileCreatedProjectIds = (
+  formSnapshot: ResumeCreateDTO,
+  projectSnapshot: ResumeProjectVO[],
+  createdProjects: Array<{ draftId: number; project: ResumeProjectVO }>
+) => {
+  if (!createdProjects.length) return
+  suppressResumeAutosave = true
+  if (formSnapshot.document) {
+    formSnapshot.document = bindCreatedProjectIds(formSnapshot.document, createdProjects)
+  }
+  const createdByDraft = new Map(createdProjects.map(({ draftId, project }) => [draftId, project]))
+  projectSnapshot.forEach((project) => {
+    const created = createdByDraft.get(project.projectId)
+    if (!created) return
+    if (project.id === project.projectId) project.id = created.projectId
+    project.projectId = created.projectId
+  })
+  projects.value.forEach((project) => {
+    const created = createdByDraft.get(project.projectId)
+    if (!created) return
+    if (project.id === project.projectId) project.id = created.projectId
+    project.projectId = created.projectId
+  })
+  resumeDocument.replace(bindCreatedProjectIds(resumeDocument.document.value, createdProjects))
+  void nextTick(() => {
+    suppressResumeAutosave = false
+  })
 }
 
 const selectAllOptimizeSuggestions = () => {
@@ -2661,7 +2726,7 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete', options: { si
     document: resumeDocument.document.value
   }
   const projectSnapshot = projects.value.map((project) => ({ ...project }))
-  const saveSnapshotSignature = createResumeDraftSignature(
+  let persistedSnapshotSignature = createResumeDraftSignature(
     formSnapshot,
     projectSnapshot,
     presentationSnapshot,
@@ -2694,6 +2759,13 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete', options: { si
         ElMessage.warning(saveError.value)
         return
       }
+      reconcileCreatedProjectIds(formSnapshot, projectSnapshot, projectResult.createdProjects)
+      persistedSnapshotSignature = createResumeDraftSignature(
+        formSnapshot,
+        projectSnapshot,
+        presentationSnapshot,
+        formSnapshot.document
+      )
       if (mode === 'complete' && formSnapshot.isDefault === 1 && !updated.draft) {
         await setDefaultResumeApi(editingResumeId)
         if (!isCurrentOperation()) return
@@ -2705,7 +2777,7 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete', options: { si
         ? await ensureStableVersionAfterSave(editingResumeId, shouldCreateVersion, isCurrentOperation)
         : true
       if (stableVersionReady === null || !isCurrentOperation()) return
-      const changedDuringSave = resumeDraftSignature.value !== saveSnapshotSignature
+      const changedDuringSave = resumeDraftSignature.value !== persistedSnapshotSignature
       if (!options.silent) {
         ElMessage.success(
           changedDuringSave
@@ -2734,6 +2806,15 @@ const handleSave = async (mode: 'draft' | 'complete' = 'complete', options: { si
       if (projectResult.failedCount) {
         saveError.value = `简历已创建，但 ${projectResult.failedCount} 条项目未保存成功，请进入编辑页修复后再创建稳定版本。`
         ElMessage.warning(saveError.value)
+      }
+      if (projectResult.failedCount === 0) {
+        reconcileCreatedProjectIds(formSnapshot, projectSnapshot, projectResult.createdProjects)
+        persistedSnapshotSignature = createResumeDraftSignature(
+          formSnapshot,
+          projectSnapshot,
+          presentationSnapshot,
+          formSnapshot.document
+        )
       }
       if (mode === 'complete' && formSnapshot.isDefault === 1 && !created.draft) {
         await setDefaultResumeApi(created.id)

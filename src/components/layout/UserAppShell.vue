@@ -120,6 +120,7 @@
           <el-dropdown trigger="click" @command="handleUserCommand">
             <button class="user-app-shell__avatar" type="button" :aria-label="`打开 ${props.displayName} 的账户菜单`">
               <el-avatar :size="32" :src="props.avatarUrl || ''">{{ props.avatarText }}</el-avatar>
+              <span class="user-app-shell__avatar-name">{{ props.displayName }}</span>
               <ChevronDown :size="14" aria-hidden="true" />
             </button>
             <template #dropdown>
@@ -678,6 +679,17 @@ onBeforeUnmount(() => {
   color: var(--user-text-muted, #6e6963);
 }
 
+.user-app-shell__avatar-name {
+  min-width: 0;
+  max-width: 128px;
+  overflow: hidden;
+  color: var(--user-text, #1a1917);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .user-app-shell__mobile-backdrop {
   display: none;
 }
@@ -744,6 +756,10 @@ onBeforeUnmount(() => {
 
   .user-app-shell__breadcrumb {
     max-width: 46vw;
+  }
+
+  .user-app-shell__avatar-name {
+    max-width: 72px;
   }
 }
 

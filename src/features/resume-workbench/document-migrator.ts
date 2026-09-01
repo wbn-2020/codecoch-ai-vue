@@ -321,7 +321,6 @@ export const fromResumeDocument = (document: ResumeDocumentV2): LegacyProjection
     projects: projectedProjects
   }
 }
-
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
 /**
@@ -366,4 +365,3 @@ export const mergeFlatEdit = (
 
   return { ...migrated, sections }
 }
-

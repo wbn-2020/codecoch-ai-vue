@@ -512,6 +512,7 @@ onMounted(async () => {
 
   &__eyebrow {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: 6px;
     padding: 3px 10px;
@@ -561,6 +562,7 @@ onMounted(async () => {
 
   &__guide-head {
     display: flex;
+    min-width: 0;
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;

@@ -310,4 +310,3 @@ const removeGroup = (id: string) => write(props.groups.filter((group) => group.i
   }
 }
 </style>
-

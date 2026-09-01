@@ -242,4 +242,3 @@ export const updateProjectItems = (
   next.sections[index] = { ...next.sections[index] as ProjectSection, content: { items: clone(items) } }
   return next
 }
-

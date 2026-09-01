@@ -86,6 +86,7 @@ const handleClick = (item: ModuleTabItem, event: MouseEvent) => {
   border: 1px solid var(--user-border, #e3e0da);
   border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted, #f0efeb);
+  scroll-snap-type: x proximity;
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
@@ -107,6 +108,7 @@ const handleClick = (item: ModuleTabItem, event: MouseEvent) => {
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
+  scroll-snap-align: start;
   transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 

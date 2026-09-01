@@ -154,7 +154,7 @@
     </section>
 
     <AppState
-      v-else-if="!loading"
+      v-else-if="!loading && !listContext"
       :type="pageState.type"
       :title="pageState.title"
       :description="pageState.description"
@@ -164,6 +164,29 @@
         <el-button v-if="pageState.retryable" @click="fetchDetail">重新加载</el-button>
       </div>
     </AppState>
+
+    <section
+      v-else-if="!loading && listContext"
+      class="list-fallback page-shell"
+    >
+      <AppState
+        :type="pageState.type"
+        :title="pageState.title"
+        :description="pageState.description"
+      >
+        <div class="state-actions">
+          <el-button type="primary" @click="router.push('/project-evidence')">返回项目证据库</el-button>
+          <el-button v-if="pageState.retryable" @click="fetchDetail">重新加载</el-button>
+        </div>
+      </AppState>
+
+      <article class="fallback-origin-card">
+        <p class="section-kicker">你点击的项目证据</p>
+        <h2>{{ listContext.title || '未命名项目' }}</h2>
+        <p class="fallback-origin-role">{{ listContext.role || '未填写项目角色' }}</p>
+        <p class="fallback-origin-hint">它在项目证据库中仍可见，但详情暂时无法打开。可返回列表重新进入，或点击「重新加载」重试。</p>
+      </article>
+    </section>
   </div>
 </template>
 
@@ -222,6 +245,16 @@ interface RequestFailure {
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => getRouteNumberParam(route.params.id as string))
+const listContext = computed(() => {
+  if (route.query.from !== 'list') return null
+  const listId = getRouteNumberParam(route.query.listId as unknown as string)
+  if (!listId) return null
+  return {
+    listId,
+    title: typeof route.query.title === 'string' ? route.query.title : '',
+    role: typeof route.query.role === 'string' ? route.query.role : ''
+  }
+})
 const loading = ref(false)
 const detail = ref<ProjectEvidenceDetailVO | null>(null)
 const pageState = ref<ProjectEvidencePageState>({
@@ -293,10 +326,14 @@ const classifyPageFailure = (error: unknown): ProjectEvidencePageState => {
   const status = Number(failure.response?.status)
   const code = Number(failure.response?.data?.code ?? failure.code)
   if (status === 404 || code === 40400) {
+    const traceId = failureTraceId(failure)
+    const description = traceId
+      ? `该项目证据不存在或已被删除，请返回项目证据库确认。（追踪号：${traceId}）`
+      : '该项目证据不存在或已被删除，请返回项目证据库确认。'
     return {
       type: 'empty',
       title: '项目证据不存在',
-      description: '该项目证据不存在或已被删除，请返回项目证据库确认。',
+      description,
       retryable: false
     }
   }
@@ -640,6 +677,40 @@ onBeforeUnmount(() => {
 
 .state-actions {
   margin-top: 12px;
+}
+
+.list-fallback {
+  display: grid;
+  gap: 16px;
+}
+
+.fallback-origin-card {
+  padding: 18px;
+  border: 1.5px solid var(--arena-line);
+  border-radius: var(--arena-radius-card);
+  background: var(--arena-card);
+  box-shadow: var(--arena-shadow-card);
+
+  h2 {
+    margin: 6px 0 0;
+    color: var(--arena-ink);
+    font-size: 20px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+}
+
+.fallback-origin-role {
+  margin: 6px 0 0;
+  color: var(--arena-sub);
+  font-size: 14px;
+}
+
+.fallback-origin-hint {
+  margin: 12px 0 0;
+  color: var(--user-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 @media (max-width: 1020px) {

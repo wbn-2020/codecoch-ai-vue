@@ -116,7 +116,7 @@
           </p>
 
           <div class="card-actions">
-            <el-button @click="router.push(`/project-evidence/${item.id}`)">
+            <el-button @click="openDetail(item)">
               查看证据
             </el-button>
             <el-button type="primary" plain @click="router.push(`/project-evidence/${item.id}/edit`)">
@@ -264,6 +264,18 @@ const handleReset = () => {
     completenessStatus: undefined
   })
   fetchList()
+}
+
+const openDetail = (item: ProjectEvidenceListVO) => {
+  void router.push({
+    path: `/project-evidence/${item.id}`,
+    query: {
+      from: 'list',
+      listId: String(item.id),
+      title: item.title || '',
+      role: item.role || ''
+    }
+  })
 }
 
 onMounted(fetchList)

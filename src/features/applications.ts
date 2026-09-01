@@ -25,6 +25,9 @@ export interface ApplicationWorkbenchContext {
 export type ApplicationFollowUpStateKey = 'missing' | 'overdue' | 'due-today' | 'upcoming'
 export type ApplicationDeepLinkFollowUpFilter = Extract<ApplicationFollowUpStateKey, 'missing' | 'overdue' | 'due-today'>
 export type ApplicationDeepLinkAction = 'create-event'
+export type ApplicationOverdueLevel = 'standard' | 'critical'
+
+export const criticalOverdueDays = 14
 
 export interface ApplicationFollowUpState {
   key: ApplicationFollowUpStateKey
@@ -33,6 +36,7 @@ export interface ApplicationFollowUpState {
   description: string
   dueAt?: string
   overdueByDays?: number
+  overdueLevel?: ApplicationOverdueLevel
   dueInDays?: number
 }
 
@@ -696,13 +700,18 @@ export const getApplicationFollowUpState = (
   }
 
   if (next.getTime() < reference.getTime()) {
+    const overdueByDays = Math.max(1, localCalendarDayDistance(next, reference))
+    const isCritical = overdueByDays >= criticalOverdueDays
     return {
       key: 'overdue',
-      label: '已过期跟进',
+      label: isCritical ? '严重逾期' : '逾期跟进',
       tone: 'danger',
-      description: `建议尽快跟进，原定时间为 ${formatLocalDateTime(next)}`,
+      description: isCritical
+        ? `已长期未跟进，原定时间为 ${formatLocalDateTime(next)}，请确认是否继续推进，必要时归档或关闭`
+        : `建议尽快跟进，原定时间为 ${formatLocalDateTime(next)}`,
       dueAt: formatLocalDateTime(next),
-      overdueByDays: Math.max(1, localCalendarDayDistance(next, reference))
+      overdueByDays,
+      overdueLevel: isCritical ? 'critical' : 'standard'
     }
   }
 
@@ -1293,9 +1302,11 @@ export const getApplicationDataQualityTags = (
     if (followUp.key === 'overdue') {
       tags.push({
         key: 'follow-up-overdue',
-        label: '逾期跟进',
+        label: followUp.label,
         tone: 'danger',
-        description: '跟进时间已经过期，这是执行提醒，不代表岗位质量或个人能力结论。'
+        description: followUp.overdueLevel === 'critical'
+          ? `${followUp.description}。这是执行提醒，不代表岗位质量或个人能力结论。`
+          : '跟进时间已经过期，这是执行提醒，不代表岗位质量或个人能力结论。'
       })
     } else if (followUp.key === 'due-today') {
       tags.push({

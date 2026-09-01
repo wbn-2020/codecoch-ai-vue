@@ -77,6 +77,13 @@ describe('resume workbench flow and list data guard', () => {
     expect(delivery).toContain('disposed = true')
   })
 
+  it('renders stable delivery previews from the v2 snapshot document', () => {
+    const delivery = source('src/views/resume/components/ResumeDeliveryWorkbench.vue')
+
+    expect(delivery).toContain(':document="stableDocument"')
+    expect(delivery).toContain('normalizeResumeDocument(versionSnapshot.value.document)')
+  })
+
   it('guards export responses and reports the returned artifact state accurately', () => {
     const delivery = source('src/views/resume/components/ResumeDeliveryWorkbench.vue')
 

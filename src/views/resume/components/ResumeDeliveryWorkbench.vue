@@ -384,6 +384,7 @@
             <div class="paper-stack">
               <ResumeDocumentPreview
                 :draft="stableDraft"
+                :document="stableDocument"
                 :template-code="selectedTemplate?.templateCode || preferredTemplateCode"
                 :density="selectedTemplate?.templateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
                 :presentation-config="selectedPresentation"
@@ -508,6 +509,7 @@ import {
   mergeResumeTemplatePresentation,
   normalizeResumePresentation
 } from '@/features/resume-presentation'
+import { normalizeResumeDocument } from '@/features/resume-workbench/document-normalizer'
 import {
   downloadBlobReliably,
   reliableDownloadOptionsForFile
@@ -573,6 +575,7 @@ const suggestionDraft = reactive({
 })
 
 const versionSnapshot = computed<Record<string, unknown>>(() => currentVersion.value?.snapshot || {})
+const stableDocument = computed(() => normalizeResumeDocument(versionSnapshot.value.document))
 const stableDraft = computed<ResumeDeliveryDraft>(() => {
   const snapshot = versionSnapshot.value
   const text = (...keys: string[]) =>

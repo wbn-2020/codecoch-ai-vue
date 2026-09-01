@@ -320,7 +320,10 @@ beforeEach(() => {
   ui.confirm.mockResolvedValue(undefined)
   api.assignCareerApplicationApi.mockResolvedValue(undefined)
   api.createCareerHypothesisApi.mockResolvedValue(hypothesis(9, 1, 'Saved hypothesis'))
-  api.createResumeProjectApi.mockResolvedValue(undefined)
+  api.createResumeProjectApi.mockImplementation(async (_resumeId, payload) => ({
+    projectId: 701,
+    ...payload
+  }))
   api.createResumeVersionApi.mockResolvedValue({ id: 1 })
   api.getApplicationsApi.mockResolvedValue([])
   api.getCareerHypothesisApi.mockResolvedValue(undefined)

@@ -42,7 +42,7 @@
             style="width: 64px; height: 64px; background: conic-gradient(var(--arena-grn) 0 68%, var(--arena-line) 68% 100%)"
           >
             <div class="arena-ring__hole" style="width: 50px; height: 50px">
-              <b style="font-size: 16px; line-height: 1">68</b>
+              <b style="font-size: 16px; line-height: 1">68 / 100</b>
               <span class="arena-tiny" style="font-size: 8.5px; font-weight: 700">准备度</span>
             </div>
           </div>

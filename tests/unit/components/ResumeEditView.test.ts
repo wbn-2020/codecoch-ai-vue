@@ -391,6 +391,67 @@ describe('ResumeEditView', () => {
     })
   })
 
+  it('reconciles created project ids before creating a stable version', async () => {
+    const detail = {
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '初始摘要',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      draft: false,
+      projects: []
+    }
+    resumeApiMocks.getResumeDetailApi
+      .mockResolvedValueOnce(detail)
+      .mockResolvedValue({
+        ...detail,
+        projects: [{
+          projectId: 701,
+          projectName: '新项目',
+          projectTime: '2026.01 - 2026.06'
+        }]
+      })
+    resumeApiMocks.updateResumeApi.mockResolvedValue(detail)
+    resumeApiMocks.createResumeProjectApi.mockResolvedValue({
+      projectId: 701,
+      projectName: '新项目',
+      projectTime: '2026.01 - 2026.06'
+    })
+    resumeVersionApiMocks.getResumeVersionsApi.mockResolvedValue([])
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: { loading: () => undefined },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { projects: Array<Record<string, unknown>> }
+    vm.projects.push({
+      projectId: -101,
+      projectName: '新项目',
+      projectTime: '2026.01 - 2026.06',
+      projectBackground: '',
+      technicalChallenges: '',
+      optimizationResult: ''
+    })
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+
+    expect(resumeApiMocks.updateResumeApi).toHaveBeenCalledTimes(1)
+    expect(vm.projects[0].projectId).toBe(701)
+    expect(resumeVersionApiMocks.createResumeVersionApi).toHaveBeenCalledWith(2, {
+      sourceType: 'MANUAL_SAVE'
+    })
+  })
+
   it('keeps failed project drafts dirty and blocks stable version creation', async () => {
     const detail = {
       id: 2,

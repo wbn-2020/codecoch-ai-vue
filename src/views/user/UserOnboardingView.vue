@@ -342,7 +342,9 @@ const realProgressError = ref('')
 
 const currentStep = computed(() => steps[currentStepIndex.value])
 const isLastStep = computed(() => currentStepIndex.value === steps.length - 1)
-const readinessText = computed(() => `${Math.min(currentStepIndex.value + 1, steps.length)} 个偏好项已浏览`)
+const readinessText = computed(
+  () => `${Math.min(currentStepIndex.value + 1, steps.length)} / ${steps.length} 步已完成`
+)
 const hasResume = computed(() => Boolean(overview.value?.resumeCount))
 const hasTargetJob = computed(() => Boolean(v3Overview.value?.currentTargetJob?.targetJobId || v3Overview.value?.currentTargetJob?.id))
 const latestMatchStatus = computed(() => String(v3Overview.value?.latestMatch?.status || '').toUpperCase())
