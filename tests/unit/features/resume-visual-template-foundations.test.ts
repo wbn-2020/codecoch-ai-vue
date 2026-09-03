@@ -111,7 +111,7 @@ describe('resume visual template foundations', () => {
       expect(style).toContain('--template-line-height: 1.6')
       expect(style).toContain('--template-section-gap: 25.2px')
       expect(style).toContain('--template-page-margin: 69.33px')
-      expect(style).toContain('--template-accent: #3b82f6')
+      expect(style).toContain('--template-accent: #3E6AAE')
       expect(wrapper.find('.template-contact-item__label').exists()).toBe(true)
     }
   })

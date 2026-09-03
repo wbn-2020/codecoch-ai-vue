@@ -60,6 +60,38 @@ const normalizeContact = (
     .filter((contact) => contact.visible && Boolean(contact.value))
 }
 
+const CUSTOM_CONTACT_LABELS: Record<string, string> = {
+  url: '链接',
+  location: '所在地',
+  text: '其他'
+}
+
+const defaultContactLabel = (kind: string): string => CUSTOM_CONTACT_LABELS[kind] || '其他'
+
+/**
+ * 文档 v2 的 basics.contacts 除了 phone/email（由 normalizeContact 从扁平字段映射），
+ * 还可能携带 url/location/text 等自定义字段；这里把它们补进渲染模型，
+ * 图标按 kind 取 url→Link / location→MapPin / 其余→circle（见 TemplateContactItem）。
+ */
+const appendCustomContacts = (
+  base: ResumeContactModel[],
+  document?: ResumeDocumentV2 | null
+): ResumeContactModel[] => {
+  if (!document?.basics?.contacts?.length) return base
+  const extras = document.basics.contacts
+    .filter((contact) => contact.kind !== 'phone' && contact.kind !== 'email')
+    .map((contact) => ({
+      key: contact.id,
+      label: contact.label || defaultContactLabel(contact.kind),
+      value: String(contact.value || '').trim(),
+      iconKey: contact.iconKey,
+      visible: contact.visible !== false,
+      showLabel: contact.showLabel === true
+    }))
+    .filter((contact) => contact.visible && Boolean(contact.value))
+  return extras.length ? [...base, ...extras] : base
+}
+
 export const buildResumeRenderModel = (
   draft: ResumeDocumentDraft,
   presentationSource?: ResumePresentationConfig,
@@ -94,7 +126,7 @@ export const buildResumeRenderModel = (
     basicFieldIcons: presentation.basicFieldIcons,
     iconMode: presentation.iconMode,
     density,
-    contacts: normalizeContact(draft, presentation),
+    contacts: appendCustomContacts(normalizeContact(draft, presentation), document),
     summary: documentModel.summary,
     skills: documentModel.skills,
     skillGroups: documentModel.skillGroups,

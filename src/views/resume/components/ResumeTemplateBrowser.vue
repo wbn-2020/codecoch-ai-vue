@@ -253,13 +253,13 @@ const activePreviewTemplate = computed(() =>
 )
 
 const accentColor = (accent: ResumeAccent) => ({
-  default: '#e7e5e4',
-  blue: '#3b82f6',
-  green: '#10b981',
-  purple: '#8b5cf6',
+  default: '#1b1b18',
+  blue: '#3E6AAE',
+  green: '#1f6f5c',
+  purple: '#7E6CB0',
   orange: '#f97316',
   red: '#ef4444',
-  slate: '#475569',
+  slate: '#57534e',
   black: '#000000'
 })[accent]
 

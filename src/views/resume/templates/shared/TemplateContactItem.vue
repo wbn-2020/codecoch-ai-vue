@@ -19,7 +19,9 @@ import {
   BriefcaseBusiness,
   Circle,
   GraduationCap,
+  Link,
   Mail,
+  MapPin,
   Phone,
   UserRound
 } from 'lucide-vue-next'
@@ -45,7 +47,9 @@ const icon = computed(() => ({
   user: UserRound,
   briefcase: BriefcaseBusiness,
   'graduation-cap': GraduationCap,
-  circle: Circle
+  circle: Circle,
+  url: Link,
+  location: MapPin
 }[props.contact.iconKey] || Circle))
 </script>
 

@@ -93,11 +93,12 @@
           <button
             class="user-app-shell__icon-button"
             type="button"
-            aria-label="打开通知中心"
+            :aria-label="unreadCount > 0 ? `打开通知中心（${unreadCount} 条未读）` : '打开通知中心'"
             title="通知"
             @click="go('/notifications')"
           >
             <Bell :size="18" aria-hidden="true" />
+            <span v-if="unreadCount > 0" class="user-app-shell__icon-button-dot" aria-hidden="true" />
           </button>
           <span class="user-app-shell__stat" title="连续完成天数">
             <Flame :size="17" aria-hidden="true" />
@@ -167,6 +168,7 @@ import UserSidebar from '@/components/layout/UserSidebar.vue'
 import ThemeSwitcher from '@/components/layout/ThemeSwitcher.vue'
 import { fetchCachedTodayAgentTasks } from '@/composables/useUserHomeDataCache'
 import { useDocumentScrollLock } from '@/composables/useDocumentScrollLock'
+import { getUnreadCountApi } from '@/api/notification'
 import { formatDateInTimezone } from '@/utils/format'
 
 const props = withDefaults(defineProps<{
@@ -190,6 +192,17 @@ const gameProfile = useGameProfileStore()
 const collapsed = ref(false)
 const mobileOpen = ref(false)
 const todayTodoCount = ref<number | null>(null)
+const unreadCount = ref(0)
+
+// 顶栏通知角标：对照原型 topbar .icon-btn .dot，数据驱动未读指示。
+const loadUnreadCount = async () => {
+  try {
+    const result = await getUnreadCountApi()
+    unreadCount.value = Number(result.unreadCount ?? result.total ?? 0)
+  } catch {
+    unreadCount.value = 0
+  }
+}
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
 const visibleGroups = computed(() => getVisibleUserNavigationGroups())
 
@@ -333,11 +346,20 @@ const loadTodayBadge = async () => {
 
 watch(() => route.fullPath, closeMobileNav)
 
+watch(
+  () => route.name,
+  (_, fromName) => {
+    // 离开通知中心后刷新未读角标，使红点能及时消除。
+    if (String(fromName) === 'Notifications') void loadUnreadCount()
+  }
+)
+
 onMounted(() => {
   collapsed.value = readCollapsedPreference()
   document.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('resize', updateViewportWidth)
   void loadTodayBadge()
+  void loadUnreadCount()
 })
 
 onBeforeUnmount(() => {
@@ -644,6 +666,20 @@ onBeforeUnmount(() => {
   height: 32px;
   border-radius: 6px;
   color: var(--user-text-secondary, #3a3630);
+}
+
+// 顶栏通知未读角标：对照原型 topbar .icon-btn .dot（红点 + 2px 画布描边环）。
+.user-app-shell__icon-button-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--user-danger, #b03a3a);
+  border: 2px solid var(--user-surface, #ffffff);
+  pointer-events: none;
 }
 
 // 顶栏连胜 / 经验值胶囊（对照原型 topbar 右侧 icon 位）

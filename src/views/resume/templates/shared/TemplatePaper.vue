@@ -26,9 +26,9 @@ const props = withDefaults(defineProps<{
 
 const accentColors = {
   default: { accent: '#1b1b18', strong: '#11110f', soft: '#f1f0ee' },
-  blue: { accent: '#3b82f6', strong: '#1d4ed8', soft: '#eff6ff' },
+  blue: { accent: '#3E6AAE', strong: '#2A4E86', soft: '#eef2fb' },
   green: { accent: '#1f6f5c', strong: '#17493d', soft: '#eaf2ef' },
-  purple: { accent: '#8b5cf6', strong: '#6d28d9', soft: '#f5f3ff' },
+  purple: { accent: '#7E6CB0', strong: '#5A4D8A', soft: '#f4f1fb' },
   orange: { accent: '#f97316', strong: '#c2410c', soft: '#fff7ed' },
   red: { accent: '#ef4444', strong: '#b91c1c', soft: '#fef2f2' },
   slate: { accent: '#57534e', strong: '#3a3630', soft: '#f0efeb' },

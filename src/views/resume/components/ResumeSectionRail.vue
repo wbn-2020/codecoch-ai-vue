@@ -42,7 +42,24 @@
         模块管理
       </summary>
       <div class="resume-section-rail__manager-list">
-        <div v-for="(item, index) in items" :key="item.id">
+        <div
+          v-for="(item, index) in items"
+          :key="item.id"
+          class="resume-section-rail__manager-item"
+          :class="{
+            'is-dragging': draggingId === item.id,
+            'is-drop-target': dropIndex === index && draggingId !== null && draggingId !== item.id
+          }"
+          draggable="true"
+          :title="`拖拽排序${item.label}`"
+          @dragstart="startDrag(item.id, $event)"
+          @dragover.prevent="overDrag(index, $event)"
+          @drop.prevent="dropDrag(index, $event)"
+          @dragend="endDrag"
+        >
+          <span class="resume-section-rail__manager-grip" aria-hidden="true">
+            <GripVertical :size="14" />
+          </span>
           <span>{{ item.label }}</span>
           <button
             type="button"
@@ -100,7 +117,7 @@
 
 <script setup lang="ts">
 import type { Component } from 'vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   AlertCircle,
   BriefcaseBusiness,
@@ -113,6 +130,7 @@ import {
   Eye,
   EyeOff,
   FolderKanban,
+  GripVertical,
   Plus,
   Settings2,
   Target,
@@ -144,6 +162,7 @@ const emit = defineEmits<{
   select: [id: string]
   review: []
   move: [id: string, delta: -1 | 1]
+  reorder: [id: string, targetIndex: number]
   'toggle-visibility': [id: string, currentlyHidden: boolean]
   'add-section': [variant: 'text' | 'entry']
 }>()
@@ -165,6 +184,40 @@ const completedCount = computed(() => props.items.filter((item) => item.done).le
 const canHide = (id: string) => id !== 'resume-basic' && id !== 'resume-target'
 const isHidden = (id: string) => props.hiddenIds?.includes(id) === true
 const visibleItems = computed(() => props.items.filter((item) => !isHidden(item.id)))
+
+// —— V-02 · 板块拖拽排序（忠于原型 v15 动态 menuSections 可拖拽）——
+// 保留上/下移按钮作为键盘与触屏兜底，拖拽为其渐进增强。
+const draggingId = ref<string | null>(null)
+const dropIndex = ref<number | null>(null)
+
+const resetDrag = () => {
+  draggingId.value = null
+  dropIndex.value = null
+}
+
+const startDrag = (id: string, event: DragEvent) => {
+  draggingId.value = id
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', id)
+  }
+}
+
+const overDrag = (index: number, event: DragEvent) => {
+  if (draggingId.value === null) return
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  dropIndex.value = index
+}
+
+const dropDrag = (index: number, event: DragEvent) => {
+  const id = draggingId.value || event.dataTransfer?.getData('text/plain') || ''
+  resetDrag()
+  if (!id) return
+  emit('reorder', id, index)
+}
+
+const endDrag = () => resetDrag()
+
 </script>
 
 <style scoped lang="scss">
@@ -352,10 +405,41 @@ const visibleItems = computed(() => props.items.filter((item) => !isHidden(item.
 
   > div {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 28px 28px 28px;
+    grid-template-columns: 16px minmax(0, 1fr) 28px 28px 28px;
     align-items: center;
     min-height: 34px;
     gap: 3px;
+    border-radius: 5px;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .resume-section-rail__manager-grip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    overflow: visible;
+    color: var(--resume-workbench-line-strong);
+    cursor: grab;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  .resume-section-rail__manager-item {
+    &:hover {
+      background: var(--resume-workbench-surface-soft);
+    }
+
+    &.is-dragging {
+      opacity: 0.45;
+    }
+
+    &.is-drop-target {
+      background: var(--resume-workbench-accent-soft);
+      box-shadow: inset 0 0 0 1px var(--resume-workbench-accent);
+    }
   }
 
   span {

@@ -154,6 +154,7 @@ const badgeOf = (group: UserNavigationGroup) => {
 }
 
 .user-sidebar-nav__group-link {
+  position: relative;
   flex: 1 1 auto;
   gap: 10px;
   min-height: 40px;
@@ -177,11 +178,23 @@ const badgeOf = (group: UserNavigationGroup) => {
   outline: 0;
 }
 
-// v21 侧栏 active 态：tint 底 + 主色文字 + 1px 内描边（不做左侧色条）
+// v21 侧栏 active 态：tint 底 + 主色文字 + 1px 内描边 + 左侧色条（忠于原型 .sb-item.active::before）
 .user-sidebar-nav__group-link.is-active {
   background: var(--user-primary-soft, #eaf2ef);
   border-color: var(--user-primary-border, rgba(31, 111, 92, 0.28));
   color: var(--user-primary, #1f6f5c);
+}
+
+// 左侧色条：对照原型 .sb-item.active::before（3px 主色条，top/bottom 内缩 8px 避让圆角）。
+.user-sidebar-nav__group-link.is-active::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: var(--user-primary, #1f6f5c);
+  border-radius: 2px;
 }
 
 .user-sidebar-nav__group-link span,
@@ -255,6 +268,11 @@ const badgeOf = (group: UserNavigationGroup) => {
 .user-sidebar-nav.is-collapsed .user-sidebar-nav__badge,
 .user-sidebar-nav.is-collapsed .user-sidebar-nav__chevron,
 .user-sidebar-nav.is-collapsed .user-sidebar-nav__items {
+  display: none;
+}
+
+// 折叠态仅保留 tint 底区分 active，隐藏左侧色条（图标居中时色条会脱离视觉锚点）。
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__group-link.is-active::before {
   display: none;
 }
 

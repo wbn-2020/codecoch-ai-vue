@@ -138,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-import { FileText, Mail, Phone } from 'lucide-vue-next'
+import { Circle, FileText, Link, Mail, MapPin, Phone } from 'lucide-vue-next'
 import { computed, defineComponent, h, type PropType } from 'vue'
 
 import {
@@ -234,9 +234,15 @@ const isFieldVisible = (field: keyof NonNullable<ResumePresentationConfig['field
     && field !== 'phone'
     || presentation.value.basicFieldVisibility[field] !== false
   )
+const contactIcon = (iconKey: string) => ({
+  phone: Phone,
+  mail: Mail,
+  url: Link,
+  location: MapPin
+}[iconKey] || Circle)
 const visibleContacts = computed(() => model.value.contacts.map((contact) => ({
   ...contact,
-  icon: contact.iconKey === 'phone' ? Phone : Mail
+  icon: contactIcon(contact.iconKey)
 })))
 const paperStyle = computed(() => ({
   '--paper-font-family': presentation.value.fontFamily,
@@ -276,21 +282,21 @@ const paperStyle = computed(() => ({
   overflow-wrap: anywhere;
 
   &.is-blue {
-    --paper-accent: #3b82f6;
-    --paper-accent-strong: #1d4ed8;
-    --paper-accent-soft: #eff6ff;
+    --paper-accent: #3E6AAE;
+    --paper-accent-strong: #2A4E86;
+    --paper-accent-soft: #eef2fb;
   }
 
   &.is-green {
-    --paper-accent: #10b981;
-    --paper-accent-strong: #047857;
-    --paper-accent-soft: #ecfdf5;
+    --paper-accent: #1f6f5c;
+    --paper-accent-strong: #17493d;
+    --paper-accent-soft: #eaf2ef;
   }
 
   &.is-purple {
-    --paper-accent: #8b5cf6;
-    --paper-accent-strong: #6d28d9;
-    --paper-accent-soft: #f5f3ff;
+    --paper-accent: #7E6CB0;
+    --paper-accent-strong: #5A4D8A;
+    --paper-accent-soft: #f4f1fb;
   }
 
   &.is-orange {

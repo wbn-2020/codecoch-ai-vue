@@ -2,6 +2,7 @@ import {
   MAX_BLOCK_TEXT_LENGTH,
   MAX_BLOCKS_PER_FIELD,
   MAX_CUSTOM_SECTIONS,
+  MAX_RESUME_CONTACTS,
   MAX_SECTION_TITLE_LENGTH,
   RESUME_BUILTIN_SECTION_KEYS,
   RESUME_DOCUMENT_SCHEMA_VERSION,
@@ -169,14 +170,14 @@ export const normalizeResumeDocument = (input: unknown): ResumeDocumentV2 | null
     basics: {
       name: String(basics.name ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 60),
       headline: String(basics.headline ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 120),
-      contacts: (Array.isArray(basics.contacts) ? basics.contacts : []).slice(0, 8).map((contact) => ({
+      contacts: (Array.isArray(basics.contacts) ? basics.contacts : []).slice(0, MAX_RESUME_CONTACTS).map((contact) => ({
         id: typeof contact.id === 'string' && contact.id ? contact.id : nextDocumentId('ct'),
         kind: (['phone', 'email', 'url', 'location', 'text'] as const).includes(contact.kind)
           ? contact.kind
           : 'text',
         label: String(contact.label ?? '').slice(0, 20),
         value: String(contact.value ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 120),
-        iconKey: (['phone', 'mail', 'user', 'briefcase', 'graduation-cap', 'circle'] as const).includes(contact.iconKey)
+        iconKey: (['phone', 'mail', 'user', 'briefcase', 'graduation-cap', 'circle', 'url', 'location'] as const).includes(contact.iconKey)
           ? contact.iconKey
           : 'circle',
         visible: contact.visible !== false,

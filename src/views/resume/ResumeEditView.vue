@@ -131,6 +131,7 @@
         @add-section="addCustomSectionPane"
         @review="setInspectorMode('review')"
         @move="moveWorkshopModule"
+        @reorder="moveWorkshopModuleTo"
         @toggle-visibility="toggleWorkshopModule"
       />
       </template>
@@ -197,6 +198,88 @@
               <el-form-item label="手机号">
                 <el-input v-model.trim="form.phone" placeholder="用于补充联系方式" />
               </el-form-item>
+            </div>
+
+            <div class="custom-fields">
+              <div class="block-head">
+                <span>自定义字段</span>
+                <el-tag size="small" :type="customContacts.length ? 'success' : 'info'" effect="plain">
+                  {{ customContacts.length ? customContacts.length + ' 项' : '可补充' }}
+                </el-tag>
+              </div>
+              <p class="custom-fields__hint">添加链接、所在地或其他信息，会显示在简历抬头的联系方式中。</p>
+
+              <div v-if="customContacts.length === 0" class="custom-fields__empty">
+                <FileText :size="22" aria-hidden="true" />
+                <p>还没添加自定义字段。可补充 <strong>个人网站 / 微信 / 所在地</strong> 等信息，会显示在简历抬头。</p>
+              </div>
+
+              <div v-for="contact in customContacts" :key="contact.id" class="custom-field-row">
+                <span class="custom-field-row__badge" :title="customFieldKindLabel(contact.kind)">
+                  <component :is="customFieldIcon(contact.kind)" :size="16" aria-hidden="true" />
+                </span>
+                <el-select
+                  :model-value="contact.kind"
+                  class="custom-field-row__kind"
+                  :prefix-icon="customFieldIcon(contact.kind)"
+                  @change="handleCustomContactKindChange(contact.id, $event)"
+                >
+                  <el-option label="链接" value="url" />
+                  <el-option label="所在地" value="location" />
+                  <el-option label="其他" value="text" />
+                </el-select>
+                <el-input
+                  :model-value="contact.label"
+                  class="custom-field-row__label"
+                  placeholder="字段名称"
+                  @update:model-value="handleCustomContactLabelChange(contact.id, $event)"
+                />
+                <el-input
+                  :model-value="contact.value"
+                  class="custom-field-row__value"
+                  placeholder="字段内容"
+                  @update:model-value="handleCustomContactValueChange(contact.id, $event)"
+                />
+                <button
+                  type="button"
+                  class="custom-field-row__remove"
+                  :aria-label="`删除自定义字段 ${contact.label || contact.kind}`"
+                  @click="removeCustomContact(contact.id)"
+                >
+                  <Trash2 :size="15" aria-hidden="true" />
+                </button>
+                <div class="custom-field-row__meta">
+                  <label class="custom-field-row__toggle">
+                    <el-switch
+                      :model-value="contact.visible"
+                      :active-value="true"
+                      :inactive-value="false"
+                      @change="handleCustomContactVisibilityChange(contact.id, $event)"
+                    />
+                    <span>显示</span>
+                  </label>
+                  <label class="custom-field-row__toggle">
+                    <el-switch
+                      :model-value="contact.showLabel"
+                      :active-value="true"
+                      :inactive-value="false"
+                      @change="handleCustomContactLabelVisibilityChange(contact.id, $event)"
+                    />
+                    <span>名称</span>
+                  </label>
+                </div>
+              </div>
+
+              <button
+                v-if="canAddCustomContact"
+                type="button"
+                class="custom-field-add"
+                @click="addCustomContact"
+              >
+                <Plus :size="16" aria-hidden="true" />
+                <span>添加自定义字段</span>
+              </button>
+              <p v-else class="custom-fields__cap">已达联系方式上限（含电话、邮箱共 8 项）。</p>
             </div>
             </div>
 
@@ -852,11 +935,14 @@ import {
   Circle,
   FileCheck2,
   FilePenLine,
+  FileText,
   FolderOpen,
   GitCompareArrows,
   ChevronRight,
   LayoutTemplate,
   Layers3,
+  Link,
+  MapPin,
   Maximize2,
   Minimize2,
   Minus,
@@ -867,6 +953,7 @@ import {
   Plus,
   Printer,
   Save,
+  Trash2,
   Sparkles,
 } from 'lucide-vue-next'
 import { getActivePinia } from 'pinia'
@@ -920,15 +1007,18 @@ import { useResumeDocument } from '@/features/resume-workbench/use-resume-docume
 import { getResumeTemplateDefinition } from '@/features/resume-template/registry'
 import { projectToDocumentItem } from '@/features/resume-workbench/document-migrator'
 import {
+  reorderBuiltInSections,
   updateProjectItems,
   updateSectionBlocks,
   updateSectionGroups,
   updateSectionItems
 } from '@/features/resume-workbench/section-ops'
-import { MAX_CUSTOM_SECTIONS } from '@/features/resume-workbench/document'
+import { MAX_CUSTOM_SECTIONS, MAX_RESUME_CONTACTS } from '@/features/resume-workbench/document'
 import type {
   CustomSection,
   ResumeBlock,
+  ResumeContactItem,
+  ResumeContactKind,
   ResumeDocumentV2,
   ResumeEntryItem,
   ResumeProjectItem,
@@ -1101,6 +1191,112 @@ const resumeDocument = useResumeDocument({
   projects: () => projects.value,
   presentation: () => presentationConfig.value
 })
+
+// 自定义联系字段（url / location / text）直接写入文档 v2 的 basics.contacts，
+// 通过 replace 进入撤销栈；预览由 adapter 从 document 读出（appendCustomContacts）。
+const customContacts = computed(() =>
+  resumeDocument.document.value.basics.contacts.filter(
+    (contact) => contact.kind !== 'phone' && contact.kind !== 'email'
+  )
+)
+const canAddCustomContact = computed(
+  () => resumeDocument.document.value.basics.contacts.length < MAX_RESUME_CONTACTS
+)
+
+const iconKeyForKind = (kind: ResumeContactKind): 'url' | 'location' | 'circle' => {
+  if (kind === 'url') return 'url'
+  if (kind === 'location') return 'location'
+  return 'circle'
+}
+
+const customFieldIcon = (kind: ResumeContactKind) => {
+  if (kind === 'url') return Link
+  if (kind === 'location') return MapPin
+  return FileText
+}
+
+const customFieldKindLabel = (kind: ResumeContactKind): string => {
+  if (kind === 'url') return '链接'
+  if (kind === 'location') return '所在地'
+  return '其他'
+}
+
+const patchCustomContact = (id: string, patch: Partial<ResumeContactItem>) => {
+  const document = resumeDocument.document.value
+  const next: ResumeDocumentV2 = {
+    ...document,
+    basics: {
+      ...document.basics,
+      contacts: document.basics.contacts.map((contact) => {
+        if (contact.id !== id) return contact
+        const merged: ResumeContactItem = { ...contact, ...patch }
+        if (patch.kind) merged.iconKey = iconKeyForKind(patch.kind)
+        return merged
+      })
+    }
+  }
+  resumeDocument.replace(next)
+}
+
+const setCustomContactKind = (id: string, value: unknown) => {
+  const document = resumeDocument.document.value
+  const current = document.basics.contacts.find((contact) => contact.id === id)
+  const nextKind = value as ResumeContactKind
+  const patch: Partial<ResumeContactItem> = { kind: nextKind }
+  // 名称仍为该类型的默认值时，跟随类型切换（用户已自定义则保留）
+  if (current && current.label && current.label === customFieldKindLabel(current.kind)) {
+    patch.label = customFieldKindLabel(nextKind)
+  }
+  patchCustomContact(id, patch)
+}
+
+const handleCustomContactKindChange = (id: string, value: unknown) =>
+  setCustomContactKind(id, value)
+const handleCustomContactLabelChange = (id: string, value: string) =>
+  patchCustomContact(id, { label: value })
+const handleCustomContactValueChange = (id: string, value: string) =>
+  patchCustomContact(id, { value })
+const handleCustomContactVisibilityChange = (id: string, value: string | number | boolean) =>
+  patchCustomContact(id, { visible: Boolean(value) })
+const handleCustomContactLabelVisibilityChange = (id: string, value: string | number | boolean) =>
+  patchCustomContact(id, { showLabel: Boolean(value) })
+
+const addCustomContact = () => {
+  const document = resumeDocument.document.value
+  if (!canAddCustomContact.value) return
+  const id = `contact-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+  const next: ResumeDocumentV2 = {
+    ...document,
+    basics: {
+      ...document.basics,
+      contacts: [
+        ...document.basics.contacts,
+        {
+          id,
+          kind: 'url',
+          label: '链接',
+          value: '',
+          iconKey: 'url',
+          visible: true,
+          showLabel: true
+        }
+      ]
+    }
+  }
+  resumeDocument.replace(next)
+}
+
+const removeCustomContact = (id: string) => {
+  const document = resumeDocument.document.value
+  const next: ResumeDocumentV2 = {
+    ...document,
+    basics: {
+      ...document.basics,
+      contacts: document.basics.contacts.filter((contact) => contact.id !== id)
+    }
+  }
+  resumeDocument.replace(next)
+}
 
 const skillsSection = computed(() => resumeDocument.document.value.sections
   .find((section) => section.builtinKey === 'skills'))
@@ -1364,6 +1560,25 @@ const sectionsForWorkshopModule: Record<ResumeWorkbenchModule, Array<'summary' |
   'resume-experience': ['experience', 'education']
 }
 
+const applyWorkshopModuleOrder = (order: string[]) => {
+  const sectionOrder = order.flatMap((moduleId) =>
+    sectionsForWorkshopModule[moduleId as ResumeWorkbenchModule] || []
+  )
+  presentationConfig.value = normalizeResumePresentation({
+    ...presentationConfig.value,
+    moduleOrder: order,
+    sectionOrder,
+    overrides: {
+      ...presentationConfig.value.overrides,
+      sectionOrder: true
+    }
+  })
+  const reorderedDocument = reorderBuiltInSections(resumeDocument.document.value, sectionOrder)
+  if (reorderedDocument !== resumeDocument.document.value) {
+    resumeDocument.replace(reorderedDocument)
+  }
+}
+
 const moveWorkshopModule = (id: string, delta: -1 | 1) => {
   const sections = resumeDocument.document.value.sections
   const sectionIndex = sections.findIndex((section) => section.id === id && !section.builtinKey)
@@ -1380,17 +1595,37 @@ const moveWorkshopModule = (id: string, delta: -1 | 1) => {
   if (currentIndex < 0 || nextIndex < 0 || nextIndex >= order.length) return
   const [moved] = order.splice(currentIndex, 1)
   order.splice(nextIndex, 0, moved)
-  presentationConfig.value = normalizeResumePresentation({
-    ...presentationConfig.value,
-    moduleOrder: order,
-    sectionOrder: order.flatMap((moduleId) =>
-      sectionsForWorkshopModule[moduleId as ResumeWorkbenchModule] || []
-    ),
-    overrides: {
-      ...presentationConfig.value.overrides,
-      sectionOrder: true
-    }
-  })
+  applyWorkshopModuleOrder(order)
+}
+
+/** V-02 · 拖拽排序：把模块/分区移动到 sectionNavItems 中的绝对目标位置（忠于原型 v15 板块可拖拽排序） */
+const moveWorkshopModuleTo = (id: string, targetIndex: number) => {
+  const customIds = customSections.value.map((section) => section.id)
+  if (customIds.includes(id)) {
+    const fromCustomIndex = customIds.indexOf(id)
+    const builtinCount = sectionNavItems.value.filter((item) => !customIds.includes(item.id)).length
+    const toCustomIndex = Math.max(0, Math.min(customIds.length - 1, targetIndex - builtinCount))
+    if (toCustomIndex === fromCustomIndex) return
+    const remaining = customIds.filter((item) => item !== id)
+    if (!remaining.length) return
+    // moveSection 语义：先移除再插入到目标索引，故索引基于「移除后」的 sections 计算
+    const sectionsAfterRemoval = resumeDocument.document.value.sections.filter((section) => section.id !== id)
+    const insertIndex = toCustomIndex === 0
+      ? sectionsAfterRemoval.findIndex((section) => section.id === remaining[0])
+      : sectionsAfterRemoval.findIndex((section) => section.id === remaining[toCustomIndex - 1]) + 1
+    if (insertIndex < 0) return
+    resumeDocument.moveSection(id, insertIndex)
+    return
+  }
+  if (!presentationConfig.value.moduleOrder.includes(id)) return
+  const order = [...presentationConfig.value.moduleOrder]
+  const currentIndex = order.indexOf(id)
+  if (currentIndex < 0) return
+  const nextIndex = Math.max(0, Math.min(order.length - 1, targetIndex))
+  if (nextIndex === currentIndex) return
+  const [moved] = order.splice(currentIndex, 1)
+  order.splice(nextIndex, 0, moved)
+  applyWorkshopModuleOrder(order)
 }
 
 const toggleWorkshopModule = (id: string, currentlyHidden: boolean) => {
@@ -3143,7 +3378,7 @@ onBeforeUnmount(() => {
   --resume-paper-border: #d4dbe4;
   --resume-paper-line: #9aa7b5;
   --resume-paper-default: #1b1b18;
-  --resume-paper-blue: #3b82f6;
+  --resume-paper-blue: #3E6AAE;
   --resume-paper-green: #1f6f5c;
   --resume-paper-slate: #57534e;
   --resume-paper-red: #ef4444;
@@ -3887,9 +4122,9 @@ onBeforeUnmount(() => {
     box-shadow: 0 0 0 1px var(--user-border);
     cursor: pointer;
 
-    &.is-blue { background: #3b82f6; }
+    &.is-blue { background: #3E6AAE; }
     &.is-green { background: #1f6f5c; }
-    &.is-purple { background: #8b5cf6; }
+    &.is-purple { background: #7E6CB0; }
     &.is-orange { background: #f97316; }
     &.is-red { background: #ef4444; }
     &.is-slate { background: #57534e; }
@@ -7023,6 +7258,175 @@ onBeforeUnmount(() => {
     .resume-workbench-pane--editor > .ai-writing-card .prompt-list {
       grid-template-columns: 1fr;
     }
+  }
+}
+
+.custom-fields {
+  margin-top: var(--user-space-5);
+  padding-top: var(--user-space-4);
+  border-top: 1px dashed var(--user-border);
+}
+
+.custom-fields__hint {
+  margin: 0 0 var(--user-space-3);
+  color: var(--user-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.custom-field-row {
+  display: grid;
+  grid-template-columns: 36px 116px minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: var(--user-space-2);
+  padding: 10px 12px;
+  margin-bottom: var(--user-space-3);
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.custom-field-row:hover {
+  border-color: var(--user-primary-border);
+}
+
+.custom-field-row__meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--user-space-4);
+  margin-top: var(--user-space-2);
+  padding-top: var(--user-space-2);
+  border-top: 1px dashed var(--user-border);
+  font-size: 12px;
+  color: var(--user-text-muted);
+}
+
+.custom-field-row__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface-muted);
+  color: var(--user-primary);
+}
+
+.custom-field-row__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--user-text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.custom-field-row__toggle .el-switch {
+  --el-switch-on-color: var(--user-primary);
+}
+
+.custom-field-row__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-sm);
+  background: var(--user-surface);
+  color: var(--user-danger);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.custom-field-row__remove:hover {
+  border-color: var(--user-danger);
+  background: var(--user-surface-muted);
+}
+
+.custom-fields__empty {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--user-space-3);
+  padding: 14px 16px;
+  margin-bottom: var(--user-space-3);
+  border: 1px dashed var(--user-primary-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface-muted);
+  color: var(--user-text-muted);
+}
+
+.custom-fields__empty svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--user-primary);
+}
+
+.custom-fields__empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.custom-fields__empty strong {
+  color: var(--user-text);
+  font-weight: 500;
+}
+
+.custom-fields__cap {
+  margin: var(--user-space-2) 0 0;
+  font-size: 12px;
+  color: var(--user-text-muted);
+}
+
+.custom-field-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--user-space-2);
+  padding: 6px 12px;
+  border: 1px dashed var(--user-primary-border);
+  border-radius: var(--user-radius-md);
+  background: transparent;
+  color: var(--user-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.custom-field-add:hover {
+  background: var(--user-surface-muted);
+}
+
+@media (max-width: 640px) {
+  .custom-field-row {
+    grid-template-columns: 36px 1fr;
+    grid-template-rows: repeat(4, auto);
+    gap: var(--user-space-2) var(--user-space-3);
+  }
+
+  .custom-field-row__badge {
+    grid-row: 1 / span 4;
+    align-self: start;
+  }
+
+  .custom-field-row__kind,
+  .custom-field-row__label,
+  .custom-field-row__value,
+  .custom-field-row__remove {
+    grid-column: 2;
+  }
+
+  .custom-field-row__meta {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+
+  .custom-field-row__remove {
+    justify-self: end;
   }
 }
 </style>

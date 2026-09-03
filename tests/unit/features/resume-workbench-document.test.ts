@@ -16,6 +16,7 @@ import {
   addCustomSection,
   addBlock,
   moveSection,
+  reorderBuiltInSections,
   removeSection,
   toggleSectionVisible,
   addEntryItem,
@@ -211,6 +212,22 @@ describe('normalizer', () => {
     expect(doc.sections.filter((s) => s.builtinKey === 'summary')).toHaveLength(1)
     expect(doc.sections.filter((s) => !s.builtinKey)).toHaveLength(12)
   })
+
+  it('caps the combined standard and custom contact list at eight items', () => {
+    const doc = normalizeResumeDocument({
+      schemaVersion: 2,
+      basics: {
+        contacts: Array.from({ length: 10 }, (_, index) => ({
+          id: `contact-${index}`,
+          kind: index === 0 ? 'phone' : index === 1 ? 'email' : 'text',
+          value: String(index)
+        }))
+      },
+      layout: {},
+      sections: []
+    })!
+    expect(doc.basics.contacts).toHaveLength(8)
+  })
 })
 
 describe('anchors', () => {
@@ -296,5 +313,21 @@ describe('section ops', () => {
         expect(eduMoved.content.items[0].id).toBe(eduAfter.content.items[1].id)
       }
     }
+  })
+
+  it('reorders built-in sections without moving custom section slots', () => {
+    const withCustom = addCustomSection(buildDoc(), { variant: 'text', title: '证书', at: 2 })
+    const customId = withCustom.sections[2].id
+    const reordered = reorderBuiltInSections(withCustom, [
+      'projects',
+      'summary',
+      'skills',
+      'experience',
+      'education'
+    ])
+
+    expect(reordered.sections[2].id).toBe(customId)
+    expect(reordered.sections.filter((section) => section.builtinKey).map((section) => section.builtinKey))
+      .toEqual(['projects', 'summary', 'skills', 'experience', 'education'])
   })
 })

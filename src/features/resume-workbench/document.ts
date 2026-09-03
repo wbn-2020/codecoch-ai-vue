@@ -37,7 +37,7 @@ export interface ResumeContactItem {
   kind: ResumeContactKind
   label: string
   value: string
-  iconKey: 'phone' | 'mail' | 'user' | 'briefcase' | 'graduation-cap' | 'circle'
+  iconKey: 'phone' | 'mail' | 'user' | 'briefcase' | 'graduation-cap' | 'circle' | 'url' | 'location'
   visible: boolean
   showLabel: boolean
 }
@@ -155,6 +155,7 @@ export interface ResumeDocumentV2 {
 }
 
 export const MAX_CUSTOM_SECTIONS = 12
+export const MAX_RESUME_CONTACTS = 8
 export const MAX_BLOCKS_PER_FIELD = 60
 export const MAX_BLOCK_TEXT_LENGTH = 2000
 export const MAX_SECTION_TITLE_LENGTH = 40

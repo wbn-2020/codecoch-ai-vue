@@ -363,5 +363,15 @@ export const mergeFlatEdit = (
     if (!used.has(key)) sections.push(section)
   })
 
-  return { ...migrated, sections }
+  const customContacts = existing.basics.contacts.filter(
+    (contact) => contact.kind !== 'phone' && contact.kind !== 'email'
+  )
+  return {
+    ...migrated,
+    basics: {
+      ...migrated.basics,
+      contacts: [...migrated.basics.contacts, ...customContacts]
+    },
+    sections
+  }
 }

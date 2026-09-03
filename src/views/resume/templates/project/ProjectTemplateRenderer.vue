@@ -102,8 +102,9 @@ const sections = computed(() => visibleRenderSections(props.model))
   gap: 24px;
   margin: calc(var(--template-page-margin) * -1) calc(var(--template-page-margin) * -1) 0;
   padding: 18px var(--template-page-margin);
-  background: var(--template-accent-strong);
-  color: #fff;
+  background: transparent;
+  border-bottom: 2px solid var(--template-accent);
+  color: var(--template-ink);
 }
 
 .project-renderer__identity {
@@ -113,14 +114,14 @@ const sections = computed(() => visibleRenderSections(props.model))
 .project-renderer__role {
   display: block;
   margin-bottom: 4px;
-  color: #cfe1fb;
+  color: var(--template-accent-strong);
   font-size: calc(10px * var(--template-font-scale, 1));
   font-weight: 800;
 }
 
 .project-renderer__header h1 {
   margin: 0;
-  color: #fff;
+  color: var(--template-ink);
   font-size: calc(30px * var(--template-font-scale, 1));
   line-height: 1.12;
 }
@@ -135,7 +136,11 @@ const sections = computed(() => visibleRenderSections(props.model))
 .project-renderer__contacts :deep(.template-contact-item__label),
 .project-renderer__contacts :deep(.template-contact-item__value),
 .project-renderer__contacts :deep(svg) {
-  color: #fff;
+  color: var(--template-body);
+}
+
+.project-renderer__contacts :deep(svg) {
+  color: var(--template-accent);
 }
 
 .template-paper--identity-center .project-renderer__header {

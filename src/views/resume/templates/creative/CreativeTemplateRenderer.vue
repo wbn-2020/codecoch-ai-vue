@@ -96,8 +96,9 @@ const sections = computed(() => visibleRenderSections(props.model))
   justify-content: space-between;
   gap: 24px;
   padding: calc(var(--template-page-margin) * 0.9) var(--template-page-margin);
-  background: var(--template-accent);
-  color: #fff;
+  background: transparent;
+  border-bottom: 2px solid var(--template-accent);
+  color: var(--template-ink);
 }
 
 .creative-renderer__header-main {
@@ -106,7 +107,7 @@ const sections = computed(() => visibleRenderSections(props.model))
 
 .creative-renderer__role {
   margin: 0 0 7px;
-  color: color-mix(in srgb, #fff 78%, var(--template-accent));
+  color: var(--template-accent-strong);
   font-size: calc(12px * var(--template-font-scale, 1));
   font-weight: 800;
 }
@@ -127,7 +128,11 @@ const sections = computed(() => visibleRenderSections(props.model))
 .creative-renderer__contacts :deep(.template-contact-item__label),
 .creative-renderer__contacts :deep(.template-contact-item__value),
 .creative-renderer__contacts :deep(svg) {
-  color: #fff;
+  color: var(--template-body);
+}
+
+.creative-renderer__contacts :deep(svg) {
+  color: var(--template-accent);
 }
 
 .template-paper--identity-center .creative-renderer__header {

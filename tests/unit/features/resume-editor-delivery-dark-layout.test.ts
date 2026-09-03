@@ -137,7 +137,7 @@ describe('resume editor and delivery workspace layout', () => {
   it('keeps every resume accent readable on white paper headings', () => {
     const preview = readSource('src/views/resume/components/ResumeDocumentPreview.vue')
 
-    expect(preview).toContain('--paper-accent: #10b981')
+    expect(preview).toContain('--paper-accent: #1f6f5c')
     expect(preview).not.toContain('--paper-accent: #0f8b7c')
   })
 })

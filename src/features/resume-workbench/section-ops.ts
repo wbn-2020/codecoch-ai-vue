@@ -2,6 +2,7 @@ import {
   MAX_CUSTOM_SECTIONS,
   type ProjectSection,
   type ResumeBlock,
+  type ResumeBuiltInSectionKey,
   type ResumeDocumentV2,
   type ResumeEntryItem,
   type ResumeProjectItem,
@@ -25,6 +26,31 @@ export const moveSection = (document: ResumeDocumentV2, sectionId: string, toInd
   const [section] = next.sections.splice(from, 1)
   next.sections.splice(clamped, 0, section)
   return next
+}
+
+export const reorderBuiltInSections = (
+  document: ResumeDocumentV2,
+  requestedOrder: ResumeBuiltInSectionKey[]
+): ResumeDocumentV2 => {
+  const builtInSections = document.sections.filter((section) => Boolean(section.builtinKey))
+  if (builtInSections.length < 2) return document
+
+  const byKey = new Map(
+    builtInSections.map((section) => [section.builtinKey as ResumeBuiltInSectionKey, section])
+  )
+  const orderedKeys = [
+    ...requestedOrder.filter((key, index) => requestedOrder.indexOf(key) === index && byKey.has(key)),
+    ...builtInSections
+      .map((section) => section.builtinKey as ResumeBuiltInSectionKey)
+      .filter((key) => !requestedOrder.includes(key))
+  ]
+  const orderedSections = orderedKeys.map((key) => byKey.get(key)).filter(Boolean)
+  let builtInIndex = 0
+  const sections = document.sections.map((section) =>
+    section.builtinKey ? orderedSections[builtInIndex++] || section : section
+  )
+  const changed = sections.some((section, index) => section !== document.sections[index])
+  return changed ? { ...document, sections } : document
 }
 
 export const toggleSectionVisible = (document: ResumeDocumentV2, sectionId: string): ResumeDocumentV2 => {

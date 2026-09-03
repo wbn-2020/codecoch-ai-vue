@@ -115,9 +115,9 @@ describe('user workspace layout system', () => {
     expect(components).toMatch(/\.content-card__body,[\s\S]*?padding:\s*16px/)
     expect(elementTheme).not.toMatch(/backdrop-filter\s*:/i)
     expect(elementTheme).not.toMatch(/(?:linear|radial)-gradient\(/i)
-    expect(variables).toContain('--cc-primary: #5b8def')
+    expect(variables).toContain('--cc-primary: #1F6F5C')
     expect(variables).toContain('--cc-ai: #7d86b2')
-    expect(variables).toContain('--cc-ai-cyan: #6ea8fe')
+    expect(variables).toContain('--cc-ai-cyan: #0E9F9A')
   })
 
   it('integrates primary interview actions and keeps training support secondary', () => {

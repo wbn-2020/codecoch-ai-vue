@@ -56,6 +56,11 @@
         <TemplateSectionBody v-else :section="section" />
       </section>
     </div>
+
+    <div v-else class="modern-renderer__empty">
+      <strong>开始构建你的专业简历</strong>
+      <span>填写姓名、目标岗位或任一经历后，这里会按所选模板实时排版。</span>
+    </div>
   </TemplatePaper>
 </template>
 
@@ -81,8 +86,9 @@ defineProps<{
   gap: 20px;
   margin: calc(var(--template-page-margin) * -1) calc(var(--template-page-margin) * -1) 0;
   padding: 22px var(--template-page-margin);
-  background: var(--template-accent-strong);
-  color: #fff;
+  background: transparent;
+  border-bottom: 2px solid var(--template-accent);
+  color: var(--template-ink);
 }
 
 .template-paper--identity-center .modern-renderer__header {
@@ -111,7 +117,7 @@ defineProps<{
 .modern-renderer__kicker {
   display: block;
   margin-bottom: 4px;
-  color: #d8eef0;
+  color: var(--template-accent-strong);
   font-size: calc(10px * var(--template-font-scale, 1));
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -119,7 +125,7 @@ defineProps<{
 
 .modern-renderer__header h1 {
   margin: 0;
-  color: #fff;
+  color: var(--template-ink);
   font-size: calc(30px * var(--template-font-scale, 1));
   line-height: 1.15;
 }
@@ -131,17 +137,38 @@ defineProps<{
 }
 
 .modern-renderer__contacts :deep(.template-contact-item) {
-  color: #e7f1f2;
+  color: var(--template-body);
 }
 
 .modern-renderer__contacts :deep(.template-contact-item svg) {
-  color: #b8dcda;
+  color: var(--template-accent);
 }
 
 .modern-renderer__body {
   display: grid;
   gap: var(--template-section-gap);
   padding-top: var(--template-section-gap);
+}
+
+.modern-renderer__empty {
+  margin-top: var(--template-section-gap);
+  padding: 26px 18px;
+  background: var(--template-accent-soft);
+  color: var(--template-muted);
+  text-align: center;
+  border-radius: 8px;
+}
+
+.modern-renderer__empty strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--template-accent-strong);
+  font-size: calc(13px * var(--template-font-scale, 1));
+  font-weight: 700;
+}
+
+.modern-renderer__empty span {
+  font-size: calc(11px * var(--template-font-scale, 1));
 }
 
 .modern-renderer__section {

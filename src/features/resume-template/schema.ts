@@ -61,9 +61,11 @@ export type ResumeContactIconKey =
   | 'briefcase'
   | 'graduation-cap'
   | 'circle'
+  | 'url'
+  | 'location'
 
 export interface ResumeContactModel {
-  key: 'phone' | 'email'
+  key: string
   label: string
   value: string
   iconKey: ResumeContactIconKey

@@ -25,6 +25,29 @@
 
       <ModuleTabs :items="moduleTabs" />
 
+      <!-- V-01 · 今日关键指标（忠于原型 .kpi-row / .kpi）-->
+      <section class="arena-home__kpi-row" aria-label="今日关键指标">
+        <article
+          v-for="kpi in kpiCards"
+          :key="kpi.key"
+          class="arena-home__kpi"
+          :style="{ '--kpi-c': kpi.color }"
+        >
+          <span class="arena-home__kpi-icon">
+            <component :is="kpi.icon" :size="16" aria-hidden="true" />
+          </span>
+          <div class="arena-home__kpi-main">
+            <p class="arena-home__kpi-label">{{ kpi.label }}</p>
+            <p class="arena-home__kpi-val">{{ kpi.value }}</p>
+          </div>
+          <span class="arena-home__kpi-delta" :class="{ 'is-up': kpi.tone === 'up' }">{{ kpi.delta }}</span>
+          <svg class="arena-home__kpi-spark" :viewBox="'0 0 ' + sparkW + ' ' + sparkH" preserveAspectRatio="none" aria-hidden="true">
+            <path :d="kpi.sparkFill" class="arena-home__kpi-spark-fill" />
+            <path :d="kpi.sparkLine" class="arena-home__kpi-spark-line" />
+          </svg>
+        </article>
+      </section>
+
       <!-- 加载骨架 -->
       <div v-if="loading" class="arena-home__grid">
         <div class="arena-home__col">
@@ -155,13 +178,58 @@
           </div>
         </div>
       </div>
+
+      <!-- V-01 · 数据洞察：训练时长面积图 + 目标完成环形图（忠于原型 today.overview）-->
+      <section v-if="!loading" class="arena-home__insights" aria-label="今日数据洞察">
+        <article class="arena-card arena-home__card arena-home__chart">
+          <header class="arena-home__chart-head">
+            <h3>本周训练时长</h3>
+            <span class="arena-home__eyebrow arena-home__eyebrow--ai">近 7 日</span>
+          </header>
+          <svg v-if="hasArea" class="arena-home__area" :viewBox="'0 0 ' + AREA_W + ' ' + AREA_H" preserveAspectRatio="none" role="img" aria-label="本周训练时长趋势">
+            <defs>
+              <linearGradient :id="areaFillId" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" :stop-color="areaLineColor" stop-opacity="0.26" />
+                <stop offset="100%" :stop-color="areaLineColor" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path :d="areaFillPath" :fill="'url(#' + areaFillId + ')'" />
+            <path :d="areaLinePath" fill="none" :stroke="areaLineColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+            <circle v-for="(pt, i) in areaPoints" :key="i" :cx="pt.x" :cy="pt.y" r="3" :fill="areaLineColor" />
+            <text v-for="(d, i) in areaDayLabels" :key="'d' + i" :x="d.x" y="164" class="arena-home__area-label">{{ d.label }}</text>
+          </svg>
+          <p v-else class="arena-home__list-empty">近 7 日训练数据加载中，稍后自动回填。</p>
+        </article>
+
+        <article class="arena-card arena-home__card arena-home__donut">
+          <header class="arena-home__chart-head">
+            <h3>目标完成</h3>
+            <span class="arena-home__eyebrow arena-home__eyebrow--ai">本周</span>
+          </header>
+          <div class="arena-home__donut-wrap">
+            <svg class="arena-home__donut-svg" viewBox="0 0 140 140" role="img" :aria-label="'目标完成 ' + weekCompletionProgress + '%'">
+              <circle cx="70" cy="70" r="56" fill="none" stroke="var(--user-border)" stroke-width="12" />
+              <circle
+                cx="70" cy="70" r="56" fill="none"
+                :stroke="areaLineColor" stroke-width="12" stroke-linecap="round"
+                :stroke-dasharray="donutCirc"
+                :stroke-dashoffset="donutOffset"
+                transform="rotate(-90 70 70)"
+              />
+              <text x="70" y="68" text-anchor="middle" class="arena-home__donut-val">{{ weekCompletionProgress }}%</text>
+              <text x="70" y="88" text-anchor="middle" class="arena-home__donut-sub">完成度</text>
+            </svg>
+          </div>
+        </article>
+      </section>
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { CalendarDays, Sparkles } from 'lucide-vue-next'
-import { computed, onMounted, ref } from 'vue'
+import { CalendarDays, Sparkles, ListTodo, CheckCircle2, Clock, Flame } from 'lucide-vue-next'
+import { computed, onMounted, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { completeAgentTaskApi } from '@/api/agent'
@@ -328,6 +396,91 @@ const asMission = (task: AgentTaskVO): Mission => {
 
 const OPEN_STATUS = new Set(['TODO', 'DOING'])
 const isDoneTask = (task: AgentTaskVO) => String(task.status || 'TODO').toUpperCase() === 'DONE'
+
+// —— V-01 · 今日关键指标（忠于原型 .kpi 行 + today.overview 图表）——
+const KPI_ICONS: Record<string, Component> = { todo: ListTodo, done: CheckCircle2, time: Clock, streak: Flame }
+const openTaskCount = computed(() => tasks.value.filter((task) => !isDoneTask(task)).length)
+
+const sparkW = 120
+const sparkH = 36
+function sparkPaths(values: number[], w: number, h: number, pad = 3) {
+  const safe = values.length ? values : [0, 0, 0, 0, 0, 0, 0]
+  const max = Math.max(...safe)
+  const min = Math.min(...safe, 0)
+  const range = max - min || 1
+  const stepX = safe.length > 1 ? (w - pad * 2) / (safe.length - 1) : 0
+  const pts = safe.map((v, i) => {
+    const x = Number((pad + i * stepX).toFixed(1))
+    const y = Number((pad + (h - pad * 2) * (1 - (v - min) / range)).toFixed(1))
+    return [x, y] as [number, number]
+  })
+  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ')
+  const fill = `${line} L${pts[pts.length - 1][0]},${h} L${pts[0][0]},${h} Z`
+  return { line, fill }
+}
+
+const kpiCards = computed(() => {
+  const trend = (sel: (p: WeekTrendPoint) => number) =>
+    weekTrend.value.length ? weekTrend.value.map(sel) : [0, 0, 0, 0, 0, 0, 0]
+  const build = (
+    key: string,
+    label: string,
+    value: string,
+    color: string,
+    icon: Component,
+    delta: string,
+    tone: 'flat' | 'up',
+    vals: number[]
+  ) => {
+    const { line, fill } = sparkPaths(vals, sparkW, sparkH)
+    return { key, label, value, color, icon, delta, tone, sparkLine: line, sparkFill: fill }
+  }
+  return [
+    build('todo', '待办任务', String(openTaskCount.value), '#1f6f5c', KPI_ICONS.todo, openTaskCount.value ? `剩 ${openTaskCount.value} 项` : '已全部清空', openTaskCount.value ? 'flat' : 'up', trend((p) => p.generated)),
+    build('done', '本周完成', String(weekCompletedCount.value), '#2f6f8f', KPI_ICONS.done, weekCompletedCount.value ? `近 7 日 +${weekCompletedCount.value}` : '近 7 日', weekCompletedCount.value ? 'up' : 'flat', trend((p) => p.completed)),
+    build('time', '训练时长', `${weekMinutesTotal.value} 分钟`, '#b08534', KPI_ICONS.time, weekMinutesTotal.value ? '近 7 日' : '等待记录', weekMinutesTotal.value ? 'up' : 'flat', trend((p) => p.minutes)),
+    build('streak', '连续天数', String(gameProfile.streakDays), '#a8504e', KPI_ICONS.streak, gameProfile.streakDays ? '连续打卡' : '今日开启', gameProfile.streakDays ? 'up' : 'flat', trend((p) => p.completed))
+  ]
+})
+
+// 训练时长面积图（忠于原型 today.overview 的 area 生成器）
+const AREA_W = 520
+const AREA_H = 170
+const areaFillId = 'arena-kpi-area-fill'
+const areaLineColor = 'var(--user-primary, #1f6f5c)'
+const areaChart = computed(() => {
+  const vals = weekTrend.value.map((p) => p.minutes)
+  if (vals.length < 2) return null
+  const w = AREA_W
+  const h = AREA_H
+  const padX = 14
+  const top = 14
+  const bottom = 146
+  const max = Math.max(...vals, 1)
+  const range = max || 1
+  const stepX = (w - padX * 2) / (vals.length - 1)
+  const pts = vals.map((v, i) => {
+    const x = Number((padX + i * stepX).toFixed(1))
+    const y = Number((top + (bottom - top) * (1 - v / range)).toFixed(1))
+    return [x, y] as [number, number]
+  })
+  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ')
+  const fill = `${line} L${pts[pts.length - 1][0]},${bottom + 6} L${pts[0][0]},${bottom + 6} Z`
+  const dayLabels = weekTrend.value.map((p, i) => ({ x: pts[i][0], label: String(p.date).slice(5) }))
+  return { line, fill, points: pts.map((p) => ({ x: p[0], y: p[1] })), dayLabels }
+})
+const hasArea = computed(() => areaChart.value !== null)
+const areaFillPath = computed(() => areaChart.value?.fill ?? '')
+const areaLinePath = computed(() => areaChart.value?.line ?? '')
+const areaPoints = computed(() => areaChart.value?.points ?? [])
+const areaDayLabels = computed(() => areaChart.value?.dayLabels ?? [])
+
+// 目标完成环形图（忠于原型 today.overview 的 donut 生成器）
+const DONUT_R = 56
+const DONUT_C = 2 * Math.PI * DONUT_R
+const donutCirc = DONUT_C.toFixed(1)
+const donutOffset = computed(() => (DONUT_C * (1 - weekCompletionProgress.value / 100)).toFixed(1))
+
 
 const missions = computed<Mission[]>(() =>
   tasks.value.filter((task) => OPEN_STATUS.has(String(task.status || 'TODO').toUpperCase())).slice(0, 3).map(asMission)
@@ -812,8 +965,177 @@ onMounted(async () => {
   }
 }
 
+.arena-home {
+  // ---- V-01 · KPI 行（忠于原型 .kpi-row / .kpi）----
+  &__kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  &__kpi {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 4px 12px;
+    padding: 16px 18px;
+    overflow: hidden;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-lg, 14px);
+    background: var(--user-surface);
+
+    &::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--kpi-c, var(--user-primary)), transparent 72%);
+    }
+  }
+
+  &__kpi-icon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    color: var(--kpi-c, var(--user-primary));
+    background: color-mix(in srgb, var(--kpi-c, var(--user-primary)) 14%, var(--user-surface));
+  }
+
+  &__kpi-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__kpi-label {
+    margin: 0;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-caption, 12px);
+  }
+
+  &__kpi-val {
+    margin: 0;
+    color: var(--user-text);
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__kpi-delta {
+    grid-column: 2;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-caption, 12px);
+    font-variant-numeric: tabular-nums;
+
+    &.is-up {
+      color: var(--user-primary);
+    }
+  }
+
+  &__kpi-spark {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 34px;
+    margin-top: 2px;
+  }
+
+  &__kpi-spark-line {
+    fill: none;
+    stroke: var(--kpi-c, var(--user-primary));
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    opacity: 0.9;
+  }
+
+  &__kpi-spark-fill {
+    fill: var(--kpi-c, var(--user-primary));
+    opacity: 0.1;
+  }
+
+  // ---- V-01 · 数据洞察（忠于原型 today.overview 面积图 + 环形图）----
+  &__insights {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+    align-items: start;
+  }
+
+  &__card {
+    padding: 16px 18px;
+  }
+
+  &__chart-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+
+    h3 {
+      margin: 0;
+      color: var(--user-text);
+      font-size: var(--user-text-h4, 15px);
+      font-weight: 600;
+    }
+  }
+
+  &__area {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  &__area-label {
+    fill: var(--user-text-muted);
+    font-size: 10px;
+    text-anchor: middle;
+  }
+
+  &__donut-wrap {
+    display: grid;
+    place-items: center;
+    padding: 8px 0;
+  }
+
+  &__donut-svg {
+    width: 160px;
+    height: 160px;
+  }
+
+  &__donut-val {
+    fill: var(--user-text);
+    font-size: 26px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__donut-sub {
+    fill: var(--user-text-muted);
+    font-size: 11px;
+  }
+}
+
 @media (max-width: 1024px) {
   .arena-home__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .arena-home__kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .arena-home__insights {
     grid-template-columns: 1fr;
   }
 }
