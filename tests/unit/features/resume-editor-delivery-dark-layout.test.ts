@@ -81,7 +81,9 @@ describe('resume editor and delivery workspace layout', () => {
     expect(source).toContain('ResumeDocumentPreview')
     expect(source).toContain('ResumeTemplateBrowser')
     const preview = readSource('src/views/resume/components/ResumeDocumentPreview.vue')
-    expect(preview).toContain("import { FileText, Mail, Phone } from 'lucide-vue-next'")
+    expect(preview).toContain(
+      "import { Circle, FileText, Link, Mail, MapPin, Phone } from 'lucide-vue-next'"
+    )
     expect(preview).toContain(':is="item.icon"')
     expect(preview).toContain("presentation.iconMode !== 'HIDDEN'")
     expect(preview).toContain('class="document-contact__item"')
