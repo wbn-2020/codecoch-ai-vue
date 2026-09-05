@@ -9,6 +9,10 @@ export interface JobSearchExperimentQueryDTO extends PageQuery {
 
 export interface JobSearchExperimentSaveDTO {
   title: string
+  targetJobId?: number
+  resumeVersionId?: number
+  targetJobIds?: number[]
+  resumeIds?: number[]
   goal?: string
   targetDirection?: string
   startDate?: string

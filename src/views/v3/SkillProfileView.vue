@@ -1,18 +1,20 @@
 <template>
-  <div class="v3-page">
-    <section class="page-hero">
-      <div>
-        <div class="hero-kicker"><Network :size="16" /> 能力画像</div>
-        <h1>{{ overview?.profileName || detail?.profileName || '能力画像' }}</h1>
-        <p>{{ overview?.summary || detail?.summary || '基于匹配报告和目标岗位展示技能节点、短板与下一步动作。' }}</p>
-      </div>
-      <div class="hero-actions">
+  <main class="v3-page cc-module-page">
+    <PageHeader
+      eyebrow="成长分析"
+      :icon="Network"
+      :title="overview?.profileName || detail?.profileName || '能力画像'"
+      :description="overview?.summary || detail?.summary || '基于匹配报告和目标岗位展示技能节点、短板与下一步动作。'"
+    >
+      <template #actions>
         <el-button :loading="loading" @click="loadAll"><RefreshCw :size="16" /> 刷新</el-button>
         <el-button type="primary" :loading="generating || matchReportVerifyLoading" :disabled="!canGenerateFromReport" @click="generateFromReport">
           <Sparkles :size="16" /> 从报告生成
         </el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <el-alert
       v-if="matchReportVerifyMessage"
@@ -57,10 +59,10 @@
       </section>
 
       <section class="metric-grid">
-        <article class="metric-card"><span>综合水平</span><strong>{{ trustedMetricValue(overview?.overallLevel ?? detail?.overallLevel) }}</strong></article>
-        <article class="metric-card"><span>画像评分</span><strong>{{ trustedMetricValue(overview?.overallScore ?? detail?.overallScore) }}</strong></article>
-        <article class="metric-card"><span>已量化短板</span><strong>{{ quantifiedGapCount }}</strong></article>
-        <article class="metric-card"><span>状态</span><strong class="status">{{ profileStatusLabel(overview?.status || detail?.status) }}</strong></article>
+        <MetricCard label="综合水平" :value="trustedMetricValue(overview?.overallLevel ?? detail?.overallLevel)" />
+        <MetricCard label="画像评分" :value="trustedMetricValue(overview?.overallScore ?? detail?.overallScore)" />
+        <MetricCard label="已量化短板" :value="quantifiedGapCount" />
+        <MetricCard label="状态" :value="profileStatusLabel(overview?.status || detail?.status)" />
       </section>
 
       <section class="profile-grid">
@@ -149,7 +151,7 @@
         </AppState>
       </section>
     </template>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -161,12 +163,17 @@ import { useRoute, useRouter } from 'vue-router'
 import { getResumeJobMatchReportDetailApi } from '@/api/resumeJobMatch'
 import { generateSkillProfileApi, getSkillProfileByIdApi, getSkillProfileByJobTargetApi, getSkillProfileOverviewApi, refreshSkillProfileApi } from '@/api/skillProfile'
 import AppState from '@/components/common/AppState.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import type { SkillGapItemVO, SkillProfileDetailVO, SkillProfileOverviewVO } from '@/types/skillProfile'
 import { getErrorMessage } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('growth')
 const loading = ref(false)
 const generating = ref(false)
 const loadError = ref('')
@@ -192,6 +199,7 @@ const canGenerateFromReport = computed(() => Boolean(
 const canUseProfileForTraining = computed(() => Boolean(
   profileId.value
   && verifiedRouteMatchReport.value
+  && hasQuantifiedEvidence.value
 ))
 const buildContextQuery = (extra: Record<string, unknown>) => Object.fromEntries(
   Object.entries(extra)
@@ -211,6 +219,10 @@ const gapItems = computed<SkillGapItemVO[]>(() => {
   const detailGaps = Array.isArray(detail.value?.gapItems) ? detail.value.gapItems : []
   return topGaps.length ? topGaps : detailGaps
 })
+const hasQuantifiedEvidence = computed(() => [...sourceItems.value, ...gapItems.value].some((item) =>
+  numericLevel(item.currentLevel) !== undefined
+  && numericLevel(item.targetLevel) !== undefined
+))
 const quantifiedGapCount = computed(() => gapItems.value.filter((item) => {
   const current = numericLevel(item.currentLevel)
   const target = numericLevel(item.targetLevel)
@@ -272,6 +284,9 @@ const profileEvidenceTag = computed(() => {
 })
 const profileEvidenceText = computed(() => {
   if (matchReportVerifyMessage.value) return matchReportVerifyMessage.value
+  if (matchReportId.value && !hasQuantifiedEvidence.value) {
+    return '该画像已绑定可信简历匹配报告，但节点尚未形成可量化的当前/目标等级；总分、综合水平和训练入口暂不展示。'
+  }
   if (matchReportId.value) return '该画像已绑定通过可信校验的简历匹配报告，可用于后续学习计划和推荐题。'
   if (sourceMatchReportId.value) return '该画像关联的匹配报告尚未通过可信校验，数值仅保留为待量化状态，不能用于训练。'
   if (targetJobId.value) return '当前画像先按目标岗位和已有画像数据展示；从匹配报告进入时会获得更完整的分析。'
@@ -298,7 +313,7 @@ const numericLevel = (value?: number | null) => {
 }
 
 const trustedMetricValue = (value?: number | null) => {
-  if (!canUseProfileForTraining.value) return '--'
+  if (!canUseProfileForTraining.value || !hasQuantifiedEvidence.value) return '--'
   return numericLevel(value) ?? '--'
 }
 
@@ -528,51 +543,29 @@ watch(() => route.query.matchReportId, () => verifyMatchReport(routeMatchReportI
   color: var(--user-text);
 }
 
-.page-hero,
 .content-panel {
   min-width: 0;
+  padding: 20px;
   border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-md);
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
 }
 
-.page-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 22px 24px;
-}
-
-.hero-kicker,
-.hero-actions,
 .section-head {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.hero-kicker {
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-h1,
 h2,
 p {
   margin: 0;
 }
 
-h1 {
-  margin-top: 7px;
-  font-size: 24px;
-  line-height: 1.3;
-}
-
 h2 {
   color: var(--user-text);
-  font-size: 17px;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -580,18 +573,8 @@ p {
   max-width: 68ch;
   margin-top: 7px;
   color: var(--user-text-muted);
-  font-size: 13px;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.65;
-}
-
-.hero-actions {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.content-panel {
-  padding: 20px;
 }
 
 .evidence-panel {
@@ -629,40 +612,7 @@ p {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-md);
-  background: var(--user-surface);
-}
-
-.metric-card {
-  min-width: 0;
-  padding: 16px 18px;
-  border-right: 1px solid var(--user-border);
-  background: var(--user-surface);
-
-  &:last-child {
-    border-right: 0;
-  }
-
-  span {
-    color: var(--user-text-muted);
-    font-size: 12px;
-  }
-
-  strong {
-    display: block;
-    margin-top: 7px;
-    overflow-wrap: anywhere;
-    color: var(--user-text);
-    font-size: 23px;
-    line-height: 1.2;
-  }
-
-  .status {
-    color: var(--user-primary);
-    font-size: 17px;
-  }
+  gap: 14px;
 }
 
 .profile-grid {
@@ -682,10 +632,10 @@ p {
 .skill-count {
   flex: 0 0 auto;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--user-radius-full);
   background: var(--user-surface-muted);
   color: var(--user-text-muted);
-  font-size: 12px;
+  font-size: var(--user-text-caption, 12px);
 }
 
 .skill-domain-grid {
@@ -739,7 +689,7 @@ p {
   min-width: 0;
   padding: 10px;
   border: 1px solid var(--user-border);
-  border-radius: 10px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
 }
 
@@ -851,7 +801,7 @@ p {
   em {
     flex: 0 0 auto;
     padding: 3px 7px;
-    border-radius: 999px;
+    border-radius: var(--user-radius-full);
     background: var(--user-control-bg);
     color: var(--user-text-secondary);
     font-size: 12px;
@@ -867,7 +817,7 @@ p {
 
   .severity-medium {
     background: var(--user-warning-soft);
-    color: #8c4709;
+    color: var(--user-warning-text);
   }
 }
 
@@ -893,7 +843,7 @@ p {
 
   b {
     color: var(--user-text-secondary);
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -911,14 +861,13 @@ p {
 }
 
 @media (max-width: 900px) {
-  .page-hero,
   .profile-grid,
   .evidence-panel {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .hero-actions,
+  :deep(.cc-hero-band__actions),
   .evidence-tags {
     justify-content: flex-start;
   }
@@ -926,26 +875,17 @@ p {
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .metric-card:nth-child(2) {
-    border-right: 0;
-  }
-
-  .metric-card:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--user-border);
-  }
 }
 
 @media (max-width: 640px) {
-  .page-hero,
   .content-panel {
     padding: 16px;
   }
 
-  .hero-actions {
+  :deep(.cc-hero-band__actions) {
     width: 100%;
 
-    :deep(.el-button) {
+    .el-button {
       flex: 1 1 0;
       min-width: 0;
     }
@@ -954,15 +894,6 @@ p {
   .metric-grid,
   .gap-card-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .metric-card {
-    border-right: 0;
-    border-bottom: 1px solid var(--user-border);
-
-    &:last-child {
-      border-bottom: 0;
-    }
   }
 
   .skill-node-grid {

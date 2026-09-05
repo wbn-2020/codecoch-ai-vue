@@ -1,6 +1,25 @@
 <template>
   <div class="arena arena-iv">
     <div class="arena-iv__page">
+      <ModuleTabs :items="moduleTabs" />
+
+      <!-- 原型 mock-hero：同色相深绿渐变横幅 + 麦克风脉冲 -->
+      <section class="arena-iv__hero">
+        <span class="arena-iv__hero-pulse" aria-hidden="true"><Mic :size="26" /></span>
+        <div class="arena-iv__hero-body">
+          <b>AI 模拟面试 · 实时记录你的回答</b>
+          <p>从自我介绍到压力面全覆盖，完成后自动生成多维复盘报告。</p>
+        </div>
+        <button
+          class="arena-iv__hero-cta"
+          type="button"
+          :disabled="creating || resumeLoading || matchReportVerifyLoading"
+          @click="handleQuickCreate"
+        >
+          {{ creating ? '创建中…' : '立即开始' }}
+        </button>
+      </section>
+
       <!-- 首屏只承载模拟形式选择，推荐依据和微调留在后续折叠区。 -->
       <div class="arena-between arena-iv__head">
         <div>
@@ -133,7 +152,7 @@
                 <small>{{ item.desc }}</small>
                 <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
                   <span class="arena-chip arena-chip--mut">{{ item.badge }}</span>
-                  <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeDifficultyLabel(item) }}</span>
+                  <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 600">{{ modeDifficultyLabel(item) }}</span>
                   <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
                 </div>
               </button>
@@ -338,7 +357,7 @@
                   <small>{{ item.desc }}</small>
                   <div class="arena-row" style="gap: 6px; flex-wrap: wrap">
                     <span class="arena-chip arena-chip--mut">{{ item.badge }}</span>
-                    <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 800">{{ modeDifficultyLabel(item) }}</span>
+                    <span class="arena-tiny" style="color: var(--arena-amber); font-weight: 600">{{ modeDifficultyLabel(item) }}</span>
                     <span class="arena-tiny">{{ item.defaults?.questionCount || 8 }} 题</span>
                   </div>
                 </button>
@@ -447,6 +466,8 @@ import {
 import { buildInterviewCreatePayload } from '@/features/interview-create'
 import { saveInterviewVoiceProductContext } from '@/features/interview-voice-product'
 import { useGameProfileStore } from '@/features/game-profile'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { useAuthStore } from '@/stores/auth'
 import type {
   InterviewScenarioBindingVO,
@@ -466,6 +487,7 @@ import type { SelectOption } from '@/types/common'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('interview')
 const route = useRoute()
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
@@ -1687,7 +1709,6 @@ const handleVoiceTextFallback = () => {
 }
 
 onMounted(async () => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   await fetchResumes()
   await loadApplicationPackageContext()
   await applyRouteContext()
@@ -1699,6 +1720,92 @@ onMounted(async () => {
 .arena-iv {
   min-height: calc(100vh - 64px);
   margin: 0;
+
+  &__hero {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 16px;
+    padding: 22px 26px;
+    overflow: hidden;
+    border-radius: var(--arena-radius-card);
+    background: var(--arena-grad-accent);
+    color: var(--user-primary-contrast);
+  }
+
+  &__hero-pulse {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--user-primary-contrast) 18%, transparent);
+
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 2px solid color-mix(in srgb, var(--user-primary-contrast) 35%, transparent);
+      border-radius: 50%;
+      animation: arenaIvRing 2.4s infinite;
+    }
+
+    &::after {
+      animation-delay: 1.2s;
+    }
+  }
+
+  &__hero-body {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    min-width: 0;
+
+    b {
+      display: block;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    p {
+      margin: 5px 0 0;
+      color: color-mix(in srgb, var(--user-primary-contrast) 86%, transparent);
+      font-size: 12.5px;
+      line-height: 1.55;
+    }
+  }
+
+  &__hero-cta {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    padding: 11px 22px;
+    border: 0;
+    border-radius: var(--arena-radius-btn);
+    background: var(--user-surface);
+    color: var(--arena-grn-d);
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease;
+
+    &:hover:not(:disabled) {
+      box-shadow: var(--user-shadow-md);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
 
   &__page {
     max-width: 1060px;
@@ -1721,8 +1828,10 @@ onMounted(async () => {
   }
 
   &__kicker {
-    font-size: 12.5px;
-    font-weight: 800;
+    font-size: var(--user-text-overline, 11px);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     color: var(--arena-grn-d);
   }
 
@@ -1745,7 +1854,7 @@ onMounted(async () => {
       color: var(--arena-sub);
       cursor: pointer;
       font-size: 12.5px;
-      font-weight: 800;
+      font-weight: 600;
       list-style: none;
     }
 
@@ -1778,13 +1887,13 @@ onMounted(async () => {
     gap: 10px;
     padding: 16px;
     border: 1.5px dashed var(--arena-line);
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.7);
+    border-radius: var(--user-radius-lg, 14px);
+    background: color-mix(in srgb, var(--user-surface) 70%, transparent);
   }
 
   &__warn {
     padding: 9px 12px;
-    border-radius: 11px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--arena-amber-soft);
     color: var(--arena-amber);
     font-size: 12px;
@@ -1805,12 +1914,12 @@ onMounted(async () => {
     article {
       padding: 11px 13px;
       border: 1.5px solid var(--arena-line2);
-      border-radius: 12px;
-      background: #fff;
+      border-radius: var(--user-radius-md, 10px);
+      background: var(--user-surface);
 
       span {
         font-size: 10.5px;
-        font-weight: 800;
+        font-weight: 600;
         color: var(--arena-mut);
       }
 
@@ -1840,14 +1949,14 @@ onMounted(async () => {
       align-items: center;
       gap: 9px;
       padding: 9px 12px;
-      border-radius: 11px;
-      background: #f8faf8;
+      border-radius: var(--user-radius-md, 10px);
+      background: var(--user-surface-muted);
       border: 1px solid var(--arena-line2);
       color: var(--arena-grn-d);
 
       span {
         font-size: 10.5px;
-        font-weight: 800;
+        font-weight: 600;
         color: var(--arena-mut);
       }
 
@@ -1862,9 +1971,9 @@ onMounted(async () => {
   &__app-context {
     margin-top: 12px;
     padding: 13px 15px;
-    border-radius: 13px;
+    border-radius: var(--user-radius-lg, 14px);
     border: 1.5px solid var(--arena-line2);
-    background: #f8faf8;
+    background: var(--user-surface-muted);
   }
 
   &__app-grid {
@@ -1875,13 +1984,13 @@ onMounted(async () => {
 
     article {
       padding: 8px 11px;
-      border-radius: 10px;
-      background: #fff;
+      border-radius: var(--user-radius-md, 10px);
+      background: var(--user-surface);
       border: 1px solid var(--arena-line2);
 
       span {
         font-size: 10.5px;
-        font-weight: 800;
+        font-weight: 600;
         color: var(--arena-mut);
       }
 
@@ -1908,13 +2017,13 @@ onMounted(async () => {
   &__trust {
     margin-top: 12px;
     padding: 11px 14px;
-    border-radius: 12px;
+    border-radius: var(--user-radius-md, 10px);
     border: 1.5px dashed var(--arena-line);
     font-size: 12px;
 
     summary {
       cursor: pointer;
-      font-weight: 800;
+      font-weight: 600;
       color: var(--arena-sub);
     }
 
@@ -1933,12 +2042,12 @@ onMounted(async () => {
 
     article {
       padding: 8px 10px;
-      border-radius: 10px;
-      background: #f8faf8;
+      border-radius: var(--user-radius-md, 10px);
+      background: var(--user-surface-muted);
 
       span {
         font-size: 10.5px;
-        font-weight: 800;
+        font-weight: 600;
         color: var(--arena-mut);
       }
 
@@ -2015,7 +2124,7 @@ onMounted(async () => {
       span {
         color: var(--arena-ink);
         font-size: 12.5px;
-        font-weight: 800;
+        font-weight: 600;
       }
 
       small {
@@ -2037,26 +2146,25 @@ onMounted(async () => {
     padding: 20px 22px;
     border: 1.5px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
-    background: #fff;
+    background: var(--user-surface);
     font-family: inherit;
     text-align: left;
     cursor: pointer;
-    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
 
     &:hover {
-      transform: translateY(-1px);
       border-color: var(--arena-grn);
-      box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+      box-shadow: var(--user-shadow-xs);
     }
 
     &.is-active {
       border-color: var(--arena-grn);
-      background: #fff;
+      background: var(--user-surface);
       box-shadow: 0 0 0 3px var(--arena-grn-soft);
     }
 
     &.is-recommended {
-      border-color: #b9e7cd;
+      border-color: var(--user-primary-border);
     }
 
     b {
@@ -2079,7 +2187,7 @@ onMounted(async () => {
     padding: 16px 22px;
     border: 1.5px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
-    background: #fff;
+    background: var(--user-surface);
 
     > div:first-child {
       display: grid;
@@ -2090,7 +2198,7 @@ onMounted(async () => {
     b {
       color: var(--arena-ink);
       font-size: 14px;
-      font-weight: 900;
+      font-weight: 600;
     }
 
     p {
@@ -2115,7 +2223,7 @@ onMounted(async () => {
   &__dungeon-icon {
     width: 32px;
     height: 32px;
-    border-radius: 10px;
+    border-radius: var(--user-radius-md, 10px);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2126,7 +2234,7 @@ onMounted(async () => {
   &__collapsed {
     margin-top: 14px;
     padding: 14px 16px;
-    border-radius: 13px;
+    border-radius: var(--user-radius-lg, 14px);
     border: 1.5px dashed var(--arena-line);
   }
 
@@ -2150,12 +2258,12 @@ onMounted(async () => {
     gap: 9px;
     margin-bottom: 12px;
     font-size: 13px;
-    font-weight: 900;
+    font-weight: 600;
 
     span {
       width: 24px;
       height: 24px;
-      border-radius: 8px;
+      border-radius: var(--user-radius-sm, 6px);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -2177,17 +2285,17 @@ onMounted(async () => {
     justify-content: space-between;
     gap: 14px;
     padding: 12px 14px;
-    border-radius: 12px;
-    background: #f8faf8;
+    border-radius: var(--user-radius-md, 10px);
+    background: var(--user-surface-muted);
     border: 1px solid var(--arena-line2);
     margin-bottom: 12px;
   }
 
   &__tpl-preview {
     padding: 13px 15px;
-    border-radius: 13px;
+    border-radius: var(--user-radius-lg, 14px);
     border: 1.5px solid var(--arena-line2);
-    background: #f8faf8;
+    background: var(--user-surface-muted);
     margin-bottom: 14px;
   }
 
@@ -2202,24 +2310,24 @@ onMounted(async () => {
       align-items: flex-start;
       gap: 11px;
       padding: 10px 12px;
-      border-radius: 12px;
+      border-radius: var(--user-radius-md, 10px);
       border: 1.5px solid var(--arena-line2);
 
       &.is-active {
-        border-color: #b9e7cd;
-        background: linear-gradient(135deg, #f0fbf4, #ffffff 75%);
+        border-color: var(--user-primary-border);
+        background: var(--user-primary-soft);
       }
 
       > span {
         flex: none;
         width: 24px;
         height: 24px;
-        border-radius: 8px;
+        border-radius: var(--user-radius-sm, 6px);
         display: inline-flex;
         align-items: center;
         justify-content: center;
         font-size: 11px;
-        font-weight: 900;
+        font-weight: 600;
         background: var(--arena-grn-soft);
         color: var(--arena-grn-d);
       }
@@ -2262,12 +2370,22 @@ onMounted(async () => {
   }
 
   &__tip {
-    background: linear-gradient(150deg, #fff, #fff7ec);
-    border-color: #f3ddc0;
+    background: var(--user-warning-soft);
+    border-color: color-mix(in srgb, var(--user-warning) 35%, transparent);
   }
 }
 
 @media (max-width: 720px) {
+  .arena-iv__hero {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .arena-iv__hero-cta {
+    width: 100%;
+  }
+
   .arena-iv {
     margin: 0;
 
@@ -2299,6 +2417,24 @@ onMounted(async () => {
     &__selection-actions .arena-btn {
       flex: 1;
     }
+  }
+}
+
+@keyframes arenaIvRing {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-iv__hero-pulse::before,
+  .arena-iv__hero-pulse::after {
+    animation: none;
   }
 }
 </style>

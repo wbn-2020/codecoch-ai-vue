@@ -1,5 +1,7 @@
 <template>
   <div class="page-shell weekly-report-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="weekly-header">
       <div class="weekly-header__copy">
         <span>每周进展</span>
@@ -63,6 +65,14 @@
       :closable="false"
       title="目标岗位列表暂不可用"
       :description="targetLoadWarning"
+    />
+    <el-alert
+      v-if="operationNotice"
+      type="info"
+      show-icon
+      :closable="false"
+      title="周报状态确认中"
+      :description="operationNotice"
     />
 
     <AppState
@@ -191,6 +201,7 @@ import WeeklyReportCoveragePanel from '@/components/agent-weekly-report/WeeklyRe
 import WeeklyReportFactsPanel from '@/components/agent-weekly-report/WeeklyReportFactsPanel.vue'
 import WeeklyReportSignalsPanel from '@/components/agent-weekly-report/WeeklyReportSignalsPanel.vue'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import {
   buildWeeklyReportIdempotencyKey,
   buildWeeklyReportRequestId,
@@ -212,6 +223,7 @@ import {
 } from '@/features/agent-weekly-report'
 import type { AgentWeeklyReport } from '@/types/agentWeeklyReport'
 import type { TargetJobVO } from '@/types/jobTarget'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { getErrorMessage } from '@/utils/error'
 
 const timezone = normalizeWeeklyReportTimezone(
@@ -220,6 +232,7 @@ const timezone = normalizeWeeklyReportTimezone(
 )
 const route = inject(routeLocationKey, null)
 const router = inject(routerKey, null)
+const moduleTabs = useUserModuleTabs('progress')
 
 const stringQueryValue = (value: unknown) =>
   typeof value === 'string' ? value.trim() : ''
@@ -268,6 +281,7 @@ const refreshing = ref(false)
 const historyVisible = ref(false)
 const errorMessage = ref('')
 const targetLoadWarning = ref('')
+const operationNotice = ref('')
 const requestGate = createWeeklyReportRequestGate()
 let selectionSequence = 0
 let routeSelectionReady = false
@@ -326,6 +340,44 @@ const targetLabel = (target: TargetJobVO) =>
 
 const weeklyReportErrorMessage = (error: unknown, fallback: string) =>
   getWeeklyReportUserText(getErrorMessage(error, fallback), fallback)
+
+const isConsumableReport = (value: AgentWeeklyReport | null | undefined) =>
+  Boolean(
+    value
+    && value.reportStatus !== 'NOT_GENERATED'
+    && (value.id || value.snapshotId || value.facts.length)
+  )
+
+const isAmbiguousGenerationError = (error: unknown) => {
+  const candidate = error as {
+    message?: unknown
+    code?: unknown
+    response?: { data?: { message?: unknown; msg?: unknown } }
+  }
+  const message = [
+    candidate?.message,
+    candidate?.code,
+    candidate?.response?.data?.message,
+    candidate?.response?.data?.msg,
+    weeklyReportErrorMessage(error, '')
+  ].filter(Boolean).join(' ')
+  return /timeout|timed out|超时|正在生成|稍后重试|network|网络/i.test(message)
+}
+
+const waitForReportFinalState = async () => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1200))
+    }
+    try {
+      const current = await getCurrentAgentWeeklyReportApi(queryParams(), { silentError: true })
+      if (isConsumableReport(current)) return current
+    } catch {
+      // A later attempt can still observe the committed snapshot.
+    }
+  }
+  return null
+}
 
 const disableFutureWeek = (value: Date) =>
   isFutureWeeklyReportWeek(value, timezone)
@@ -437,6 +489,7 @@ const generateReport = async () => {
     timezone
   })
   generating.value = true
+  operationNotice.value = ''
   try {
     const result = await requestGate.run(idempotencyKey, () =>
       generateAgentWeeklyReportApi({
@@ -446,11 +499,28 @@ const generateReport = async () => {
         idempotencyKey
       })
     )
-    if (result) report.value = result
+    if (!isConsumableReport(result)) {
+      throw new Error('周报生成结果尚未完成。')
+    }
+    report.value = result
     ElMessage.success(result?.operationResult === 'NO_CHANGE' ? '来源未变化，已返回当前快照' : '周报已生成')
     await loadHistory()
   } catch (error) {
-    ElMessage.error(weeklyReportErrorMessage(error, '周报生成失败，请稍后重试。'))
+    if (isAmbiguousGenerationError(error)) {
+      operationNotice.value = '请求结果暂未确认，正在自动核对最终周报状态，请勿重复提交。'
+      const recovered = await waitForReportFinalState()
+      if (recovered) {
+        report.value = recovered
+        operationNotice.value = ''
+        ElMessage.success('周报已生成，并已同步最终状态。')
+        await loadHistory()
+      } else {
+        operationNotice.value = ''
+        ElMessage.error('暂未确认周报最终状态，请点击重新加载后再决定是否重试。')
+      }
+    } else {
+      ElMessage.error(weeklyReportErrorMessage(error, '周报生成失败，请稍后重试。'))
+    }
   } finally {
     generating.value = false
   }
@@ -562,7 +632,7 @@ onMounted(async () => {
 .weekly-header__copy > span {
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .weekly-header h1,
@@ -663,7 +733,7 @@ onMounted(async () => {
 .weekly-summary span {
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .weekly-summary p {

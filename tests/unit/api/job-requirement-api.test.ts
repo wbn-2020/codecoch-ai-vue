@@ -16,6 +16,7 @@ vi.mock('@/utils/request', () => ({
 }))
 
 import {
+  getLatestJobReadinessApi,
   getJobReadinessHistoryApi,
   getJobReadinessHistoryPageApi,
   getJobReadinessSnapshotApi
@@ -36,13 +37,34 @@ describe('job requirement readiness snapshot api', () => {
   it('requests a readiness snapshot by target and snapshot ID', async () => {
     const result = await getJobReadinessSnapshotApi(15, 42)
 
-    expect(get).toHaveBeenCalledWith('/job-targets/15/readiness-snapshots/42')
+    expect(get).toHaveBeenCalledWith(
+      '/job-targets/15/readiness-snapshots/42',
+      { silentError: undefined }
+    )
     expect(result).toMatchObject({
       id: 42,
       targetJobId: 15,
       snapshotHash: 'snapshot-42'
     })
     expectTypeOf(result).toEqualTypeOf<JobReadinessSnapshotDetailVO>()
+  })
+
+  it('allows readiness callers to keep expected failures local to their component', async () => {
+    await getLatestJobReadinessApi(15, { silentError: true })
+
+    expect(get).toHaveBeenCalledWith(
+      '/job-targets/15/readiness-snapshots/latest',
+      { silentError: true }
+    )
+  })
+
+  it('allows readiness history detail failures to remain local to the evidence component', async () => {
+    await getJobReadinessSnapshotApi(15, 42, { silentError: true })
+
+    expect(get).toHaveBeenCalledWith(
+      '/job-targets/15/readiness-snapshots/42',
+      { silentError: true }
+    )
   })
 
   it('requests paged readiness history with the full page contract', async () => {

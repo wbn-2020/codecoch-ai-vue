@@ -711,6 +711,14 @@
         <el-form-item label="每日投入（分钟）">
           <el-input-number v-model="studyPlanConfig.dailyMinutes" :min="20" :max="360" :step="10" :precision="0" />
         </el-form-item>
+        <el-form-item label="开始日期">
+          <el-date-picker
+            v-model="studyPlanConfig.startDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="studyPlanConfigVisible = false">取消</el-button>
@@ -758,7 +766,13 @@ import {
 import { buildInterviewReportKnowledgeCandidates } from '@/features/interview-report'
 import { buildVoiceDeliveryFacts } from '@/features/interview-voice-product'
 import { appConfig } from '@/config'
+import {
+  isAsyncOperationFailure,
+  resolveAsyncOperationState,
+  shouldPollAsyncOperation
+} from '@/features/async-operation-state'
 import { resolveAppRoutePath } from '@/features/route-safety'
+import { downloadBlobReliably } from '@/features/reliable-download'
 import type {
   InterviewKnowledgeCandidateVO,
   InterviewMessageVO,
@@ -770,6 +784,7 @@ import type {
 import type { InterviewReplayEligibilityVO } from '@/types/interviewAdvanced'
 import type { StudyPlanGenerateDTO } from '@/types/studyPlan'
 import { toFriendlyMessage } from '@/utils/error'
+import { formatDateInTimezone } from '@/utils/format'
 import { createOperationIdempotencyKey } from '@/utils/idempotency'
 import { getRouteNumberParam } from '@/utils/route'
 
@@ -789,9 +804,10 @@ const replayIdempotencyKeys = new Map<number, string>()
 const replayEligibility = ref<InterviewReplayEligibilityVO | null>(null)
 const studyPlanGenerating = ref(false)
 const studyPlanConfigVisible = ref(false)
-const studyPlanConfig = ref<Pick<StudyPlanGenerateDTO, 'expectedDurationDays' | 'dailyMinutes'>>({
+const studyPlanConfig = ref<Pick<StudyPlanGenerateDTO, 'expectedDurationDays' | 'dailyMinutes' | 'startDate'>>({
   expectedDurationDays: 14,
-  dailyMinutes: 60
+  dailyMinutes: 60,
+  startDate: formatDateInTimezone(new Date(), 'Asia/Shanghai')
 })
 const report = ref<InterviewReportVO | null>(null)
 const reportRecoveryNotice = ref('')
@@ -851,15 +867,14 @@ const handleExportReport = async (command: string | number | object) => {
     if (!isCurrentReportRequest(id, generation)) return
     const mimeType = format === 'json' ? 'application/json;charset=UTF-8' : 'text/markdown;charset=UTF-8'
     const blob = response instanceof Blob ? response : new Blob([response as BlobPart], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    try {
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `面试报告_${id}.${format === 'json' ? 'json' : 'md'}`
-      link.click()
-    } finally {
-      URL.revokeObjectURL(url)
-    }
+    downloadBlobReliably(blob, {
+      filename: `面试报告_${id}.${format === 'json' ? 'json' : 'md'}`,
+      allowedExtensions: [format === 'json' ? 'json' : 'md'],
+      allowedMimeTypes: format === 'json'
+        ? ['application/json', 'text/json']
+        : ['text/markdown', 'text/plain'],
+      maxBytes: 20 * 1024 * 1024
+    })
     ElMessage.success('报告已导出')
   } catch (error) {
     if (!isCurrentReportRequest(id, generation)) return
@@ -892,10 +907,24 @@ const normalizedStatus = computed(() => {
 
 const successReportStatuses = ['GENERATED', 'COMPLETED', 'SUCCESS']
 const unscorableReportStatuses = ['UNSCORABLE', 'NOT_SCORABLE', 'INSUFFICIENT_SAMPLE', 'SAMPLE_INSUFFICIENT']
-const isGenerating = computed(() => ['GENERATING', 'REPORT_GENERATING'].includes(normalizedStatus.value))
-const isFailed = computed(() => normalizedStatus.value === 'FAILED')
 const isUnscorable = computed(() => unscorableReportStatuses.includes(normalizedStatus.value))
 const isGenerated = computed(() => successReportStatuses.includes(normalizedStatus.value))
+const reportOperationSnapshot = computed(() => ({
+  status: normalizedStatus.value,
+  consumable: isGenerated.value,
+  hasExecution: Boolean(report.value?.reportId || report.value?.id || interviewId.value),
+  hasReceipt: Boolean(
+    report.value?.asyncMessageId
+    || report.value?.asyncTraceId
+    || asyncReceipt.value.messageId
+    || asyncReceipt.value.traceId
+  )
+}))
+const isGenerating = computed(() => shouldPollAsyncOperation(reportOperationSnapshot.value))
+const isFailed = computed(() =>
+  !isUnscorable.value
+  && isAsyncOperationFailure(resolveAsyncOperationState(reportOperationSnapshot.value))
+)
 const isRecoveryState = computed(() => !loading.value && !isGenerating.value && !isGenerated.value)
 const normalizedTrustStatus = computed(() => String(report.value?.trustStatus || '').toUpperCase())
 const hasVerifiedReport = computed(() =>
@@ -2036,14 +2065,16 @@ const confirmGenerateStudyPlan = async () => {
     dailyMinutes: Math.min(
       360,
       Math.max(20, Math.round(Number(studyPlanConfig.value.dailyMinutes) || 60))
-    )
+    ),
+    startDate: studyPlanConfig.value.startDate || formatDateInTimezone(new Date(), 'Asia/Shanghai')
   }
   studyPlanGenerating.value = true
   try {
     const payload: StudyPlanGenerateDTO = {
       reportId,
       expectedDurationDays: studyPlanConfig.value.expectedDurationDays,
-      dailyMinutes: studyPlanConfig.value.dailyMinutes
+      dailyMinutes: studyPlanConfig.value.dailyMinutes,
+      startDate: studyPlanConfig.value.startDate
     }
     const result = await generateStudyPlanApi(payload)
     if (!isCurrentReportRequest(id, generation)) return
@@ -2145,7 +2176,7 @@ onBeforeUnmount(() => {
 .report-top,
 .analysis-card {
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
   box-shadow: none;
 }
@@ -2192,7 +2223,7 @@ onBeforeUnmount(() => {
   margin-bottom: 12px;
   padding: 14px;
   border: 1px solid var(--user-primary-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-primary-soft);
 
   div {
@@ -2209,7 +2240,7 @@ onBeforeUnmount(() => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2241,7 +2272,7 @@ onBeforeUnmount(() => {
   margin-top: 20px;
   padding: 14px 16px;
   border: 1px dashed var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
   color: var(--user-text-secondary);
 
@@ -2282,7 +2313,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 
   .el-button {
@@ -2296,7 +2327,7 @@ onBeforeUnmount(() => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2329,7 +2360,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: 16px;
   border: 1px dashed var(--user-primary);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-primary-soft);
 
   div {
@@ -2339,7 +2370,7 @@ onBeforeUnmount(() => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2376,7 +2407,7 @@ onBeforeUnmount(() => {
   width: 100%;
   padding: 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
   color: var(--user-text);
   text-align: left;
@@ -2415,7 +2446,7 @@ onBeforeUnmount(() => {
 .stage-report-card {
   padding: 18px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
 
   header {
@@ -2431,7 +2462,7 @@ onBeforeUnmount(() => {
   label {
     color: var(--user-text-muted);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   strong {
@@ -2450,13 +2481,13 @@ onBeforeUnmount(() => {
 .stage-score-pill {
   min-width: 88px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-primary-soft);
   text-align: center;
 
   strong {
     color: var(--user-primary);
-    font-size: 24px;
+    font-size: var(--user-text-h2, 22px);
   }
 }
 
@@ -2470,14 +2501,16 @@ onBeforeUnmount(() => {
 .stage-copy {
   min-width: 0;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 }
 
 .eyebrow {
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .report-actions,
@@ -2494,7 +2527,7 @@ onBeforeUnmount(() => {
 .failed-panel {
   h2 {
     margin: 14px 0 8px;
-    font-size: 24px;
+    font-size: var(--user-text-h2, 22px);
   }
 }
 
@@ -2508,7 +2541,7 @@ onBeforeUnmount(() => {
 .generating-panel {
   h2 {
     margin: 12px 0 8px;
-    font-size: 22px;
+    font-size: var(--user-text-h2, 22px);
   }
 
   p {
@@ -2533,13 +2566,13 @@ onBeforeUnmount(() => {
 .task-stage-item {
   padding: 12px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
   }
 
@@ -2572,7 +2605,7 @@ onBeforeUnmount(() => {
     max-width: 100%;
     padding: 5px 8px;
     border: 1px solid var(--user-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--user-surface);
     color: var(--user-text-muted);
     font-size: 12px;
@@ -2614,7 +2647,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: 20px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
 }
 
@@ -2637,11 +2670,13 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   padding: 5px 10px;
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-primary-soft);
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .state-promise {
@@ -2651,11 +2686,11 @@ onBeforeUnmount(() => {
   span {
     padding: 7px 10px;
     border: 1px solid var(--user-primary-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--user-surface);
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -2666,8 +2701,10 @@ onBeforeUnmount(() => {
 
 .panel-kicker {
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .report-score-panel .panel-kicker {
@@ -2677,7 +2714,7 @@ onBeforeUnmount(() => {
 .score-value {
   margin: 16px 0 10px;
   font-size: 64px;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 0.95;
 }
 
@@ -2698,7 +2735,7 @@ onBeforeUnmount(() => {
   h2 {
     margin: 10px 0 8px;
     color: var(--user-text);
-    font-size: 22px;
+    font-size: var(--user-text-h2, 22px);
     line-height: 1.35;
     overflow-wrap: anywhere;
   }
@@ -2715,7 +2752,7 @@ onBeforeUnmount(() => {
   margin-top: 18px;
   padding: 14px;
   border: 1px dashed var(--user-primary-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
 
   strong,
@@ -2742,13 +2779,13 @@ onBeforeUnmount(() => {
   margin-top: 18px;
   padding: 14px;
   border: 1px solid var(--user-success-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-success-soft);
 
   span {
     color: var(--user-success);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2781,7 +2818,7 @@ onBeforeUnmount(() => {
   span {
     padding: 6px 10px;
     border: 1px solid var(--user-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--user-surface);
     color: var(--user-text-muted);
     font-size: 12px;
@@ -2798,7 +2835,7 @@ onBeforeUnmount(() => {
     min-width: 0;
     padding: 14px;
     border: 1px solid var(--user-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--user-surface);
   }
 
@@ -2811,7 +2848,7 @@ onBeforeUnmount(() => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2832,7 +2869,7 @@ onBeforeUnmount(() => {
 .score-hero,
 .overview-card {
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
   padding: 18px;
 
@@ -2844,7 +2881,7 @@ onBeforeUnmount(() => {
   strong {
     display: block;
     margin-top: 10px;
-    font-size: 22px;
+    font-size: var(--user-text-h2, 22px);
     line-height: 1.2;
   }
 }
@@ -2901,7 +2938,7 @@ onBeforeUnmount(() => {
     min-width: 0;
     padding: 14px;
     border: 1px solid var(--user-border);
-    border-radius: 6px;
+    border-radius: var(--user-radius-sm, 6px);
     background: var(--user-surface-muted);
   }
 
@@ -2932,7 +2969,7 @@ onBeforeUnmount(() => {
   margin-top: 18px;
   padding: 18px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 }
 
@@ -2946,7 +2983,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
 
   span,
@@ -2957,7 +2994,7 @@ onBeforeUnmount(() => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2980,7 +3017,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--user-primary-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
 
   header {
@@ -3026,7 +3063,7 @@ onBeforeUnmount(() => {
   margin-top: 18px;
   padding: 18px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 }
 
@@ -3038,14 +3075,14 @@ onBeforeUnmount(() => {
   article {
     padding: 14px;
     border: 1px solid var(--user-border);
-    border-radius: 8px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--user-surface);
   }
 
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong,
@@ -3106,7 +3143,7 @@ onBeforeUnmount(() => {
 .qa-item {
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 }
 
@@ -3125,7 +3162,7 @@ onBeforeUnmount(() => {
 
   span {
     color: var(--user-primary);
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -3291,7 +3328,7 @@ onBeforeUnmount(() => {
 
   h1 {
     margin: 6px 0;
-    font-size: 24px;
+    font-size: var(--user-text-h2, 22px);
   }
 
   p {
@@ -3778,8 +3815,9 @@ onBeforeUnmount(() => {
     box-shadow: none;
 
     h1 {
-      font-size: 28px;
-      font-weight: 900;
+      font-size: var(--user-text-h1, 30px);
+      font-weight: 600;
+      letter-spacing: -0.03em;
     }
   }
 
@@ -3830,7 +3868,7 @@ onBeforeUnmount(() => {
   }
 
   .stage-score-pill {
-    border-radius: 13px;
+    border-radius: var(--user-radius-lg, 14px);
     background: var(--arena-grn-soft);
 
     strong {
@@ -3842,7 +3880,7 @@ onBeforeUnmount(() => {
     border-color: var(--arena-grn);
     background: var(--arena-grn);
     box-shadow: 0 4px 0 var(--arena-grn-d);
-    font-weight: 800;
+    font-weight: 600;
   }
 }
 
@@ -3882,7 +3920,7 @@ onBeforeUnmount(() => {
     width: 42px;
     height: 42px;
     place-items: center;
-    border-radius: 12px;
+    border-radius: var(--user-radius-lg, 14px);
     background: var(--arena-amber-soft);
     color: var(--user-warning-text);
   }
@@ -3895,14 +3933,14 @@ onBeforeUnmount(() => {
     display: block;
     color: var(--arena-sub);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   .report-recovery-card h2 {
     margin: 6px 0 0;
     color: var(--arena-ink);
-    font-size: 26px;
-    font-weight: 900;
+    font-size: var(--user-text-h2, 22px);
+    font-weight: 600;
     line-height: 1.25;
     text-wrap: balance;
   }
@@ -3920,7 +3958,7 @@ onBeforeUnmount(() => {
     margin-top: 20px;
     padding: 14px 16px;
     border: 1px solid var(--arena-line);
-    border-radius: 10px;
+    border-radius: var(--user-radius-md, 10px);
     background: var(--arena-bg);
   }
 
@@ -3928,7 +3966,7 @@ onBeforeUnmount(() => {
     display: block;
     color: var(--arena-ink);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   .report-recovery-card__reason p {
@@ -3949,7 +3987,7 @@ onBeforeUnmount(() => {
       min-width: 0;
       padding: 10px 12px;
       border: 1px solid var(--arena-line);
-      border-radius: 8px;
+      border-radius: var(--user-radius-md, 10px);
       background: var(--user-surface);
     }
 
@@ -4003,12 +4041,12 @@ onBeforeUnmount(() => {
       min-height: 34px;
       padding: 8px 12px;
       border: 1.5px solid var(--arena-line);
-      border-radius: 12px;
+      border-radius: var(--user-radius-lg, 14px);
       background: var(--user-surface);
       color: var(--arena-sub);
       cursor: pointer;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 600;
       list-style: none;
     }
 
@@ -4028,7 +4066,7 @@ onBeforeUnmount(() => {
     width: min(360px, calc(100vw - 44px));
     padding: 10px;
     border: 1.5px solid var(--arena-line);
-    border-radius: 14px;
+    border-radius: var(--user-radius-lg, 14px);
     background: var(--user-surface);
     box-shadow: var(--user-shadow-md);
 
@@ -4050,7 +4088,7 @@ onBeforeUnmount(() => {
 
     h1 {
       margin: 5px 0;
-      font-size: 22px;
+      font-size: var(--user-text-h2, 22px);
     }
 
     p {
@@ -4078,15 +4116,18 @@ onBeforeUnmount(() => {
 
     > span {
       color: var(--arena-grn-d);
-      font-size: 12.5px;
-      font-weight: 800;
+      font-size: var(--user-text-overline, 11px);
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
     }
 
     h2 {
       margin: 5px 0 0;
       color: var(--arena-ink);
-      font-size: 28px;
-      font-weight: 900;
+      font-size: var(--user-text-h1, 30px);
+      font-weight: 600;
+      letter-spacing: -0.03em;
       line-height: 1.2;
     }
   }
@@ -4142,7 +4183,7 @@ onBeforeUnmount(() => {
     strong {
       color: var(--arena-ink);
       font-size: 38px;
-      font-weight: 900;
+      font-weight: 600;
       line-height: 1;
     }
 
@@ -4150,7 +4191,7 @@ onBeforeUnmount(() => {
       margin-top: 5px;
       color: var(--arena-mut);
       font-size: 11px;
-      font-weight: 800;
+      font-weight: 600;
     }
   }
 
@@ -4161,7 +4202,7 @@ onBeforeUnmount(() => {
       margin: 0;
       color: var(--arena-ink);
       font-size: 16px;
-      font-weight: 800;
+      font-weight: 600;
       line-height: 1.45;
     }
 
@@ -4183,13 +4224,13 @@ onBeforeUnmount(() => {
     grid-column: 1 / -1;
     padding: 14px 16px;
     border: 1.5px solid var(--user-ai);
-    border-radius: 13px;
+    border-radius: var(--user-radius-lg, 14px);
     background: var(--user-ai-soft);
 
     > span {
       color: var(--arena-vio);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 600;
     }
 
     ol {
@@ -4252,11 +4293,11 @@ onBeforeUnmount(() => {
       width: 24px;
       height: 24px;
       place-items: center;
-      border-radius: 8px;
+      border-radius: var(--user-radius-md, 10px);
       background: var(--arena-red-soft);
       color: var(--arena-red);
       font-size: 11px;
-      font-weight: 900;
+      font-weight: 600;
     }
 
     article strong {
@@ -4293,7 +4334,7 @@ onBeforeUnmount(() => {
       color: var(--arena-sub);
       cursor: pointer;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 600;
       list-style: none;
     }
 
@@ -4320,7 +4361,7 @@ onBeforeUnmount(() => {
       color: var(--arena-sub);
       cursor: pointer;
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 600;
       list-style: none;
     }
 
@@ -4370,7 +4411,7 @@ onBeforeUnmount(() => {
     }
 
     .report-recovery-card h2 {
-      font-size: 22px;
+      font-size: var(--user-text-h2, 22px);
     }
 
     .report-recovery-card__actions {
@@ -4392,7 +4433,7 @@ onBeforeUnmount(() => {
     }
 
     .settlement-intro h2 {
-      font-size: 24px;
+      font-size: var(--user-text-h2, 22px);
     }
 
     .settlement-card {

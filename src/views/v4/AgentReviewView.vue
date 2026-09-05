@@ -1,8 +1,10 @@
 <template>
   <div class="page-shell agent-review-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="review-header">
       <div>
-        <div class="review-eyebrow">Agent daily review</div>
+        <div class="review-eyebrow">每日智能复盘</div>
         <h1>多日闭环复盘</h1>
         <p>先展示任务事实，再说明限制、偏移、调整和下一步。样本不足或降级来源只作为弱调整信号。</p>
       </div>
@@ -120,7 +122,9 @@ import { generateAgentReviewApi, getAgentReviewsApi, type AgentReviewVO } from '
 import PlanChangePreviewDialog from '@/components/agent-review/PlanChangePreviewDialog.vue'
 import ReviewPlanSuggestionPanel from '@/components/agent-review/ReviewPlanSuggestionPanel.vue'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import { appConfig } from '@/config'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
   buildAgentReviewPlanSuggestionList,
   createAgentPlanChangeRequestIdentity,
@@ -154,6 +158,7 @@ interface ActivePreviewRequest extends AgentPlanChangePreviewCommand {
 
 const today = formatLocalDate()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('progress')
 const adaptivePlanEnabled = computed(() => appConfig.enableV4AdaptivePlan)
 const date = ref(today)
 const loading = ref(false)
@@ -581,7 +586,7 @@ onMounted(load)
 .review-eyebrow {
   color: var(--arena-grn-d, var(--app-primary));
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .review-actions,
@@ -646,7 +651,7 @@ onMounted(load)
 .review-row__head span {
   color: var(--app-text-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .review-row__head h2 {

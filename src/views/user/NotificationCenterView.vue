@@ -21,7 +21,29 @@
       </div>
     </section>
 
-    <section class="content-card cc-glass">
+    <nav class="notification-sections" aria-label="消息中心分类">
+      <button
+        type="button"
+        :class="{ 'is-active': activeSection === 'notifications' }"
+        :aria-current="activeSection === 'notifications' ? 'page' : undefined"
+        @click="showSection('notifications')"
+      >
+        <Bell :size="16" />
+        通知
+        <span v-if="unreadCount > 0">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+      </button>
+      <button
+        type="button"
+        :class="{ 'is-active': activeSection === 'announcements' }"
+        :aria-current="activeSection === 'announcements' ? 'page' : undefined"
+        @click="showSection('announcements')"
+      >
+        <Megaphone :size="16" />
+        系统公告
+      </button>
+    </nav>
+
+    <section v-show="activeSection === 'notifications'" class="content-card cc-glass">
       <div class="content-card__body notification-toolbar">
         <el-radio-group v-model="query.isRead" @change="handleFilter">
           <el-radio-button :value="''">全部</el-radio-button>
@@ -89,6 +111,8 @@
       </div>
     </section>
 
+    <UserAnnouncementPanel v-show="activeSection === 'announcements'" />
+
     <el-dialog
       v-model="detailVisible"
       class="notification-dialog"
@@ -134,9 +158,9 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { Bell, BellOff, CheckCheck, ExternalLink, LayoutDashboard, RefreshCw } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { Bell, BellOff, CheckCheck, ExternalLink, LayoutDashboard, Megaphone, RefreshCw } from 'lucide-vue-next'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   getNotificationsApi,
@@ -148,6 +172,7 @@ import {
 } from '@/api/notification'
 import AppState from '@/components/common/AppState.vue'
 import { normalizeNotificationType, resolveNotificationAction } from '@/features/notifications'
+import UserAnnouncementPanel from '@/views/user/components/UserAnnouncementPanel.vue'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime, notificationTypeLabels } from '@/utils/format'
@@ -155,6 +180,10 @@ import { notifyUnreadChanged } from '@/utils/notificationEvents'
 import request from '@/utils/request'
 
 const router = useRouter()
+const route = useRoute()
+const activeSection = ref<'notifications' | 'announcements'>(
+  route.query.tab === 'announcements' ? 'announcements' : 'notifications'
+)
 const loading = ref(false)
 const markingAll = ref(false)
 const notifications = ref<NotificationVO[]>([])
@@ -285,6 +314,11 @@ const handleFilter = () => {
   fetchNotifications()
 }
 
+const showSection = async (section: 'notifications' | 'announcements') => {
+  activeSection.value = section
+  await router.push(section === 'announcements' ? '/notifications?tab=announcements' : '/notifications')
+}
+
 const loadNotificationCenter = () => {
   fetchNotifications()
   fetchUnreadCount()
@@ -383,6 +417,13 @@ const handleMarkAllRead = async () => {
   }
 }
 
+watch(
+  () => route.query.tab,
+  (tab) => {
+    activeSection.value = tab === 'announcements' ? 'announcements' : 'notifications'
+  }
+)
+
 onMounted(() => {
   loadNotificationCenter()
 })
@@ -400,36 +441,42 @@ onMounted(() => {
   justify-content: space-between;
   gap: 20px;
   padding: 22px 24px;
-  border: 1.5px solid var(--user-primary-border);
-  border-radius: 20px;
-  background: var(--user-surface-tint);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-xl);
+  background: var(--user-surface);
+  box-shadow: var(--user-shadow-xs);
 }
 
 .eyebrow {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--user-radius-full);
+  background: var(--user-primary-soft);
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .hero-copy {
   h1 {
-    margin: 8px 0 0;
+    margin: 10px 0 0;
     color: var(--user-text);
-    font-size: 26px;
-    font-weight: 900;
-    line-height: 1.3;
+    font-size: var(--user-text-h1, 30px);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
   }
 
   p {
-    margin: 10px 0 0;
+    margin: 6px 0 0;
     max-width: 620px;
-    color: var(--user-text-secondary);
-    font-size: 13.5px;
-    line-height: 1.7;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-body-sm, 13px);
+    line-height: 1.5;
   }
 }
 
@@ -441,9 +488,66 @@ onMounted(() => {
 
 .notification-page > .content-card {
   border: 1px solid var(--user-border);
-  border-radius: 20px;
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  box-shadow: var(--user-shadow-xs);
+}
+
+.notification-sections {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  align-self: flex-start;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-md);
+  background: var(--user-surface);
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: var(--user-radius-sm);
+    background: transparent;
+    color: var(--user-text-secondary);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+
+    > span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: var(--user-radius-full);
+      background: var(--el-color-danger);
+      color: var(--user-primary-contrast);
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    &:hover {
+      background: var(--user-primary-faint);
+      color: var(--user-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--user-primary);
+      outline-offset: 2px;
+    }
+
+    &.is-active {
+      background: var(--user-primary-soft);
+      color: var(--user-primary);
+      font-weight: 600;
+    }
+  }
 }
 
 .notification-toolbar {
@@ -474,11 +578,11 @@ onMounted(() => {
   height: 18px;
   margin-left: 4px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--user-radius-full);
   background: var(--el-color-danger);
-  color: #ffffff;
+  color: var(--user-primary-contrast);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .notification-list {
@@ -528,7 +632,7 @@ onMounted(() => {
     margin-inline: -8px;
     padding-inline: 10px;
     border-bottom-color: transparent;
-    border-radius: 12px;
+    border-radius: var(--user-radius-md);
     background: var(--user-surface-tint);
 
     .notification-body strong {
@@ -563,8 +667,8 @@ onMounted(() => {
 
   strong {
     color: var(--user-text);
-    font-size: 15px;
-    font-weight: 800;
+    font-size: var(--user-text-h4, 15px);
+    font-weight: 600;
     line-height: 1.45;
   }
 }

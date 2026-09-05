@@ -14,12 +14,15 @@ const targetFiles = [
   'src/views/resume/components/ResumeArtifactDeliveryPanel.vue'
 ]
 const arenaResumeEditorScope = {
-  rootClass: 'class="arena arena-resume-studio resume-editor page-shell"',
-  selector: '.arena-resume-studio'
+  rootClass: 'class="arena resume-workbench-page resume-editor page-shell"',
+  selector: '.resume-workbench-page.resume-editor'
 }
 const stripArenaMigrationAndPaperPreviewStyles = (source: string) =>
   stripScopedStyleBlock(
-    stripScopedStyleBlock(source, arenaResumeEditorScope.selector),
+    stripScopedStyleBlock(
+      stripScopedStyleBlock(source, arenaResumeEditorScope.selector),
+      '.arena-resume-studio'
+    ),
     '.template-thumb'
   )
 
@@ -32,7 +35,8 @@ describe('resume editor and delivery workspace layout', () => {
         : source
       if (path === 'src/views/resume/ResumeEditView.vue') {
         expect(source, path).toContain(arenaResumeEditorScope.rootClass)
-        expect(source, path).toContain('var(--arena-')
+        expect(source, path).toContain('--resume-workbench-bg:')
+        expect(source, path).not.toContain('class="arena arena-resume-studio resume-editor page-shell"')
       }
       expect(validatedSource, path).toContain('var(--user-')
       expect(validatedSource, path).not.toMatch(
@@ -44,34 +48,52 @@ describe('resume editor and delivery workspace layout', () => {
     const preview = readSource('src/views/resume/components/ResumeDocumentPreview.vue')
     expect(preview).toMatch(/\.resume-document\s*\{[\s\S]*?background:\s*#fff/)
     expect(preview).toContain('document-section__heading')
-    expect(preview).toContain('resumeTemplateSectionOrder')
+    expect(preview).toContain('normalizeResumePresentation')
+    // M5: the ATS inline article iterates document-driven render sections for order/visibility.
+    expect(preview).toContain('v-for="section in renderSections"')
   })
 
   it('keeps the supporting workspace in the editor column and bounds the sticky preview to the viewport', () => {
     const source = readSource('src/views/resume/ResumeEditView.vue')
-    const workbenchStyles = source.slice(source.lastIndexOf('// Resume workbench v2'))
+    const baseWorkbenchStyles = source.slice(source.lastIndexOf('// Resume workbench v2'))
+    const shellSource = readSource('src/views/resume/components/ResumeWorkbenchShell.vue')
 
-    expect(workbenchStyles).toContain('grid-template-columns: 220px minmax(640px, 1fr) 370px')
-    expect(workbenchStyles).toMatch(
-      /\.editor-main,\s*[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;/
+    expect(shellSource).toContain('--workbench-rail-width: 220px')
+    expect(shellSource).toContain('--workbench-editor-width: 420px')
+    // v22 列序：editor 居中（col 2），preview 居右（col 3），由 Shell :slotted 托管
+    expect(shellSource).toMatch(
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;/
     )
-    expect(workbenchStyles).toMatch(
-      /\.preview-column\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?overflow:\s*hidden/
+    expect(shellSource).toMatch(
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;[\s\S]*?overflow:\s*hidden;/
     )
-    expect(workbenchStyles).toMatch(
+    expect(source).toMatch(
+      /\.resume-paper-wrap\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*100%;[\s\S]*?overscroll-behavior:\s*contain;/
+    )
+    expect(baseWorkbenchStyles).toMatch(
       /\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?max-height:\s*none;[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*auto/
     )
-    expect(workbenchStyles).toMatch(
-      /@media \(max-width: 1020px\)[\s\S]*?\.editor-main,\s*[\s\S]*?\.preview-column\s*\{[\s\S]*?position:\s*static;[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?max-height:\s*min\(780px,\s*calc\(100dvh\s*-\s*160px\)\);[\s\S]*?overflow:\s*auto;/
+    expect(shellSource).toMatch(
+      /@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout\s*\{[\s\S]*?display:\s*block;/
+    )
+    expect(shellSource).toMatch(
+      /@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*194px\)\);[\s\S]*?overflow:\s*auto;/
     )
     expect(source).toContain('ResumeDocumentPreview')
-    expect(source).toContain('ResumeTemplateGallery')
+    expect(source).toContain('ResumeTemplateBrowser')
+    const preview = readSource('src/views/resume/components/ResumeDocumentPreview.vue')
+    expect(preview).toContain(
+      "import { Circle, FileText, Link, Mail, MapPin, Phone } from 'lucide-vue-next'"
+    )
+    expect(preview).toContain(':is="item.icon"')
+    expect(preview).toContain("presentation.iconMode !== 'HIDDEN'")
+    expect(preview).toContain('class="document-contact__item"')
   })
 
   it('keeps list, delivery, and artifact actions close to their content on narrow screens', () => {
     const list = readSource('src/views/resume/ResumeListView.vue')
     const editor = readSource('src/views/resume/ResumeEditView.vue')
-    const templateGallery = readSource('src/views/resume/components/ResumeTemplateGallery.vue')
+    const templateGallery = readSource('src/views/resume/components/ResumeTemplateBrowser.vue')
     const workbench = readSource('src/views/resume/components/ResumeDeliveryWorkbench.vue')
     const artifactPanel = readSource('src/views/resume/components/ResumeArtifactDeliveryPanel.vue')
 
@@ -92,33 +114,33 @@ describe('resume editor and delivery workspace layout', () => {
     expect(workbench).not.toContain(':draft="draft"')
     expect(editor).toContain(':has-unsaved-changes="hasUnsavedResumeChanges"')
     expect(editor).toContain('moveRovingSelection')
-    expect(templateGallery).toContain(':tabindex="pendingCode === template.code ? 0 : -1"')
-    expect(templateGallery).toContain(':global(.resume-template-gallery-dialog)')
-    expect(templateGallery).toContain('--user-surface: #ffffff')
-    expect(templateGallery).toContain('--el-text-color-primary: #17211b')
-    expect(templateGallery).toContain('{{ template.roleFit }}')
-    expect(templateGallery).toContain('{{ template.pageTendency }}')
-    expect(templateGallery).toContain('{{ template.atsRiskLabel }}')
-    expect(templateGallery).toContain('{{ template.typographyLayout }}')
+    expect(templateGallery).toContain('class="template-browser"')
+    expect(templateGallery).toContain('class="template-browser__grid"')
+    expect(templateGallery).toContain('aspect-ratio: 210 / 297')
+    expect(templateGallery).toContain('class="template-card__secondary"')
+    expect(templateGallery).toContain('class="template-card__primary"')
+    expect(templateGallery).toContain('class="template-preview__renderer"')
+    expect(templateGallery).toContain('setInterval(() =>')
     expect(editor).toContain('这里不生成真实 ATS 分数')
     expect(editor).toContain('A4 预览 · 分页以导出为准')
     expect(editor).toContain('打开稳定版本分页与导出工作台')
     expect(editor).toContain('v-show="inspectorMode === \'review\'" class="content-card side-panel export-check-panel"')
-    expect(templateGallery).toMatch(/@media \(max-width: 760px\)[\s\S]*?flex:\s*0\s+0\s+min\(290px,\s*82vw\)/)
-    expect(templateGallery).toMatch(/dd\s*\{[\s\S]*?overflow-wrap:\s*anywhere;/)
+    expect(templateGallery).toMatch(/@media \(max-width: 639px\)[\s\S]*?grid-template-columns:\s*1fr;/)
     expect(workbench).not.toContain('previewPages')
     expect(artifactPanel).toMatch(/@media\s*\(max-width:\s*760px\)/)
     expect(artifactPanel).toMatch(/\.artifact-main\s*\{[\s\S]*?min-width:\s*0/)
     expect(artifactPanel).toContain('artifact-template-picker')
     expect(artifactPanel).toContain('resumeTemplateOptions')
-    expect(artifactPanel).not.toContain("templateCode: 'ATS_SINGLE_COLUMN'")
-    expect(artifactPanel).not.toContain('templateVersion: 1')
+    expect(artifactPanel).toContain('getResumeAtsTemplatesApi')
+    expect(artifactPanel).toContain('templateVersion')
+    expect(artifactPanel).toContain('selectedTemplateVersion.value')
+    expect(artifactPanel).toContain(':disabled="!canCreateZip"')
   })
 
   it('keeps every resume accent readable on white paper headings', () => {
     const preview = readSource('src/views/resume/components/ResumeDocumentPreview.vue')
 
-    expect(preview).toContain('--paper-accent: #0b7669')
+    expect(preview).toContain('--paper-accent: #1f6f5c')
     expect(preview).not.toContain('--paper-accent: #0f8b7c')
   })
 })

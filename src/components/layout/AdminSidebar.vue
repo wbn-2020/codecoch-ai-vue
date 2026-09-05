@@ -69,6 +69,9 @@ import { useAuthStore } from '@/stores/auth'
 const props = defineProps<{
   collapsed?: boolean
 }>()
+const emit = defineEmits<{
+  select: []
+}>()
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -203,6 +206,7 @@ const closeAllMenus = () => {
 }
 
 const handleSelect = () => {
+  emit('select')
   closeAllMenus()
 }
 

@@ -88,26 +88,36 @@ describe('user workspace layout system', () => {
 
   it('uses the wide compact user workspace shell', () => {
     const layout = readSource('src/layouts/UserLayout.vue')
-    const topNav = readSource('src/components/layout/UserTopNav.vue')
+    const appShell = readSource('src/components/layout/UserAppShell.vue')
     const components = readSource('src/styles/user-components.scss')
     const elementTheme = readSource('src/styles/element-dark.scss')
     const variables = readSource('src/styles/variables.scss')
-    const arena = readSource('src/styles/arena.scss')
+    const theme = readSource('src/styles/user-theme.scss')
     const routes = readSource('src/router/routes.ts')
 
     expect(layout).toMatch(/width:\s*min\(100%,\s*1440px\)/)
-    expect(topNav).toMatch(/width:\s*min\(100%,\s*1440px\)/)
-    expect(layout).toContain("document.body.classList.toggle('arena-overlay-theme', enabled)")
-    expect(layout).toContain("document.body.classList.remove('arena-overlay-theme')")
+    expect(layout).toMatch(
+      />\s*:deep\(\.page-shell:not\(\.interview-room\)\),[\s\S]*?width:\s*min\(100%,\s*1440px\)/
+    )
+    expect(layout).toMatch(
+      />\s*:deep\(\.page-shell\.page-shell--wide\)\s*\{[\s\S]*?width:\s*min\(100%,\s*1600px\)/
+    )
+    expect(layout).not.toMatch(/font-size:\s*[^;]*vw/)
+    expect(layout).not.toMatch(/radial-gradient\(/)
+    expect(appShell).toContain('grid-template-columns: var(--user-sidebar-width) minmax(0, 1fr)')
+    expect(appShell).toContain('width: var(--user-sidebar-width)')
+    expect(appShell).toContain('useDocumentScrollLock(mobileOpen)')
+    expect(layout).toContain("document.body.classList.toggle('user-overlay-theme', !immersive)")
+    expect(layout).toContain("document.body.classList.remove('user-overlay-theme')")
     expect(routes).toContain('arenaTheme: true')
-    expect(arena).toMatch(/body\.arena-overlay-theme\s*\{[\s\S]*?--el-bg-color:\s*#ffffff/)
+    expect(theme).toMatch(/body\.user-overlay-theme\s*\{[\s\S]*?--el-bg-color:\s*#ffffff/)
     expect(components).toContain('Compact workspace density')
     expect(components).toMatch(/\.content-card__body,[\s\S]*?padding:\s*16px/)
     expect(elementTheme).not.toMatch(/backdrop-filter\s*:/i)
     expect(elementTheme).not.toMatch(/(?:linear|radial)-gradient\(/i)
-    expect(variables).toContain('--cc-primary: #5b8def')
+    expect(variables).toContain('--cc-primary: #1F6F5C')
     expect(variables).toContain('--cc-ai: #7d86b2')
-    expect(variables).toContain('--cc-ai-cyan: #6ea8fe')
+    expect(variables).toContain('--cc-ai-cyan: #0E9F9A')
   })
 
   it('integrates primary interview actions and keeps training support secondary', () => {
@@ -123,5 +133,39 @@ describe('user workspace layout system', () => {
     expect(training).toMatch(
       /\.training-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(260px,\s*300px\)/
     )
+  })
+
+  it('keeps main user task areas wider than support rails and collapses them before mobile navigation', () => {
+    const dashboard = readSource('src/views/user/DashboardView.vue')
+    const study = readSource('src/views/study/StudyPlanView.vue')
+    const applications = readSource('src/views/v4/JobApplicationView.vue')
+    const today = readSource('src/views/agent/AgentTodayView.vue')
+
+    expect(dashboard).toMatch(
+      /\.dashboard-hero\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(280px,\s*320px\)/
+    )
+    expect(study).toMatch(
+      /\.study-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(280px,\s*320px\)\s+minmax\(0,\s*1fr\)/
+    )
+    expect(applications).toMatch(
+      /\.application-workbench\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(280px,\s*0\.42fr\)/
+    )
+    for (const source of [dashboard, study, applications, today]) {
+      expect(source).not.toMatch(/font-size:\s*[^;]*vw/)
+    }
+    expect(dashboard).toMatch(/@media \(max-width:\s*980px\)[\s\S]*?grid-template-columns:\s*1fr/)
+    expect(study).toMatch(/@media \(max-width:\s*820px\)[\s\S]*?grid-template-columns:\s*1fr/)
+    expect(applications).toMatch(/@media \(max-width:\s*900px\)[\s\S]*?grid-template-columns:\s*1fr/)
+    expect(today).toMatch(/@media \(max-width:\s*900px\)[\s\S]*?grid-template-columns:\s*1fr/)
+  })
+
+  it('does not use layout-level clipping to hide user workspace content', () => {
+    const layout = readSource('src/layouts/UserLayout.vue')
+
+    expect(layout).not.toMatch(/\.jobcoach-layout\s*\{[\s\S]*?overflow-x:\s*(?:hidden|clip)/)
+    expect(layout).not.toMatch(/\.arena-frame\s*\{[\s\S]*?overflow:\s*hidden/)
+    expect(layout).not.toMatch(/\.jobcoach-main\s*\{[\s\S]*?overflow-x:\s*(?:hidden|clip)/)
+    expect(layout).toContain('codecoach-global-message')
+    expect(layout).toContain('safe-area-inset-top')
   })
 })

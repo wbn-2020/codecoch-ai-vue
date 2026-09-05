@@ -30,20 +30,9 @@ vi.mock('vue-router', () => ({
 const mountSidebar = () => mount(UserSidebar, {
   global: {
     stubs: {
-      'el-menu': {
-        props: ['defaultActive'],
-        template: '<nav class="el-menu-stub" :data-default-active="defaultActive"><slot /></nav>'
-      },
-      'el-sub-menu': {
-        props: ['index'],
-        template: '<section :data-section="index"><slot name="title" /><slot /></section>'
-      },
-      'el-menu-item': {
-        props: ['index'],
-        template: '<button type="button" :data-index="index"><slot /><slot name="title" /></button>'
-      },
-      'el-icon': {
-        template: '<i><slot /></i>'
+      RouterLink: {
+        props: ['to'],
+        template: '<a :data-index="to"><slot /></a>'
       }
     }
   }
@@ -69,7 +58,7 @@ describe('UserSidebar weekly report entry', () => {
     const wrapper = mountSidebar()
 
     expect(wrapper.get('[data-index="/agent/weekly-reports"]').text()).toContain('求职周报')
-    expect(wrapper.get('.el-menu-stub').attributes('data-default-active')).toBe('/agent/weekly-reports')
+    expect(wrapper.get('[data-index="/agent/weekly-reports"]').classes()).toContain('is-active')
   })
 
   it('hides and reveals the V9 aggregate entry using the shared gate', () => {
@@ -82,6 +71,6 @@ describe('UserSidebar weekly report entry', () => {
     const enabledWrapper = mountSidebar()
 
     expect(enabledWrapper.get('[data-index="/evidence-assets"]').text()).toContain('证据使用')
-    expect(enabledWrapper.get('.el-menu-stub').attributes('data-default-active')).toBe('/evidence-assets')
+    expect(enabledWrapper.get('[data-index="/evidence-assets"]').classes()).toContain('is-active')
   })
 })

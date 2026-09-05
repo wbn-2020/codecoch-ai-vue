@@ -41,4 +41,20 @@ describe('userMessage gateway', () => {
 
     expect(emit).toHaveBeenCalledTimes(2)
   })
+
+  it('closes transient error handles while keeping persistent errors open', () => {
+    const transientClose = vi.fn()
+    const persistentClose = vi.fn()
+    const emit = vi.fn()
+      .mockReturnValueOnce({ close: transientClose })
+      .mockReturnValueOnce({ close: persistentClose })
+    const message = createUserMessageGateway(emit)
+
+    message.error('当前页面加载失败')
+    message.error('需要继续查看的错误', { persistent: true })
+    message.closeTransientErrors()
+
+    expect(transientClose).toHaveBeenCalledTimes(1)
+    expect(persistentClose).not.toHaveBeenCalled()
+  })
 })

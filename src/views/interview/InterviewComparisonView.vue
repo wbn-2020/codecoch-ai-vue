@@ -315,7 +315,7 @@ const trustTagType = (value?: string): 'success' | 'warning' | 'info' => {
   gap: 8px;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .header-actions {
@@ -384,7 +384,7 @@ const trustTagType = (value?: string): 'success' | 'warning' | 'info' => {
 .panel-kicker {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .reason-list,

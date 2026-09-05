@@ -15,6 +15,11 @@ const toNumber = (value: unknown, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+const percentage = (value: unknown): number | undefined => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : undefined
+}
+
 const normalizeStatus = (value: unknown): JobRequirementStatus => {
   const normalized = String(value || '').trim().toUpperCase()
   if (['COVERED', 'WEAK', 'MISSING', 'UNVERIFIED', 'CONFLICT'].includes(normalized)) return normalized
@@ -184,6 +189,11 @@ export const normalizeJobReadiness = (
   targetJobId: number
 ): JobReadinessSnapshotVO | null => {
   if (!source) return null
+  const readinessScore = source.readinessScore ?? source.overallScore
+  if (readinessScore != null && percentage(readinessScore) == null) return null
+  if (asArray(source.dimensions).some((item) => item.score != null && percentage(item.score) == null)) {
+    return null
+  }
   const dimensions: JobReadinessDimensionVO[] = asArray(source.dimensions).map((item) => {
     const confidenceLevel = String(item.confidenceLevel || item.confidence || 'LOW').toUpperCase()
     const fallback = Boolean(item.fallback)
@@ -191,7 +201,7 @@ export const normalizeJobReadiness = (
       ...item,
       dimension: String(item.dimension || 'OTHER').toUpperCase(),
       title: item.title,
-      score: item.score == null ? undefined : Math.max(0, Math.min(100, toNumber(item.score))),
+      score: item.score == null ? undefined : percentage(item.score),
       confidence: confidenceLevel,
       confidenceLevel,
       fallback,
@@ -203,22 +213,32 @@ export const normalizeJobReadiness = (
       warnings: asArray(item.warnings).map(String).filter(Boolean)
     }
   })
-  const readinessScore = source.readinessScore ?? source.overallScore
   const readinessLevel = source.readinessLevel || source.overallLevel
   const confidenceLevel = String(source.confidenceLevel || source.confidence || 'LOW').toUpperCase()
+  const validationStatus = String(source.validationStatus || 'VALID').toUpperCase()
+  const warnings = new Set(asArray(source.warnings).map(String).filter(Boolean))
+  if (validationStatus !== 'VALID' && validationStatus !== 'VALID_LEGACY') {
+    warnings.add(`READINESS_DIMENSIONS_${validationStatus}`)
+  }
+  if (source.historyFallback) warnings.add('READINESS_LATEST_SNAPSHOT_INVALID')
+  if (source.regenerated) warnings.add('READINESS_SNAPSHOT_REGENERATED')
 
   return {
     id: source.id == null ? undefined : toNumber(source.id),
     targetJobId: toNumber(source.targetJobId, targetJobId),
     jdAnalysisId: source.jdAnalysisId == null ? undefined : toNumber(source.jdAnalysisId),
     snapshotHash: source.snapshotHash,
+    sourceHash: source.sourceHash,
+    schemaVersion: source.schemaVersion,
+    validationStatus,
+    repairBatchId: source.repairBatchId,
     overallScore: readinessScore == null
       ? undefined
-      : Math.max(0, Math.min(100, toNumber(readinessScore))),
+      : percentage(readinessScore),
     overallLevel: readinessLevel,
     readinessScore: readinessScore == null
       ? undefined
-      : Math.max(0, Math.min(100, toNumber(readinessScore))),
+      : percentage(readinessScore),
     readinessLevel,
     confidence: confidenceLevel,
     confidenceLevel,
@@ -235,10 +255,15 @@ export const normalizeJobReadiness = (
     mustMissingCount: toNumber(source.mustMissingCount),
     summary: source.summary,
     matrix: source.matrix,
+    historyFallback: Boolean(source.historyFallback),
+    regenerated: Boolean(source.regenerated),
+    invalidLatestSnapshotId: source.invalidLatestSnapshotId == null
+      ? undefined
+      : toNumber(source.invalidLatestSnapshotId),
     generatedAt: source.generatedAt || source.createdAt,
     createdAt: source.createdAt,
     dimensions,
-    warnings: asArray(source.warnings).map(String).filter(Boolean),
+    warnings: Array.from(warnings),
     traceId: source.traceId
   }
 }

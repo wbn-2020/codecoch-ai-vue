@@ -1,27 +1,24 @@
 <template>
   <div class="arena arena-train">
     <div class="arena-train__page">
-      <header class="arena-train__head">
-        <div class="arena-train__kicker">面试训练计划</div>
-        <h1 class="arena-h1 arena-train__title">{{ todayFocusTitle }}</h1>
-      </header>
+      <HeroBand class="arena-train__head">
+        <template #eyebrow>面试训练计划</template>
+        <template #title>{{ todayFocusTitle }}</template>
+        <template #sub>{{ todayReasonText }}</template>
+        <span class="arena-chip arena-chip--grn">推荐 · {{ todayTrustTag.label }}</span>
+        <span class="arena-chip arena-chip--mut">今日建议</span>
+        <span class="arena-chip arena-chip--mut">{{ hasPracticeQuestions ? `${actionableItems.length} 道可练` : '通用训练' }}</span>
+        <span v-if="!hasPracticeQuestions" class="arena-chip arena-chip--vio">{{ todayPlanName }}</span>
+        <template #actions>
+          <button class="arena-btn arena-btn--pri arena-train__cta" type="button" @click="startPrimaryPractice">{{ primaryPracticeLabel }}</button>
+          <button class="arena-btn arena-btn--sec arena-train__cta arena-train__cta--ghost" type="button" :disabled="!canGenerate || generating" @click="generateRecommendations">{{ generating ? '生成中…' : '换一组' }}</button>
+        </template>
+      </HeroBand>
+
+      <ModuleTabs :items="moduleTabs" />
 
       <section class="arena-train__grid">
         <main class="arena-col">
-          <section class="arena-card arena-card--hero arena-train__hero">
-            <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-              <span class="arena-chip arena-chip--grn-solid">推荐 · {{ todayTrustTag.label }}</span>
-              <span class="arena-xp-tag">今日建议</span>
-              <span class="arena-tiny">{{ hasPracticeQuestions ? `${practiceQuestionIds.length} 道可练` : '通用训练' }}</span>
-            </div>
-            <h2 class="arena-h2" style="margin-top: 13px">{{ todayPlanName }}</h2>
-            <p class="arena-p" style="margin-top: 8px">{{ todayReasonText }}</p>
-            <div class="arena-row" style="margin-top: 18px; flex-wrap: wrap">
-              <button class="arena-btn arena-btn--pri" style="padding: 13px 24px" @click="startPrimaryPractice">{{ primaryPracticeLabel }}</button>
-              <button class="arena-btn arena-btn--sec" style="padding: 12px 18px; font-size: 13.5px" :disabled="!canGenerate || generating" @click="generateRecommendations">{{ generating ? '生成中…' : '换一组' }}</button>
-            </div>
-          </section>
-
           <section class="arena-card arena-train__preview-card">
             <template v-if="loading">
               <div v-for="i in 3" :key="i" class="arena-train__skeleton"></div>
@@ -47,16 +44,16 @@
                 <button
                   type="button"
                   class="arena-train__question-row"
-                  :disabled="!itemPracticeQuestionId(item)"
-                  :title="itemPracticeQuestionId(item) ? '进入题目训练' : '暂不可直接练，已准备通用训练'"
-                  :aria-label="itemPracticeQuestionId(item) ? `${item.questionTitle || `今日训练题 ${index + 1}`}，进入题目训练` : `${item.questionTitle || `今日训练题 ${index + 1}`}，暂不可直接练，已准备通用训练`"
+                  :disabled="!itemCanPractice(item)"
+                  :title="itemCanPractice(item) ? '进入题目训练' : '暂不可直接练，已准备通用训练'"
+                  :aria-label="itemCanPractice(item) ? `${item.questionTitle || `今日训练题 ${index + 1}`}，进入题目训练` : `${item.questionTitle || `今日训练题 ${index + 1}`}，暂不可直接练，已准备通用训练`"
                   @click="openQuestion(item)"
                 >
                   <span class="arena-train__level-rank" :class="{ 'is-boss': item.gapSeverity === 'CRITICAL' || item.gapSeverity === 'HIGH' }">{{ index + 1 }}</span>
                   <span class="arena-train__question-copy">
                     <b>{{ item.questionTitle || `今日训练题 ${index + 1}` }}</b>
                     <small>{{ item.skillName || item.skillCode || '综合能力' }} · {{ difficultyStars(item.difficulty) }} {{ difficultyLabel(item.difficulty) }} · {{ questionTypeLabel(item.questionType) }}</small>
-                    <small v-if="!itemPracticeQuestionId(item)" class="is-unavailable">暂不可直接练 · 已准备通用训练</small>
+                    <small v-if="!itemCanPractice(item)" class="is-unavailable">暂不可直接练 · 已准备通用训练</small>
                   </span>
                   <span class="arena-xp-tag">答后复盘</span>
                 </button>
@@ -116,16 +113,19 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getQuestionRecommendationBatchDetailApi,
   getQuestionRecommendationBatchItemsApi,
+  getQuestionRecommendationBatchesApi,
   getQuestionRecommendationItemsFromGapBatchApi,
-  getQuestionRecommendationItemsFromMatchReportBatchApi,
   getQuestionRecommendationItemsFromStudyPlanBatchApi,
   submitQuestionRecommendationsFromGapApi,
   submitQuestionRecommendationsFromMatchReportApi,
   submitQuestionRecommendationsFromStudyPlanApi
 } from '@/api/questionRecommendation'
 import { getResumeJobMatchReportDetailApi, getResumeJobMatchReportsApi } from '@/api/resumeJobMatch'
-import { getSkillProfileOverviewApi } from '@/api/skillProfile'
+import { generateSkillProfileApi, getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { getStudyPlansApi } from '@/api/studyPlan'
+import HeroBand from '@/components/user-ui/HeroBand.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -159,6 +159,7 @@ type GenerationDiagnostic = {
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 const loading = ref(false)
@@ -167,6 +168,7 @@ const loadError = ref('')
 const items = ref<QuestionRecommendationItemVO[]>([])
 const generationDiagnostic = ref<GenerationDiagnostic | null>(null)
 const matchReportContextWarning = ref('')
+const autoMatchRecommendationSubmitted = ref(false)
 
 const sourceByRouteValue: Record<string, Source> = {
   gap: 'gap',
@@ -262,7 +264,9 @@ const itemPracticeQuestionId = (item: QuestionRecommendationItemVO) => {
   if (item.canPractice === false) return undefined
   return item.practiceQuestionId || item.questionId
 }
-const actionableItems = computed(() => items.value.filter((item) => Boolean(itemPracticeQuestionId(item))))
+const itemCanPractice = (item: QuestionRecommendationItemVO) =>
+  item.canPractice !== false && (item.practiceKind === 'PRIVATE_RECOMMENDATION' || Boolean(itemPracticeQuestionId(item)))
+const actionableItems = computed(() => items.value.filter(itemCanPractice))
 const toLocalDateKey = (date: Date) => {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -297,7 +301,12 @@ const practiceQuestionIds = computed(() =>
     .map(itemPracticeQuestionId)
     .filter((id): id is number => typeof id === 'number' && id > 0)
 )
-const hasPracticeQuestions = computed(() => practiceQuestionIds.value.length > 0)
+const privateRecommendationItemIds = computed(() =>
+  actionableItems.value
+    .filter((item) => item.practiceKind === 'PRIVATE_RECOMMENDATION')
+    .map((item) => item.id)
+)
+const hasPracticeQuestions = computed(() => actionableItems.value.length > 0)
 const primaryPracticeLabel = computed(() => hasPracticeQuestions.value ? '开始推荐题组' : '先做一组通用训练')
 const highRiskCount = computed(() =>
   items.value.filter((item) => ['CRITICAL', 'HIGH'].includes(String(item.gapSeverity || ''))).length
@@ -722,7 +731,21 @@ const loadRecommendations = async () => {
     if (query.source === 'gap') {
       items.value = await getQuestionRecommendationItemsFromGapBatchApi({ skillProfileId: query.sourceId })
     } else if (query.source === 'matchReport') {
-      items.value = await getQuestionRecommendationItemsFromMatchReportBatchApi(query.sourceId)
+      const page = await getQuestionRecommendationBatchesApi({
+        pageNo: 1,
+        pageSize: 1,
+        matchReportId: query.sourceId,
+        sourceType: QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH
+      })
+      const latestBatch = page.records?.[0]
+      setGenerationDiagnosticFromBatch(latestBatch)
+      items.value = latestBatch?.status === 'SUCCESS'
+        ? await getQuestionRecommendationBatchItemsApi(latestBatch.batchId)
+        : []
+      if (!latestBatch && !autoMatchRecommendationSubmitted.value) {
+        autoMatchRecommendationSubmitted.value = true
+        await generateRecommendations()
+      }
     } else {
       items.value = await getQuestionRecommendationItemsFromStudyPlanBatchApi(query.sourceId)
     }
@@ -756,6 +779,10 @@ const generateRecommendations = async () => {
     if (query.source === 'gap') {
       result = await submitQuestionRecommendationsFromGapApi({ skillProfileId: query.sourceId, questionCount: query.questionCount })
     } else if (query.source === 'matchReport') {
+      const profile = await generateSkillProfileApi({ matchReportId: query.sourceId })
+      if (String(profile.status || '').toUpperCase() !== 'SUCCESS') {
+        throw new Error(profile.errorMessage || '能力画像尚未生成成功，无法创建岗位专项题组。')
+      }
       result = await submitQuestionRecommendationsFromMatchReportApi({ matchReportId: query.sourceId, questionCount: query.questionCount })
     } else {
       result = await submitQuestionRecommendationsFromStudyPlanApi({ studyPlanId: query.sourceId, questionCount: query.questionCount })
@@ -811,24 +838,34 @@ const buildQuestionQuery = (item: QuestionRecommendationItemVO) => {
     gapSeverity: item.gapSeverity,
     trustStatus: item.trustStatus || generationDiagnostic.value?.trustStatus,
     fallback: item.fallback || generationDiagnostic.value?.fallback,
-    questionIds: itemPracticeQuestionId(item)
+    questionIds: itemPracticeQuestionId(item),
+    recommendationItemIds: item.practiceKind === 'PRIVATE_RECOMMENDATION' ? item.id : undefined
   })
 }
 
-const buildPracticeQuery = (questionIds: number[], item?: QuestionRecommendationItemVO) => compactRouterQuery({
+const buildPracticeQuery = (
+  questionIds: number[],
+  recommendationItemIds: number[],
+  item?: QuestionRecommendationItemVO
+) => compactRouterQuery({
   mode: 'recommended',
   questionIds: questionIds.join(','),
+  recommendationItemIds: recommendationItemIds.join(','),
   sourceType: item?.sourceType || sourceTypeBySource[query.source],
   sourceId: item?.sourceId || query.sourceId,
   trustStatus: item?.trustStatus || generationDiagnostic.value?.trustStatus,
   fallback: item?.fallback || generationDiagnostic.value?.fallback,
   skillName: trimForQuery(item?.skillName || item?.skillCode || topSkillNames.value[0], 60),
-  autoStart: questionIds.length ? true : undefined,
-  count: Math.min(questionIds.length || query.questionCount, query.questionCount)
+  autoStart: questionIds.length || recommendationItemIds.length ? true : undefined,
+  count: Math.min(questionIds.length + recommendationItemIds.length || query.questionCount, query.questionCount)
 })
 
 const openQuestion = (item: QuestionRecommendationItemVO) => {
   const questionId = itemPracticeQuestionId(item)
+  if (item.practiceKind === 'PRIVATE_RECOMMENDATION') {
+    startSinglePractice(item)
+    return
+  }
   if (!questionId) {
     ElMessage.warning('这条推荐暂时不能直接练，已为你准备通用练习。')
     return
@@ -840,13 +877,16 @@ const openQuestion = (item: QuestionRecommendationItemVO) => {
 }
 
 const startRecommendedPractice = () => {
-  if (!practiceQuestionIds.value.length) {
+  if (!actionableItems.value.length) {
     ElMessage.warning('当前没有可练习的推荐题')
     return
   }
   router.push({
     path: '/questions/practice',
-    query: buildPracticeQuery(practiceQuestionIds.value.slice(0, query.questionCount))
+    query: buildPracticeQuery(
+      practiceQuestionIds.value.slice(0, query.questionCount),
+      privateRecommendationItemIds.value.slice(0, query.questionCount)
+    )
   })
 }
 
@@ -878,10 +918,14 @@ const startFallbackPractice = () => {
 
 const startSinglePractice = (item: QuestionRecommendationItemVO) => {
   const questionId = itemPracticeQuestionId(item)
-  if (!questionId) return
+  if (!itemCanPractice(item)) return
   router.push({
     path: '/questions/practice',
-    query: buildPracticeQuery([questionId], item)
+    query: buildPracticeQuery(
+      questionId ? [questionId] : [],
+      item.practiceKind === 'PRIVATE_RECOMMENDATION' ? [item.id] : [],
+      item
+    )
   })
 }
 
@@ -889,11 +933,11 @@ const handleSourceChange = async () => {
   query.sourceId = undefined
   matchReportContextWarning.value = ''
   items.value = []
+  autoMatchRecommendationSubmitted.value = false
   await loadRecommendations()
 }
 
 onMounted(() => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   void loadRecommendations()
 })
 </script>
@@ -906,48 +950,44 @@ onMounted(() => {
   &__page {
     width: min(1060px, 100%);
     margin: 0 auto;
-    padding: 30px 34px 48px;
+    padding: 20px 24px 32px;
   }
 
-  &__kicker {
-    color: var(--arena-grn-d);
-    font-size: 12.5px;
-    font-weight: 800;
+  &__head {
+    margin-bottom: 18px;
   }
 
-  &__title {
-    margin-top: 5px;
-    font-size: 28px;
+  // HeroBand 的 actions 槽已统一高度与字号，这里只补 .arena-btn 基础类缺失的左右留白
+  &__cta {
+    padding: 0 22px;
+
+    &--ghost {
+      padding: 0 16px;
+    }
   }
 
   &__grid {
     display: grid;
     grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
-    gap: 20px;
+    gap: 16px;
     align-items: start;
-    margin-top: 22px;
-  }
-
-  &__hero {
-    padding: 24px 26px;
-    border-color: #b9e7cd;
-    background: linear-gradient(135deg, #f0fbf4, #fff 72%);
+    margin-top: 16px;
   }
 
   &__preview-card,
   &__panel,
   &__controls {
-    border: 1.5px solid var(--arena-line);
+    border: 1px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
-    background: #fff;
-    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+    background: var(--arena-card);
+    box-shadow: var(--arena-shadow-subtle);
   }
 
   &__preview-card {
     display: grid;
     gap: 8px;
-    margin-top: 14px;
-    padding: 18px 20px;
+    margin-top: 12px;
+    padding: 16px 18px;
   }
 
   &__preview-heading {
@@ -960,8 +1000,8 @@ onMounted(() => {
 
   &__level {
     overflow: hidden;
-    border: 1.5px solid var(--arena-line2);
-    border-radius: 11px;
+    border: 1px solid var(--arena-line2);
+    border-radius: var(--arena-radius-btn);
   }
 
   &__question-row {
@@ -979,7 +1019,7 @@ onMounted(() => {
     font: inherit;
 
     &:not(:disabled):hover {
-      background: #f8faf8;
+      background: var(--arena-canvas);
     }
 
     &:disabled {
@@ -993,11 +1033,11 @@ onMounted(() => {
     place-items: center;
     width: 23px;
     height: 23px;
-    border-radius: 8px;
+    border-radius: var(--user-radius-sm, 6px);
     background: var(--arena-grn-soft);
     color: var(--arena-grn-d);
     font-size: 11px;
-    font-weight: 900;
+    font-weight: 600;
 
     &.is-boss {
       background: var(--arena-red-soft);
@@ -1017,6 +1057,7 @@ onMounted(() => {
       overflow: hidden;
       color: var(--arena-ink);
       font-size: 13px;
+      font-weight: 600;
       line-height: 1.45;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -1030,47 +1071,7 @@ onMounted(() => {
 
     .is-unavailable {
       color: var(--user-warning-text);
-      font-weight: 700;
-    }
-  }
-
-  &__question-detail {
-    border-top: 1px solid var(--arena-line2);
-
-    summary {
-      padding: 8px 12px;
-      color: var(--arena-sub);
-      cursor: pointer;
-      font-size: 11px;
-      font-weight: 700;
-      list-style: none;
-    }
-
-    summary::-webkit-details-marker {
-      display: none;
-    }
-
-    summary::after {
-      content: '+';
-      float: right;
-      color: var(--arena-grn-d);
-    }
-
-    &[open] summary::after {
-      content: '-';
-    }
-
-    > div {
-      display: grid;
-      gap: 7px;
-      padding: 0 12px 12px;
-    }
-
-    p {
-      margin: 0;
-      color: var(--arena-sub);
-      font-size: 11.5px;
-      line-height: 1.55;
+      font-weight: 600;
     }
   }
 
@@ -1095,12 +1096,12 @@ onMounted(() => {
   }
 
   &__panel {
-    padding: 20px 22px;
+    padding: 16px 18px;
   }
 
   &__revive {
-    border-color: #f3ddc0;
-    background: linear-gradient(145deg, #fff, #fffaf2);
+    border-color: color-mix(in srgb, var(--arena-amber) 26%, var(--arena-line));
+    background: var(--arena-amber-soft);
   }
 
   &__week {
@@ -1122,21 +1123,21 @@ onMounted(() => {
       place-items: center;
       width: 34px;
       height: 34px;
-      border-radius: 11px;
-      background: #e8ede9;
+      border-radius: var(--arena-radius-btn);
+      background: var(--arena-sunken);
       color: var(--arena-mut);
       font-size: 14px;
     }
 
     .is-done b {
       background: var(--arena-grn);
-      color: #fff;
+      color: var(--user-primary-contrast);
     }
 
     .is-today b {
       background: var(--arena-amber);
       box-shadow: 0 0 0 3px var(--arena-amber-soft);
-      color: #fff;
+      color: var(--user-primary-contrast);
     }
   }
 
@@ -1152,17 +1153,19 @@ onMounted(() => {
     margin-top: 12px;
 
     button {
-      border: 0;
-      border-radius: 999px;
-      background: #f2f4f2;
+      border: 1px solid transparent;
+      border-radius: var(--user-radius-full, 999px);
+      background: var(--arena-sunken);
       color: var(--arena-sub);
       cursor: pointer;
       font: inherit;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 500;
       padding: 6px 10px;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
       &:hover {
+        border-color: var(--arena-grn);
         background: var(--arena-grn-soft);
         color: var(--arena-grn-d);
       }
@@ -1170,8 +1173,8 @@ onMounted(() => {
   }
 
   &__controls {
-    margin-top: 14px;
-    padding: 15px 18px;
+    margin-top: 12px;
+    padding: 13px 16px;
   }
 
   &__controls-summary {
@@ -1194,6 +1197,7 @@ onMounted(() => {
     b {
       color: var(--arena-ink);
       font-size: 13px;
+      font-weight: 600;
     }
 
     small {
@@ -1217,24 +1221,31 @@ onMounted(() => {
     display: inline-flex;
     gap: 4px;
     padding: 4px;
-    border-radius: 12px;
-    background: #f2f4f2;
+    border: 1px solid var(--arena-line);
+    border-radius: var(--arena-radius-btn);
+    background: var(--arena-sunken);
 
     button {
       border: 0;
-      border-radius: 9px;
+      border-radius: var(--user-radius-sm, 6px);
       background: transparent;
       color: var(--arena-sub);
       cursor: pointer;
       font: inherit;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 500;
       padding: 7px 12px;
+      transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+
+      &:hover {
+        color: var(--arena-ink);
+      }
 
       &.is-active {
-        background: #fff;
+        background: var(--arena-card);
         color: var(--arena-grn-d);
-        box-shadow: 0 1px 3px rgba(21, 33, 27, 0.1);
+        font-weight: 600;
+        box-shadow: var(--arena-shadow-subtle);
       }
     }
   }
@@ -1244,16 +1255,26 @@ onMounted(() => {
     align-items: center;
     gap: 8px;
 
+    b {
+      font-variant-numeric: tabular-nums;
+    }
+
     button {
       width: 26px;
       height: 26px;
-      border: 1.5px solid var(--arena-line);
-      border-radius: 8px;
-      background: #fff;
+      border: 1px solid var(--arena-line-strong);
+      border-radius: var(--user-radius-sm, 6px);
+      background: var(--arena-card);
       color: var(--arena-grn-d);
       cursor: pointer;
       font: inherit;
-      font-weight: 900;
+      font-weight: 600;
+      transition: border-color 0.15s ease, background 0.15s ease;
+
+      &:hover:not(:disabled) {
+        border-color: var(--arena-action);
+        background: var(--arena-grn-soft);
+      }
     }
   }
 
@@ -1275,7 +1296,7 @@ onMounted(() => {
     gap: 10px;
     margin-top: 12px;
     padding: 10px 12px;
-    border-radius: 11px;
+    border-radius: var(--arena-radius-btn);
   }
 
   &__notice {
@@ -1283,21 +1304,26 @@ onMounted(() => {
   }
 
   &__diag {
-    border: 1.5px dashed var(--arena-line);
+    border: 1px dashed var(--arena-line);
   }
 
   &__state {
     display: grid;
     justify-items: start;
     gap: 9px;
-    min-height: 180px;
-    padding: 26px;
+    min-height: 140px;
+    padding: 20px;
+
+    b {
+      color: var(--arena-ink);
+      font-weight: 600;
+    }
   }
 
   &__skeleton {
     height: 44px;
-    border-radius: 11px;
-    background: linear-gradient(90deg, #fff, #f4f7f4, #fff);
+    border-radius: var(--arena-radius-btn);
+    background: linear-gradient(90deg, var(--arena-card), var(--arena-sunken), var(--arena-card));
     background-size: 200% 100%;
     animation: arenaShimmer 1.4s infinite;
   }
@@ -1317,8 +1343,12 @@ onMounted(() => {
       padding: 18px 14px calc(26px + var(--user-mobile-nav-height, 0px));
     }
 
-    &__title {
-      font-size: 27px;
+    &__head :deep(.cc-hero-band__actions) {
+      width: 100%;
+    }
+
+    &__cta {
+      flex: 1 1 auto;
     }
 
     &__grid {
@@ -1327,20 +1357,16 @@ onMounted(() => {
       margin-top: 22px;
     }
 
-    &__hero {
-      padding: 25px 26px;
-    }
-
     &__preview-card {
-      padding: 18px 20px;
+      padding: 16px 18px;
     }
 
     &__side {
-      gap: 16px;
+      gap: 14px;
     }
 
     &__panel {
-      padding: 20px 22px;
+      padding: 16px 18px;
     }
 
     &__question-row {

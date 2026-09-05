@@ -1,5 +1,7 @@
 <template>
   <div class="project-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="page-hero">
       <div class="hero-copy">
         <p class="hero-kicker">
@@ -239,12 +241,15 @@ import {
   updateResumeProjectApi
 } from '@/api/resume'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { ResumeDetailVO, ResumeProjectDTO, ResumeProjectVO, ResumeVO } from '@/types/resume'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('resources')
 const route = useRoute()
 const resumes = ref<ResumeVO[]>([])
 const selectedResumeId = ref<number>()
@@ -464,7 +469,7 @@ watch(routeResumeId, async (resumeId) => {
   gap: 16px;
   padding: 18px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
   box-shadow: none;
 }
@@ -487,8 +492,10 @@ watch(routeResumeId, async (resumeId) => {
 
 .hero-copy h1 {
   color: var(--user-text);
-  font-size: 24px;
-  line-height: 1.3;
+  font-size: var(--user-text-h1, 30px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
 }
 
 .hero-copy p,
@@ -501,12 +508,25 @@ watch(routeResumeId, async (resumeId) => {
   color: var(--user-text-muted);
 }
 
-.hero-kicker,
+.hero-kicker {
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: var(--user-radius-full);
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .section-kicker {
   margin: 0;
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  color: var(--user-text-muted);
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .hero-copy p {
@@ -527,7 +547,7 @@ watch(routeResumeId, async (resumeId) => {
   gap: 10px;
   padding: 18px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface-muted);
 }
 
@@ -541,7 +561,8 @@ watch(routeResumeId, async (resumeId) => {
 
 .hero-panel strong {
   color: var(--user-text);
-  font-size: 18px;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -560,7 +581,7 @@ watch(routeResumeId, async (resumeId) => {
 .hero-panel dd {
   margin: 0;
   color: var(--user-text);
-  font-weight: 700;
+  font-weight: 600;
   text-align: right;
 }
 
@@ -576,7 +597,7 @@ watch(routeResumeId, async (resumeId) => {
   flex: 1 1 180px;
   padding: 12px 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
 }
 
@@ -584,7 +605,10 @@ watch(routeResumeId, async (resumeId) => {
   display: block;
   margin-top: 6px;
   color: var(--user-text);
-  font-size: 20px;
+  font-size: var(--user-text-h2, 22px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .overview-date {
@@ -613,7 +637,7 @@ watch(routeResumeId, async (resumeId) => {
 .project-card {
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
 }
 
@@ -638,14 +662,15 @@ watch(routeResumeId, async (resumeId) => {
 
 .project-card h3 {
   color: var(--user-text);
-  font-size: 18px;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.35;
 }
 
 .project-summary {
   margin: 14px 0 0;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface-muted);
   line-height: 1.7;
 }
@@ -660,7 +685,7 @@ watch(routeResumeId, async (resumeId) => {
 .evidence-grid article {
   padding: 12px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
 }
 
@@ -703,7 +728,7 @@ watch(routeResumeId, async (resumeId) => {
   }
 
   .hero-copy h1 {
-    font-size: 22px;
+    font-size: var(--user-text-h2, 22px);
   }
 
   .form-grid,

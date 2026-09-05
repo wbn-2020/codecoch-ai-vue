@@ -364,7 +364,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--arena-grn-d);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 

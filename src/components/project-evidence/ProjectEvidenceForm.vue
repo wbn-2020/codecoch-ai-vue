@@ -165,7 +165,7 @@ defineExpose({
   header span {
     color: var(--app-primary);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   h3 {
@@ -190,7 +190,7 @@ defineExpose({
   summary {
     color: var(--app-text);
     cursor: pointer;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   > p {

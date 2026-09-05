@@ -7,6 +7,7 @@ import {
   filterApplicationsByFollowUp,
   formatApplicationResumeVersionLabel,
   getApplicationEventMeta,
+  getApplicationDataQualityTags,
   getApplicationFollowUpState,
   getLatestApplicationEvent,
   hasBackendLatestEventSummary,
@@ -38,6 +39,37 @@ describe('application workbench helpers', () => {
       overdueByDays: 1
     })
     expect(getApplicationFollowUpState('2026-08-12T10:00:00', now).key).toBe('due-today')
+  })
+
+  it('distinguishes standard and critical overdue follow-ups', () => {
+    const standard = getApplicationFollowUpState('2026-08-11 09:00:00', '2026-08-12 10:00:00')
+    const critical = getApplicationFollowUpState('2026-07-29 09:00:00', '2026-08-12 10:00:00')
+
+    expect(standard).toMatchObject({
+      key: 'overdue',
+      label: '逾期跟进',
+      overdueByDays: 1,
+      overdueLevel: 'standard'
+    })
+    expect(critical).toMatchObject({
+      key: 'overdue',
+      label: '严重逾期',
+      overdueByDays: 14,
+      overdueLevel: 'critical'
+    })
+    expect(critical.description).toContain('归档或关闭')
+  })
+
+  it('uses the overdue severity in application data-quality tags', () => {
+    const tags = getApplicationDataQualityTags(
+      { id: 1, status: 'APPLIED', nextFollowUpAt: '2026-07-29 09:00:00' },
+      '2026-08-12 10:00:00'
+    )
+
+    expect(tags.find((tag) => tag.key === 'follow-up-overdue')).toMatchObject({
+      label: '严重逾期',
+      tone: 'danger'
+    })
   })
 
   it('filters applications by follow-up query value', () => {

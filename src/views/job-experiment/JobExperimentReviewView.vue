@@ -627,7 +627,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--app-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -831,7 +831,7 @@ onBeforeUnmount(() => {
   margin: 0 0 6px;
   color: var(--arena-grn-d);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 h1,
@@ -896,8 +896,8 @@ h3 {
 }
 
 .conclusion-panel {
-  background: #f0fbf4;
-  border-color: #b9e7cd;
+  background: var(--user-primary-soft);
+  border-color: var(--user-primary-border);
 }
 
 .conclusion-panel h2 {
@@ -921,8 +921,8 @@ h3 {
 .next-step-panel {
   align-items: flex-end;
   padding: 18px 20px;
-  background: #f0fbf4;
-  border-color: #b9e7cd;
+  background: var(--user-primary-soft);
+  border-color: var(--user-primary-border);
 }
 
 .next-step-copy {

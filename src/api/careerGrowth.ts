@@ -315,11 +315,12 @@ const csvMappingParam = (mapping?: CareerCsvMapping) =>
 export const previewCareerCsvImportApi = (
   file: File,
   timezone: string,
-  mapping?: CareerCsvMapping
+  mapping?: CareerCsvMapping,
+  contentHash?: string
 ) =>
   request
     .post<CareerImportPreviewVO, CareerImportPreviewVO>('/career-imports/csv/preview', fileForm(file), {
-      params: { timezone, mapping: csvMappingParam(mapping) }
+      params: { timezone, mapping: csvMappingParam(mapping), contentHash }
     })
     .then(normalizeCareerImportPreview)
 
@@ -327,11 +328,19 @@ export const importCareerCsvApi = (
   file: File,
   timezone: string,
   duplicatePolicy: CareerDuplicatePolicy,
-  mapping?: CareerCsvMapping
+  mapping?: CareerCsvMapping,
+  contentHash?: string,
+  previewContentHash?: string
 ) =>
   request
     .post<CareerImportResultVO, CareerImportResultVO>('/career-imports/csv', fileForm(file), {
-      params: { timezone, duplicatePolicy, mapping: csvMappingParam(mapping) }
+      params: {
+        timezone,
+        duplicatePolicy,
+        mapping: csvMappingParam(mapping),
+        contentHash,
+        previewContentHash
+      }
     })
     .then(normalizeCareerImportResult)
 

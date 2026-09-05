@@ -15,42 +15,18 @@
       </div>
     </div>
 
-    <nav class="resume-workbench-topbar__steps" aria-label="简历工作流程">
+    <!-- v22 原型：中央区域改为模板切换 tab -->
+    <nav class="resume-workbench-topbar__templates" aria-label="简历模板切换">
       <button
+        v-for="template in templates"
+        :key="template.id"
         type="button"
-        :class="{ 'is-active': activeStep === 'fill' }"
-        :aria-current="activeStep === 'fill' ? 'step' : undefined"
-        @click="emit('mode-change', 'edit')"
+        :class="{ 'is-active': activeTemplateId === template.id }"
+        :aria-current="activeTemplateId === template.id ? 'true' : undefined"
+        :title="`切换到「${template.label}」`"
+        @click="emit('template-change', template.id)"
       >
-        <span>1</span>
-        填写
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': activeStep === 'review' }"
-        :aria-current="activeStep === 'review' ? 'step' : undefined"
-        @click="emit('mode-change', 'review')"
-      >
-        <span>2</span>
-        检查
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': activeStep === 'preview' }"
-        :aria-current="activeStep === 'preview' ? 'step' : undefined"
-        @click="emit('open-preview')"
-      >
-        <span>3</span>
-        预览
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': activeStep === 'export' }"
-        :aria-current="activeStep === 'export' ? 'step' : undefined"
-        @click="emit('open-export')"
-      >
-        <span>4</span>
-        导出
+        {{ template.label }}
       </button>
     </nav>
 
@@ -61,6 +37,29 @@
       <span v-else class="resume-workbench-topbar__completion is-pending">
         待填写
       </span>
+      <div class="resume-workbench-topbar__history" role="group" aria-label="编辑历史">
+        <button
+          class="resume-workbench-topbar__icon-button"
+          type="button"
+          aria-label="撤销"
+          title="撤销"
+          :disabled="!canUndo"
+          @click="emit('undo')"
+        >
+          <Undo2 :size="16" aria-hidden="true" />
+        </button>
+        <button
+          class="resume-workbench-topbar__icon-button"
+          type="button"
+          aria-label="重做"
+          title="重做"
+          :disabled="!canRedo"
+          @click="emit('redo')"
+        >
+          <Redo2 :size="16" aria-hidden="true" />
+        </button>
+      </div>
+      <!-- v22 原型：右侧三动作（AI 优化 / 重置 / 导出 PDF） -->
       <button
         class="resume-workbench-topbar__action resume-workbench-topbar__action--utility"
         type="button"
@@ -74,12 +73,30 @@
       <button
         class="resume-workbench-topbar__action resume-workbench-topbar__action--utility"
         type="button"
-        :aria-label="`调整模板，当前为 ${templateLabel}`"
-        :title="`调整模板，当前为 ${templateLabel}`"
-        @click="emit('open-templates')"
+        aria-label="重置当前简历"
+        title="重置当前简历"
+        @click="emit('reset-resume')"
       >
-        <LayoutTemplate :size="16" aria-hidden="true" />
-        <span>模板</span>
+        <RotateCcw :size="16" aria-hidden="true" />
+        <span>重置</span>
+      </button>
+      <button
+        class="resume-workbench-topbar__action resume-workbench-topbar__action--utility"
+        type="button"
+        aria-label="导出 PDF"
+        title="导出 PDF"
+        @click="emit('export-pdf')"
+      >
+        <FileDown :size="16" aria-hidden="true" />
+        <span>导出 PDF</span>
+      </button>
+      <button
+        class="resume-workbench-topbar__action"
+        type="button"
+        :disabled="saving"
+        @click="emit('save-draft')"
+      >
+        <span>{{ saving ? '保存中' : '保存草稿' }}</span>
       </button>
       <button
         class="resume-workbench-topbar__action resume-workbench-topbar__action--primary"
@@ -97,11 +114,19 @@
 <script setup lang="ts">
 import {
   ArrowLeft,
+  FileDown,
   FileText,
-  LayoutTemplate,
+  Redo2,
+  RotateCcw,
   Save,
-  Sparkles
+  Sparkles,
+  Undo2
 } from 'lucide-vue-next'
+
+export interface TemplateOption {
+  id: string
+  label: string
+}
 
 defineProps<{
   title: string
@@ -110,17 +135,27 @@ defineProps<{
   hasStarted: boolean
   saving: boolean
   isEdit: boolean
+  canUndo: boolean
+  canRedo: boolean
   templateLabel: string
   inspectorMode: 'edit' | 'review' | 'ai'
   activeStep: 'fill' | 'review' | 'preview' | 'export'
+  templates: TemplateOption[]
+  activeTemplateId: string
 }>()
 
 const emit = defineEmits<{
   back: []
   save: []
+  'save-draft': []
   'open-templates': []
   'open-export': []
   'open-preview': []
+  'template-change': [id: string]
+  'reset-resume': []
+  'export-pdf': []
+  undo: []
+  redo: []
   'mode-change': [mode: 'edit' | 'review' | 'ai']
 }>()
 </script>
@@ -130,16 +165,17 @@ const emit = defineEmits<{
   display: grid;
   grid-template-columns: minmax(250px, 1fr) auto minmax(360px, 1fr);
   align-items: center;
-  min-height: 58px;
-  padding: 0 16px;
+  min-height: 60px;
+  padding: 0 18px;
   border-bottom: 1px solid var(--resume-workbench-line);
   background: var(--resume-workbench-surface);
   color: var(--resume-workbench-text);
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.03), 0 8px 20px -16px rgba(26, 25, 23, 0.18);
 }
 
 .resume-workbench-topbar__document,
 .resume-workbench-topbar__title,
-.resume-workbench-topbar__steps,
+.resume-workbench-topbar__templates,
 .resume-workbench-topbar__actions {
   display: flex;
   align-items: center;
@@ -148,6 +184,44 @@ const emit = defineEmits<{
 .resume-workbench-topbar__document {
   min-width: 0;
   gap: 10px;
+}
+
+/* v22 原型：模板切换 tab —— 5 个模板，当前激活用主色绿底白字 */
+.resume-workbench-topbar__templates {
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--resume-workbench-line);
+    border-radius: 8px;
+    background: var(--resume-workbench-surface-soft);
+    color: var(--resume-workbench-text-soft);
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+    transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--resume-workbench-accent);
+      color: var(--resume-workbench-accent);
+      outline: 0;
+    }
+
+    &.is-active {
+      background: var(--resume-workbench-accent);
+      border-color: var(--resume-workbench-accent);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: none;
+    }
+  }
 }
 
 .resume-workbench-topbar__icon-button,
@@ -162,12 +236,13 @@ const emit = defineEmits<{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 9px;
   background: transparent;
   color: var(--resume-workbench-muted);
+  transition: background 0.16s ease, color 0.16s ease;
 
   &:hover,
   &:focus-visible {
@@ -223,13 +298,14 @@ const emit = defineEmits<{
     align-items: center;
     justify-content: center;
     gap: 5px;
-    min-height: 34px;
-    padding: 0 12px;
-    border-radius: 6px;
+    min-height: 36px;
+    padding: 0 13px;
+    border-radius: 9px;
     background: transparent;
     color: var(--resume-workbench-muted);
     font-size: 12.5px;
     font-weight: 650;
+    transition: background 0.16s ease, color 0.16s ease;
 
     &:hover,
     &:focus-visible {
@@ -241,14 +317,15 @@ const emit = defineEmits<{
     &.is-active {
       background: var(--resume-workbench-accent-soft);
       color: var(--resume-workbench-accent);
+      font-weight: 700;
     }
 
     > span {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 16px;
-      height: 16px;
+      width: 17px;
+      height: 17px;
       border: 1px solid currentColor;
       border-radius: 50%;
       font-size: 9px;
@@ -261,6 +338,32 @@ const emit = defineEmits<{
   justify-content: flex-end;
   min-width: 0;
   gap: 8px;
+}
+
+.resume-workbench-topbar__history {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding-right: 9px;
+  border-right: 1px solid var(--resume-workbench-line);
+
+  .resume-workbench-topbar__icon-button {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.38;
+    }
+
+    &:disabled:hover,
+    &:disabled:focus-visible {
+      background: transparent;
+      color: var(--resume-workbench-muted);
+    }
+  }
 }
 
 .resume-workbench-topbar__completion {
@@ -282,14 +385,16 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 34px;
-  padding: 0 11px;
+  min-height: 32px;
+  padding: 0 12px;
   border: 1px solid var(--resume-workbench-line-strong);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--resume-workbench-surface);
   color: var(--resume-workbench-text-soft);
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease,
+    box-shadow 0.16s ease, transform 0.08s ease;
 
   &:hover,
   &:focus-visible {
@@ -312,12 +417,14 @@ const emit = defineEmits<{
   border-color: var(--resume-workbench-accent);
   background: var(--resume-workbench-accent);
   color: #fff;
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.06), 0 8px 16px -8px rgba(31, 111, 92, 0.5);
 
   &:hover,
   &:focus-visible {
     border-color: var(--resume-workbench-accent-strong);
     background: var(--resume-workbench-accent-strong);
     color: #fff;
+    box-shadow: 0 2px 4px rgba(26, 25, 23, 0.08), 0 12px 22px -10px rgba(31, 111, 92, 0.55);
   }
 }
 
@@ -366,6 +473,12 @@ const emit = defineEmits<{
 
   .resume-workbench-topbar__action--primary {
     min-width: 68px;
+  }
+}
+
+@media (max-width: 480px) {
+  .resume-workbench-topbar__history {
+    display: none;
   }
 }
 

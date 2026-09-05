@@ -43,9 +43,14 @@ describe('resume document model', () => {
     })
     expect(model.workEntries[0].bullets).toEqual(['负责订单服务重构', '接口错误率下降 30%'])
     expect(model.projectEntries[0].bullets).toEqual([
-      '支撑多渠道订单接入',
-      '解决热点数据竞争',
-      '峰值吞吐提升 40%'
+      '项目背景：支撑多渠道订单接入',
+      '技术难点：解决热点数据竞争',
+      '结果指标：峰值吞吐提升 40%'
+    ])
+    expect(model.projectEntries[0].projectSections).toEqual([
+      { key: 'background', title: '项目背景', values: ['支撑多渠道订单接入'] },
+      { key: 'technical', title: '技术难点', values: ['解决热点数据竞争'] },
+      { key: 'outcome', title: '结果指标', values: ['峰值吞吐提升 40%'] }
     ])
     expect(model.skillGroups.flatMap((group) => group.items)).toEqual(model.skills)
   })
@@ -215,6 +220,28 @@ describe('resume document model', () => {
     expect(wrapper.find('.document-entry li').text()).toBe('负责订单服务重构')
   })
 
+  it('renders each project category once while keeping multiple values grouped', () => {
+    const wrapper = mount(ResumeDocumentPreview, {
+      props: {
+        draft: {
+          projects: [{
+            projectName: '交易系统',
+            projectBackground: '业务存在重复消费\n需要补偿不可追踪问题',
+            coreFeatures: '消息去重\n状态机校验'
+          }]
+        }
+      }
+    })
+
+    expect(wrapper.findAll('.document-project-section__title').map((item) => item.text()))
+      .toEqual(['项目背景', '核心功能'])
+    expect(wrapper.findAll('.document-project-section')).toHaveLength(2)
+    expect(wrapper.text()).toContain('业务存在重复消费')
+    expect(wrapper.text()).toContain('需要补偿不可追踪问题')
+    expect(wrapper.text()).toContain('消息去重')
+    expect(wrapper.text()).toContain('状态机校验')
+  })
+
   it('keeps preview order aligned with stored ATS templates and degrades unknown values', () => {
     expect(resumeTemplateSectionOrder('ATS_SINGLE_COLUMN')).toEqual([
       'summary',
@@ -232,7 +259,7 @@ describe('resume document model', () => {
   it('provides four base templates and unlocks the signature template at seven streak days', () => {
     const signature = resumeTemplateOptions.find((template) => template.code === 'ATS_STREAK_SIGNATURE')
 
-    expect(resumeTemplateOptions.filter((template) => !template.unlockStreakDays)).toHaveLength(4)
+    expect(resumeTemplateOptions.filter((template) => !template.unlockStreakDays)).toHaveLength(10)
     expect(signature?.unlockStreakDays).toBe(RESUME_STREAK_TEMPLATE_UNLOCK_DAYS)
     expect(signature && isResumeTemplateUnlocked(signature, RESUME_STREAK_TEMPLATE_UNLOCK_DAYS - 1)).toBe(false)
     expect(signature && isResumeTemplateUnlocked(signature, RESUME_STREAK_TEMPLATE_UNLOCK_DAYS)).toBe(true)

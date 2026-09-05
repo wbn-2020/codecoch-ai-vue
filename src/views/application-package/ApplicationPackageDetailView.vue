@@ -1214,7 +1214,7 @@ onMounted(loadPackage)
 .hero-kicker {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .package-hero h1,
@@ -1319,7 +1319,7 @@ onMounted(loadPackage)
   span {
     color: var(--user-text-muted);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -1391,7 +1391,7 @@ onMounted(loadPackage)
 }
 
 .compact-facts--overview dd {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .version-panel {

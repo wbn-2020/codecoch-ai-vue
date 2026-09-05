@@ -262,12 +262,26 @@ const commonStubs = {
   'el-tooltip': true
 }
 
+const resumeWorkbenchShellStub = {
+  template: [
+    '<div>',
+    '<slot name="rail" />',
+    '<slot name="preview" />',
+    '<slot name="editor" />',
+    '<slot name="inspector" />',
+    '</div>'
+  ].join('')
+}
+
 const mountView = (component: Component) => shallowMount(component, {
   global: {
     directives: {
       loading: {}
     },
-    stubs: commonStubs
+    stubs: {
+      ...commonStubs,
+      ResumeWorkbenchShell: resumeWorkbenchShellStub
+    }
   }
 })
 
@@ -295,6 +309,7 @@ let wrapper: VueWrapper | undefined
 beforeEach(() => {
   vi.resetAllMocks()
   localStorage.clear()
+  sessionStorage.clear()
   routerHarness.route.params = { id: '1' }
   routerHarness.route.query = {}
   routerHarness.beforeRouteLeave = undefined
@@ -305,7 +320,10 @@ beforeEach(() => {
   ui.confirm.mockResolvedValue(undefined)
   api.assignCareerApplicationApi.mockResolvedValue(undefined)
   api.createCareerHypothesisApi.mockResolvedValue(hypothesis(9, 1, 'Saved hypothesis'))
-  api.createResumeProjectApi.mockResolvedValue(undefined)
+  api.createResumeProjectApi.mockImplementation(async (_resumeId, payload) => ({
+    projectId: 701,
+    ...payload
+  }))
   api.createResumeVersionApi.mockResolvedValue({ id: 1 })
   api.getApplicationsApi.mockResolvedValue([])
   api.getCareerHypothesisApi.mockResolvedValue(undefined)
@@ -349,6 +367,61 @@ describe('dynamic entity detail routes', () => {
     projectB.resolve(projectDetail(2, 'Project B'))
     await flushPromises()
     expect(state.detail?.title).toBe('Project C')
+  })
+
+  it.each([
+    [
+      { response: { status: 404, data: { code: 40400 } } },
+      '项目证据不存在',
+      '该项目证据不存在或已被删除，请返回项目证据库确认。',
+      false
+    ],
+    [
+      { response: { status: 403, data: { code: 41003 } } },
+      '无权访问项目证据',
+      '当前账号没有读取该项目证据的权限。',
+      false
+    ],
+    [
+      {
+        response: {
+          status: 503,
+          data: {
+            code: 50000,
+            message: '项目证据服务暂时不可用',
+            traceId: 'trace-project-503'
+          }
+        }
+      },
+      '项目证据加载失败',
+      '项目证据服务暂时不可用（追踪号：trace-project-503）',
+      true
+    ]
+  ])('classifies project evidence detail failures without merging permission and missing states', async (
+    failure,
+    expectedTitle,
+    expectedDescription,
+    expectedRetryable
+  ) => {
+    api.getProjectEvidenceDetailApi.mockRejectedValue(failure)
+
+    wrapper = mountView(ProjectEvidenceDetailView)
+    await flushPromises()
+    const state = setupState<{
+      detail: ReturnType<typeof projectDetail> | null
+      pageState: {
+        title: string
+        description: string
+        retryable: boolean
+      }
+    }>(wrapper)
+
+    expect(state.detail).toBeNull()
+    expect(state.pageState).toEqual(expect.objectContaining({
+      title: expectedTitle,
+      description: expectedDescription,
+      retryable: expectedRetryable
+    }))
   })
 
   it('keeps job detail C when job detail B resolves late', async () => {
@@ -780,14 +853,54 @@ describe('dynamic entity write operations', () => {
       isDefault: 1
     }))
     expect(api.createResumeProjectApi).toHaveBeenCalledWith(77, expect.objectContaining({
-      projectId: -1,
       projectName: 'Draft A'
+    }))
+    expect(api.createResumeProjectApi).toHaveBeenCalledWith(77, expect.not.objectContaining({
+      projectId: expect.anything()
     }))
     expect(api.setDefaultResumeApi).toHaveBeenCalledWith(77)
     expect(api.createResumeVersionApi).toHaveBeenCalledWith(77, {
       sourceType: 'MANUAL_SAVE'
     })
     expect(routerHarness.replace).toHaveBeenCalledWith('/resumes/77/edit')
+  })
+
+  it('keeps failed project drafts available after the initial resume create route change', async () => {
+    api.createResumeApi.mockResolvedValue({ id: 77 })
+    api.createResumeProjectApi.mockRejectedValueOnce(new Error('project save failed'))
+    api.getResumeDetailApi.mockResolvedValue({
+      ...resumeDetail(77, 'Resume A snapshot'),
+      projects: []
+    })
+    await setRoute()
+
+    wrapper = mountView(ResumeEditView)
+    await flushPromises()
+    const state = setupState<{
+      form: { resumeName: string; skills: string; isDefault: number }
+      projects: Array<{ id: number; projectId: number; projectName: string }>
+      handleSave: () => Promise<void>
+    }>(wrapper)
+    state.form.resumeName = 'Resume A snapshot'
+    state.form.skills = 'Java'
+    state.form.isDefault = 1
+    state.projects = [{ id: -1, projectId: -1, projectName: 'Retryable draft project' }]
+
+    await state.handleSave()
+
+    expect(routerHarness.replace).toHaveBeenCalledWith('/resumes/77/edit')
+    expect(sessionStorage.getItem('codecoachai:resume:77:failed-project-drafts'))
+      .toContain('Retryable draft project')
+
+    await setRoute(77)
+    await flushPromises()
+
+    expect(state.projects).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        projectId: -1,
+        projectName: 'Retryable draft project'
+      })
+    ]))
   })
 
   it('does not apply a late resume project write to the next resume route', async () => {

@@ -14,7 +14,18 @@ export type AgentTaskType =
 
 export type AgentTaskPriority = 'HIGH' | 'MEDIUM' | 'LOW' | string
 export type AgentTaskStatus = 'TODO' | 'DOING' | 'DONE' | 'DEFERRED' | 'SKIPPED' | 'EXPIRED' | string
-export type AgentRunStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELED' | string
+export type AgentRunStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'CANCELED'
+  | 'CANCELLED'
+  | 'SUCCEEDED'
+  | 'SUCCEEDED_DEGRADED'
+  | 'FAILED_RETRYABLE'
+  | 'FAILED_FINAL'
+  | string
 export type AgentTriggerType = 'MANUAL' | 'AUTO' | string
 export type AgentTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBACK' | 'DISABLED' | 'STALE' | 'UNKNOWN' | string
 export type AgentRunResultSource = 'LLM' | 'MOCK' | 'FALLBACK' | string
@@ -298,6 +309,11 @@ export interface AgentTaskVO {
 
 export interface DailyPlanVO {
   runId?: number | null
+  executionId?: string | null
+  parentExecutionId?: string | null
+  idempotencyKey?: string | null
+  attemptNo?: number | null
+  executionStatus?: AgentRunStatus | null
   schemaVersion?: string | null
   traceId?: string | null
   aiCallLogId?: number | null
@@ -317,6 +333,10 @@ export interface DailyPlanVO {
   requestId?: string | null
   errorCode?: string | null
   errorMessage?: string | null
+  terminalReasonCode?: string | null
+  consumable?: boolean | null
+  executionSource?: string | null
+  deliveryQuality?: 'COMPLETE' | 'DEGRADED' | string | null
   failureAction?: string | null
   failureActionLabel?: string | null
   failureSuggestion?: string | null
@@ -342,6 +362,9 @@ export interface DailyPlanGenerateDTO {
   date?: string
   requestId?: string
   idempotencyKey?: string
+  executionId?: string
+  parentExecutionId?: string
+  attemptNo?: number
   executionToken?: string
   maxTotalMinutes?: number
   taskCount?: number

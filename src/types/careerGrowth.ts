@@ -175,6 +175,7 @@ export interface CareerImportRowVO {
 export interface CareerImportPreviewVO {
   format: CareerImportFormat
   timezone: string
+  contentHash?: string
   headers: string[]
   suggestedMapping: CareerCsvMapping
   supportedFields: string[]
@@ -188,6 +189,7 @@ export interface CareerImportPreviewVO {
 export interface CareerImportResultVO {
   batchId?: number
   format: CareerImportFormat
+  contentHash?: string
   status?: string
   totalCount: number
   successCount: number

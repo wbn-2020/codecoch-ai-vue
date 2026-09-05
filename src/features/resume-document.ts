@@ -1,15 +1,34 @@
 import type { ResumeDeliveryDraft } from '@/types/resumeDelivery'
+import {
+  buildResumeProjectPreviewBullets,
+  buildResumeProjectPreviewSections,
+  type ResumeProjectPreviewSection
+} from '@/features/resume-project-preview'
 
 export const RESUME_TEMPLATE_CODES = [
   'ATS_SINGLE_COLUMN',
   'ATS_COMPACT',
   'ATS_PROJECT_FOCUS',
   'ATS_CLASSIC_SIDEBAR',
-  'ATS_STREAK_SIGNATURE'
+  'ATS_STREAK_SIGNATURE',
+  'MAGIC_TIMELINE',
+  'MAGIC_MINIMALIST',
+  'MAGIC_ELEGANT',
+  'MAGIC_CREATIVE',
+  'MAGIC_EDITORIAL',
+  'MAGIC_SWISS'
 ] as const
 
 export type ResumeTemplateCode = typeof RESUME_TEMPLATE_CODES[number]
-export type ResumeAccent = 'ocean' | 'teal' | 'graphite' | 'berry'
+export type ResumeAccent =
+  | 'default'
+  | 'blue'
+  | 'green'
+  | 'purple'
+  | 'orange'
+  | 'red'
+  | 'slate'
+  | 'black'
 export type ResumePreviewDensity = 'comfortable' | 'compact'
 export const RESUME_STREAK_TEMPLATE_UNLOCK_DAYS = 7
 export type ResumeTemplateAtsRisk = 'LOW' | 'MEDIUM'
@@ -26,6 +45,7 @@ export interface ResumeDocumentEntry {
   period?: string
   meta?: string
   bullets: string[]
+  projectSections?: ResumeProjectPreviewSection[]
 }
 
 export interface ResumeSkillGroup {
@@ -61,6 +81,10 @@ export interface ResumeTemplateOption {
   unlockStreakDays?: number
 }
 
+/** V4_128：MAGIC_* 的双通道事实说明，供模板卡与导出检查复用。 */
+export const RESUME_MAGIC_TEMPLATE_NOTE =
+  '设计版用浏览器打印通道导出；服务器正式导出为单栏 ATS 版式，ATS 解析优先。'
+
 export interface ResumeExportCheckItem {
   key: string
   label: string
@@ -77,9 +101,9 @@ export interface ResumeExportCheckInput extends ResumeDocumentDraft {
 export const resumeTemplateOptions: ResumeTemplateOption[] = [
   {
     code: 'ATS_SINGLE_COLUMN',
-    name: '极光绿',
-    description: '清晰时间线与强调色标题，适合通用投递',
-    shortLabel: '极光',
+    name: '经典蓝',
+    description: '左右分栏头部与色条分区标题，魔方经典版式',
+    shortLabel: '经典',
     className: 'professional',
     roleFit: '通用岗位、研发、产品与运营',
     pageTendency: '内容适中时偏 1 页，经历较多时自然延展到 2 页',
@@ -140,8 +164,127 @@ export const resumeTemplateOptions: ResumeTemplateOption[] = [
     atsRiskDetail: '文字仍保持单栏，但装饰更明显；以正式 PDF/DOCX 结果为准。',
     typographyLayout: 'Arial / 微软雅黑；单栏、暖色边框与轻装饰、标题强调更强',
     unlockStreakDays: RESUME_STREAK_TEMPLATE_UNLOCK_DAYS
+  },
+  {
+    code: 'MAGIC_TIMELINE',
+    name: '时间轴',
+    description: '以时间线组织工作、项目和教育经历',
+    shortLabel: '时间轴',
+    className: 'timeline',
+    roleFit: '经历时间顺序清晰、项目证据较多的岗位',
+    pageTendency: '内容适中偏 1 页，经历较多时自然延展',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
+    typographyLayout: 'Arial / 微软雅黑；节点、轨道和日期对齐'
+  },
+  {
+    code: 'MAGIC_MINIMALIST',
+    name: '极简',
+    description: '减少装饰，让内容和留白承担主要层级',
+    shortLabel: '极简',
+    className: 'minimalist',
+    roleFit: '内容成熟、希望突出表达质量的岗位',
+    pageTendency: '留白较多，长内容可能形成 2 页',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
+    typographyLayout: 'Arial / 微软雅黑；低装饰、低噪声、留白优先'
+  },
+  {
+    code: 'MAGIC_ELEGANT',
+    name: '优雅',
+    description: '用细线、字体层级和留白建立稳定秩序',
+    shortLabel: '优雅',
+    className: 'elegant',
+    roleFit: '内容完整、重视版面质感的岗位',
+    pageTendency: '内容适中偏 1 页，正文较长时自然延展',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
+    typographyLayout: 'Arial / Georgia 回退；细线、留白和高层级标题'
+  },
+  {
+    code: 'MAGIC_CREATIVE',
+    name: '创意',
+    description: '强调区块标签与主题色，但保持 A4 可读边界',
+    shortLabel: '创意',
+    className: 'creative',
+    roleFit: '设计、市场、运营及重视视觉识别的岗位',
+    pageTendency: '内容适中偏 1 页，复杂项目可能形成 2 页',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
+    typographyLayout: 'Arial / 微软雅黑；强调区块、色带和横向标签'
+  },
+  {
+    code: 'MAGIC_EDITORIAL',
+    name: '画报风',
+    description: '以编辑感的标题、节奏和留白组织信息',
+    shortLabel: '画报',
+    className: 'editorial',
+    roleFit: '内容表达成熟、希望形成个人风格的岗位',
+    pageTendency: '留白较多，长文本更容易延展到 2 页',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
+    typographyLayout: 'Arial / 微软雅黑；编辑感标题、细线和多段节奏'
+  },
+  {
+    code: 'MAGIC_SWISS',
+    name: '瑞士网格',
+    description: '用严格网格和列对齐提升信息扫描效率',
+    shortLabel: '瑞士',
+    className: 'swiss',
+    roleFit: '研发、产品、数据和重视信息结构的岗位',
+    pageTendency: '内容适中偏 1 页，区块较多时形成 2 页',
+    atsRisk: 'MEDIUM',
+    atsRiskLabel: '中',
+    atsRiskDetail: RESUME_MAGIC_TEMPLATE_NOTE,
+    typographyLayout: 'Arial / 微软雅黑；严格网格、列对齐、少量主题色'
   }
 ]
+
+/** 魔方简历式自由主题色：历史枚举值到 hex 的映射（读取旧数据时迁移）。 */
+export const LEGACY_ACCENT_HEX: Record<string, string> = {
+  default: '#0047AB',
+  blue: '#1A1A1A',
+  green: '#2E8B57',
+  purple: '#4B0082',
+  orange: '#FF4500',
+  red: '#8B0000',
+  slate: '#666666',
+  black: '#000000'
+}
+
+/** accentColor 统一解析为 hex：hex 直通、旧枚举迁移、非法值回退默认钴蓝。 */
+export const resolveAccentHex = (value: unknown): string => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toUpperCase()
+    if (LEGACY_ACCENT_HEX[trimmed]) return LEGACY_ACCENT_HEX[trimmed]
+  }
+  return LEGACY_ACCENT_HEX.default
+}
+
+const hexToRgb = (hex: string): [number, number, number] => [
+  parseInt(hex.slice(1, 3), 16),
+  parseInt(hex.slice(3, 5), 16),
+  parseInt(hex.slice(5, 7), 16)
+]
+
+/** 按比例向黑色压暗（amount 0-1），用于强调色 hover/strong 派生。 */
+export const shadeAccent = (hex: string, amount: number): string => {
+  const [r, g, b] = hexToRgb(resolveAccentHex(hex))
+  const mix = (channel: number) => Math.round(channel * (1 - amount))
+  return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`.toUpperCase()
+}
+
+/** 带透明度的强调色，用于色带/软背景。 */
+export const alphaAccent = (hex: string, alpha: number): string => {
+  const [r, g, b] = hexToRgb(resolveAccentHex(hex))
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 
 export const isResumeTemplateUnlocked = (
   template: ResumeTemplateOption,
@@ -153,24 +296,50 @@ export const normalizeResumeTemplateCode = (value?: string): ResumeTemplateCode 
     ? value as ResumeTemplateCode
     : 'ATS_SINGLE_COLUMN'
 
-const normalizeText = (value: unknown) =>
+/**
+ * Templates registered on the server ATS export channel (V4_128 seeds the MAGIC_* codes as
+ * single-column ATS documents). Kept here so the delivery workbench and the template registry
+ * share one source of truth for what can produce a formal PDF/DOCX.
+ */
+export const RESUME_FORMAL_EXPORT_TEMPLATE_CODES: readonly ResumeTemplateCode[] = [
+  'ATS_SINGLE_COLUMN',
+  'ATS_COMPACT',
+  'ATS_PROJECT_FOCUS',
+  'MAGIC_TIMELINE',
+  'MAGIC_MINIMALIST',
+  'MAGIC_ELEGANT',
+  'MAGIC_CREATIVE',
+  'MAGIC_EDITORIAL',
+  'MAGIC_SWISS'
+]
+
+export const isFormalResumeTemplateCode = (
+  value?: string
+): boolean =>
+  RESUME_FORMAL_EXPORT_TEMPLATE_CODES.includes(value as ResumeTemplateCode)
+
+export const normalizeText = (value: unknown) =>
   String(value || '')
     .replace(/\r\n?/g, '\n')
     .replace(/\u00a0/g, ' ')
     .trim()
 
-const splitLines = (value: unknown) =>
+export const splitLines = (value: unknown) =>
   normalizeText(value)
     .split(/\n+/)
-    .map((line) => line.replace(/^\s*(?:(?:[-*•·])\s*|(?:\d+[.)、])\s+)/, '').trim())
+    // 行首 “*” 只有在不成对时才视作列表标记：避免吃掉 “**加粗**” 的第一个星号。
+    .map((line) => line.replace(/^\s*(?:(?:[-•·])\s*|\*(?!\*)\s*|(?:\d+[.)、])\s+)/, '').trim())
     .filter(Boolean)
 
-const splitSentences = (value: string) => {
+export const splitSentences = (value: string) => {
   if (!value) return []
   const explicit = splitLines(value)
   if (explicit.length > 1) return explicit
-  if (value.length < 58) return [value]
-  return value
+  // 列表标记必须被剥离：投影回扁平列时会重新加上“- ”，保留会让文本每次保存都变长。
+  if (!explicit.length) return []
+  const [single] = explicit
+  if (single.length < 58) return [single]
+  return single
     .split(/(?<=[。！？；;])\s*/)
     .map((item) => item.trim())
     .filter(Boolean)
@@ -212,7 +381,7 @@ const isLikelyEntryTitle = (
   return /(?:大学|学院|学校|研究院)/.test(value)
 }
 
-const buildNarrativeEntries = (
+export const buildNarrativeEntries = (
   value: unknown,
   fallbackTitle: string,
   prefix: string
@@ -255,7 +424,7 @@ const buildNarrativeEntries = (
   }).filter((entry): entry is ResumeDocumentEntry => Boolean(entry))
 }
 
-const splitSkills = (value: unknown) =>
+export const splitSkills = (value: unknown) =>
   normalizeText(value)
     .split(/[，,、\n/|；;]+/)
     .map((item) => item.trim())
@@ -264,7 +433,7 @@ const splitSkills = (value: unknown) =>
 const matchesAny = (value: string, patterns: RegExp[]) =>
   patterns.some((pattern) => pattern.test(value))
 
-const groupSkills = (skills: string[]): ResumeSkillGroup[] => {
+export const groupSkills = (skills: string[]): ResumeSkillGroup[] => {
   const buckets: Record<string, string[]> = {
     语言与基础: [],
     框架与架构: [],
@@ -305,7 +474,7 @@ const projectText = (
   keys: string[]
 ) => keys.map((key) => normalizeText(project[key])).find(Boolean) || ''
 
-const buildProjectEntries = (
+export const buildProjectEntries = (
   projects: ResumeDeliveryDraft['projects']
 ): ResumeDocumentEntry[] =>
   (projects || []).map((project, index) => {
@@ -314,22 +483,17 @@ const buildProjectEntries = (
     const period = projectText(source, ['projectTime', 'projectPeriod'])
     const role = projectText(source, ['role', 'responsibility'])
     const techStack = projectText(source, ['techStack'])
-    const bulletSource = [
-      projectText(source, ['projectBackground', 'description']),
-      projectText(source, ['coreFeatures']),
-      projectText(source, ['highlights']),
-      projectText(source, ['technicalChallenges', 'technicalDifficulties']),
-      projectText(source, ['optimizationResult', 'optimizationResults']),
-      projectText(source, ['extraInfo'])
-    ].filter(Boolean)
-
     return {
       key: `project-${String(source.projectId || source.id || index)}`,
       title,
       subtitle: role,
       period,
       meta: techStack,
-      bullets: bulletSource.flatMap(splitSentences)
+      bullets: buildResumeProjectPreviewBullets(source).flatMap(splitSentences),
+      projectSections: buildResumeProjectPreviewSections(source).map((section) => ({
+        ...section,
+        values: section.values.flatMap(splitSentences)
+      }))
     }
   })
 

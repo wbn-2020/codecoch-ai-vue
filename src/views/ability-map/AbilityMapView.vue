@@ -1,5 +1,51 @@
 <template>
   <div class="arena arena-ability ability-map page-shell" :aria-busy="loading">
+    <PageHeader
+      eyebrow="成长分析"
+      :icon="Map"
+      title="能力图谱"
+      description="汇总训练记录、能力状态和评估依据，定位下一轮准备重点；没有证据的能力不会被推断为强项或薄弱项。"
+    >
+      <template #actions>
+        <el-button @click="router.push('/project-evidence')">
+          <FolderOpen :size="16" />
+          项目证据
+        </el-button>
+        <el-button type="primary" :disabled="!canStartTraining" @click="startRecommendedTraining">
+          <Play :size="16" />
+          {{ nextTrainingActionLabel }}
+        </el-button>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
+
+    <section class="cc-metric-grid">
+      <MetricCard
+        label="综合就绪度"
+        :value="hasAssessedSkills ? abilityPower : '--'"
+        :detail="hasAssessedSkills ? '基于训练与匹配证据的综合参考。' : '评估证据不足，暂不生成分数。'"
+        :tone="hasAssessedSkills ? 'success' : 'warning'"
+      />
+      <MetricCard
+        label="已评估能力"
+        :value="`${abilityMap.assessedSkillCount} / ${abilityMap.totalSkillCount}`"
+        detail="未评估项会明确保留为待验证。"
+      />
+      <MetricCard
+        label="评估证据"
+        :value="totalEvidenceCount"
+        detail="来自已完成训练、可信岗位匹配和明确评估。"
+        tone="info"
+      />
+      <MetricCard
+        label="优先补强"
+        :value="weakSkills.length"
+        :detail="weakSkills.length ? nextTrainingTitle : '当前没有证据支持的薄弱项。'"
+        :tone="weakSkills.length ? 'warning' : 'default'"
+      />
+    </section>
+
     <section class="growth-hero ability-summary">
       <div class="growth-hero__main">
         <div class="eyebrow">
@@ -22,7 +68,7 @@
         </div>
       </div>
 
-      <aside class="next-training-card next-training-card--desktop" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
+      <aside class="next-training-card next-training-card--desktop" :class="{ 'is-muted': !hasAssessedSkills }">
         <div class="next-training-card__label">
           <Target :size="16" />
           下一步训练建议
@@ -91,10 +137,10 @@
             class="ability-formula__ring"
             :style="{ background: `conic-gradient(var(--arena-grn) 0 ${abilityPower}%, var(--arena-line) ${abilityPower}% 100%)` }"
           >
-            <span v-if="abilityMap.hasTrainingData">{{ abilityPower }}</span>
+            <span v-if="hasAssessedSkills">{{ abilityPower }}</span>
             <span v-else>--</span>
           </div>
-          <p v-if="abilityMap.hasTrainingData">综合评估参考<br />训练与面试证据</p>
+          <p v-if="hasAssessedSkills">综合评估参考<br />训练与匹配证据</p>
           <p v-else>评估证据不足<br />尚未生成综合结论</p>
         </div>
       </header>
@@ -138,7 +184,7 @@
         </div>
 
         <aside class="ability-action-rail">
-          <section class="priority-action-card" :class="{ 'is-muted': !abilityMap.hasTrainingData }">
+          <section class="priority-action-card" :class="{ 'is-muted': !hasAssessedSkills }">
             <div class="priority-action-card__label">
               <Target :size="16" />
               建议优先处理
@@ -160,12 +206,19 @@
               <span>评估依据</span>
               <ShieldCheck :size="15" />
             </div>
-            <strong>{{ totalEvidenceCount }} 条可用训练证据</strong>
+            <strong>{{ totalEvidenceCount }} 条评估证据</strong>
             <p>
-              {{ abilityMap.hasTrainingData
-                ? '评分来自题目训练和面试报告；没有证据的节点不会被判定为强项或薄弱项。'
-              : '完成一次训练后，这里会展示真实的评估依据，不会把空白状态当成零分。' }}
+              {{ hasAssessedSkills
+                ? '结论来自已完成训练、可信岗位匹配和其他明确评估；没有证据的节点不会被判定为强项或薄弱项。'
+                : totalEvidenceCount
+                  ? '证据已经归集，但目前不足以量化等级；页面保留真实证据数量，不会把待量化节点显示为零分。'
+                  : '完成一次训练或可信岗位匹配后，这里会展示真实评估依据，不会把空白状态当成零分。' }}
             </p>
+            <div class="ability-evidence-card__details">
+              <span>来源：{{ evidenceSourceSummary }}</span>
+              <span>最近更新：{{ latestEvidenceAt }}</span>
+              <span>同步状态：{{ evidenceSyncText }}</span>
+            </div>
             <el-button plain @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
               去补一组训练
               <ArrowRight :size="15" />
@@ -195,6 +248,10 @@ import { useRouter } from 'vue-router'
 
 import { getAbilityMapApi } from '@/api/abilityMap'
 import AppState from '@/components/common/AppState.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { normalizeAbilityMap, statusLabel } from '@/features/ability-map'
 import type { AbilityDomainVO, AbilityMapVO, AbilitySkillNodeVO } from '@/types/abilityMap'
 import { getErrorMessage } from '@/utils/error'
@@ -204,6 +261,7 @@ const loading = ref(false)
 const loadError = ref('')
 const activeDomainCode = ref('')
 const abilityMap = ref<AbilityMapVO>(normalizeAbilityMap())
+const moduleTabs = useUserModuleTabs('growth')
 
 const domainFallbackCopy: Record<string, string> = {
   JAVA_CORE: 'Java 基础',
@@ -465,33 +523,74 @@ const activeDomain = computed(() =>
 
 const hasAbilityDirectory = computed(() => abilityMap.value.domains.length > 0)
 const isInitialLoading = computed(() => loading.value && !hasAbilityDirectory.value && !loadError.value)
+const allSkills = computed(() => abilityMap.value.domains.flatMap((domain) => domain.skills || []))
+const totalEvidenceCount = computed(() => allSkills.value.reduce((total, skill) => total + (skill.evidenceCount || 0), 0))
+const hasAssessedSkills = computed(() => allSkills.value.some(
+  (skill) => skill.status !== 'UNASSESSED' && (skill.evidenceCount || 0) > 0
+))
 const isEvidenceInsufficient = computed(() =>
-  !loading.value && !loadError.value && hasAbilityDirectory.value && !abilityMap.value.hasTrainingData
+  !loading.value && !loadError.value && hasAbilityDirectory.value && !hasAssessedSkills.value
 )
 const assessmentSummary = computed(() => {
   if (isInitialLoading.value) return '能力评估 · 正在加载'
   if (!hasAbilityDirectory.value) return '能力评估 · 尚未建立目录'
-  if (!abilityMap.value.hasTrainingData) return `能力评估 · 目录 ${abilityMap.value.totalSkillCount} 项，证据不足`
+  if (!hasAssessedSkills.value && totalEvidenceCount.value > 0) {
+    return `能力评估 · 已归集 ${totalEvidenceCount.value} 条证据，暂无可量化节点`
+  }
+  if (!hasAssessedSkills.value) return `能力评估 · 目录 ${abilityMap.value.totalSkillCount} 项，证据不足`
   return `能力评估 · 已评估 ${abilityMap.value.assessedSkillCount} / ${abilityMap.value.totalSkillCount}`
 })
 const activeDomainName = computed(() => safeDomainName(activeDomain.value) || '能力点')
-const allSkills = computed(() => abilityMap.value.domains.flatMap((domain) => domain.skills || []))
 const canStartTraining = computed(() => !loading.value && !loadError.value && allSkills.value.length > 0)
-const weakSkills = computed(() => abilityMap.value.hasTrainingData ? allSkills.value.filter((skill) => skill.status === 'WEAK') : [])
-const totalEvidenceCount = computed(() => allSkills.value.reduce((total, skill) => total + (skill.evidenceCount || 0), 0))
+const weakSkills = computed(() => allSkills.value.filter(
+  (skill) => skill.status === 'WEAK' && (skill.evidenceCount || 0) > 0
+))
+const evidenceSourceSummary = computed(() => {
+  const labels = allSkills.value.flatMap((skill) => [
+    ...(skill.evidenceSources || []),
+    ...(skill.sourceLabels || [])
+  ])
+  const unique = Array.from(new Set(labels.filter(Boolean)))
+  return unique.length ? unique.join('、') : '来源信息待同步'
+})
+const latestEvidenceAt = computed(() => {
+  const values = [
+    abilityMap.value.updatedAt,
+    ...allSkills.value.flatMap((skill) => [skill.updatedAt, skill.lastEvaluatedAt])
+  ].filter((value): value is string => Boolean(value))
+  if (!values.length) return '暂无更新时间'
+  const latest = values
+    .map((value) => ({ value, timestamp: new Date(value).getTime() }))
+    .filter((item) => Number.isFinite(item.timestamp))
+    .sort((left, right) => right.timestamp - left.timestamp)[0]
+  return latest ? formatDate(latest.value) : '更新时间格式待确认'
+})
+const evidenceSyncText = computed(() => {
+  const status = String(abilityMap.value.syncStatus || '').toUpperCase()
+  if (status === 'SYNCED' || status === 'SUCCESS') return '已同步'
+  if (status === 'PENDING' || status === 'PROCESSING') return '同步中'
+  if (status === 'FAILED') return abilityMap.value.syncMessage || '同步失败'
+  return abilityMap.value.syncMessage || '未返回同步状态'
+})
 const recommendedSkill = computed(() => {
-  if (abilityMap.value.hasTrainingData && weakSkills.value.length) return weakSkills.value[0]
+  if (hasAssessedSkills.value && weakSkills.value.length) return weakSkills.value[0]
+  const unquantifiedWithEvidence = allSkills.value.find(
+    (skill) => skill.status === 'UNASSESSED' && (skill.evidenceCount || 0) > 0
+  )
+  if (unquantifiedWithEvidence) return unquantifiedWithEvidence
   return activeDomain.value?.skills?.[0] || allSkills.value[0]
 })
 const nextTrainingTitle = computed(() => {
   if (!allSkills.value.length) return '先建立能力目录'
-  if (!abilityMap.value.hasTrainingData) return '先完成一次专项训练，建立评估证据'
+  if (!totalEvidenceCount.value) return '先完成一次专项训练，建立评估证据'
+  if (!hasAssessedSkills.value) return '继续训练，补足可量化证据'
   if (recommendedSkill.value && weakSkills.value.length) return `优先训练：${safeSkillName(recommendedSkill.value)}`
   return '保持专项训练，补齐证据链'
 })
 const nextTrainingDescription = computed(() => {
   if (!allSkills.value.length) return '当前没有可训练的能力点，请先进入题库完成一组基础训练。'
-  if (!abilityMap.value.hasTrainingData) return '目前没有训练数据，页面不会推断强弱。先围绕当前能力域做题，让图谱有真实证据。'
+  if (!totalEvidenceCount.value) return '目前没有评估证据，页面不会推断强弱。先围绕当前能力域完成训练或岗位匹配。'
+  if (!hasAssessedSkills.value) return '已有训练或匹配证据，但尚不足以形成等级结论。继续围绕有证据的节点训练，避免把“待量化”误读为零分。'
   if (recommendedSkill.value && weakSkills.value.length) {
     return safeSkillSummary(recommendedSkill.value, '这个能力点已被评估为薄弱，建议用专项题组补齐概念、方案和项目表达。')
   }
@@ -502,10 +601,10 @@ const nextTrainingMeta = computed(() => {
   return `${recommendedSkill.value.evidenceCount || 0} 条证据 · ${formatDate(recommendedSkill.value.lastEvaluatedAt)}`
 })
 const trainingTrustText = computed(() => {
-  if (!abilityMap.value.hasTrainingData) return '暂无强弱结论'
+  if (!hasAssessedSkills.value) return totalEvidenceCount.value ? '已有证据，待量化' : '暂无强弱结论'
   return recommendedSkill.value ? confidenceText(recommendedSkill.value) : '可信度待确认'
 })
-const nextTrainingActionLabel = computed(() => abilityMap.value.hasTrainingData && weakSkills.value.length ? '训练薄弱项' : '开始训练')
+const nextTrainingActionLabel = computed(() => hasAssessedSkills.value && weakSkills.value.length ? '训练薄弱项' : '开始训练')
 
 const fetchAbilityMap = async () => {
   loading.value = true
@@ -522,18 +621,18 @@ const fetchAbilityMap = async () => {
 }
 
 const domainWeakText = (domain: AbilityDomainVO) => {
-  if (!abilityMap.value.hasTrainingData) return '未评估'
   if (domain.weakCount) return `${domain.weakCount} 个薄弱项`
+  if (!domain.assessedCount) return domain.skills.some((skill) => (skill.evidenceCount || 0) > 0) ? '已有证据，待量化' : '未评估'
   return '暂无薄弱项'
 }
 
 const honestStatusLabel = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return '未评估'
+  if (skill.status === 'UNASSESSED') return skill.evidenceCount ? '待量化' : '未评估'
   return statusLabel(skill.status)
 }
 
 const confidenceText = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || !skill.evidenceCount) return '待训练验证'
+  if (!skill.evidenceCount) return '待训练验证'
   const labels: Record<string, string> = {
     UNKNOWN: '可信度待确认',
     LOW: '可信度低',
@@ -554,12 +653,12 @@ const formatDate = (value?: string) => {
 }
 
 const skillCardClass = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return 'is-unassessed'
+  if (skill.status === 'UNASSESSED') return 'is-unassessed'
   return `is-${String(skill.status).toLowerCase()}`
 }
 
 const skillScore = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return 0
+  if (skill.status === 'UNASSESSED' || !skill.evidenceCount) return 0
   const scores: Record<string, number> = {
     WEAK: 32,
     BASIC: 58,
@@ -570,13 +669,16 @@ const skillScore = (skill: AbilitySkillNodeVO) => {
 }
 
 const skillScoreLabel = (skill: AbilitySkillNodeVO) =>
-  abilityMap.value.hasTrainingData && skill.status !== 'UNASSESSED'
+  skill.evidenceCount && skill.status !== 'UNASSESSED'
     ? String(skillScore(skill))
     : honestStatusLabel(skill)
 
 const abilityPower = computed(() => {
-  if (!allSkills.value.length || !abilityMap.value.hasTrainingData) return 0
-  return Math.round(allSkills.value.reduce((total, skill) => total + skillScore(skill), 0) / allSkills.value.length)
+  const assessed = allSkills.value.filter(
+    (skill) => skill.status !== 'UNASSESSED' && (skill.evidenceCount || 0) > 0
+  )
+  if (!assessed.length) return 0
+  return Math.round(assessed.reduce((total, skill) => total + skillScore(skill), 0) / assessed.length)
 })
 
 const practiceQueryForSkill = (skill?: AbilitySkillNodeVO) => {
@@ -586,7 +688,7 @@ const practiceQueryForSkill = (skill?: AbilitySkillNodeVO) => {
     keyword,
     skillName: keyword,
     sourceType: 'SKILL_PROFILE',
-    trustStatus: abilityMap.value.hasTrainingData && (skill?.evidenceCount || 0) > 0 ? 'VERIFIED' : 'PARTIAL'
+    trustStatus: skill?.status !== 'UNASSESSED' && (skill?.evidenceCount || 0) > 0 ? 'VERIFIED' : 'PARTIAL'
   }
 }
 
@@ -600,7 +702,7 @@ const startDomainTraining = (domain?: AbilityDomainVO) => {
       keyword,
       skillName: keyword,
       sourceType: 'SKILL_PROFILE',
-      trustStatus: abilityMap.value.hasTrainingData ? 'PARTIAL' : 'FALLBACK'
+      trustStatus: totalEvidenceCount.value > 0 ? 'PARTIAL' : 'FALLBACK'
     }
   })
 }
@@ -623,7 +725,7 @@ const startRecommendedTraining = () => {
 
 /** 能力节点状态用于展示评估可用性。 */
 const skillNodeState = (skill: AbilitySkillNodeVO) => {
-  if (!abilityMap.value.hasTrainingData || skill.status === 'UNASSESSED') return 'locked'
+  if (skill.status === 'UNASSESSED') return 'locked'
   if (skill.status === 'WEAK') return 'training'
   return 'unlocked'
 }
@@ -713,7 +815,7 @@ onMounted(fetchAbilityMap)
 .eyebrow {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -756,7 +858,7 @@ onMounted(fetchAbilityMap)
 .next-training-card__label {
   color: var(--user-warning);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .next-training-card__meta {
@@ -901,7 +1003,7 @@ onMounted(fetchAbilityMap)
   span {
     color: var(--app-text);
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   em {
@@ -962,7 +1064,7 @@ onMounted(fetchAbilityMap)
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   h2,
@@ -1059,12 +1161,12 @@ onMounted(fetchAbilityMap)
   background: var(--user-primary);
   color: var(--user-primary-contrast);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.26);
 }
 
 .growth-stage:not(.active) .growth-stage__node {
-  background: #94a3b8;
+  background: var(--user-text-subtle);
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.28);
 }
 
@@ -1229,7 +1331,7 @@ onMounted(fetchAbilityMap)
   background: var(--user-danger-soft);
 
   &::before {
-    background: #ef4444;
+    background: var(--user-danger);
     box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.28);
   }
 }
@@ -1240,7 +1342,7 @@ onMounted(fetchAbilityMap)
   background: var(--user-success-soft);
 
   &::before {
-    background: #16a34a;
+    background: var(--user-success);
     box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.28);
   }
 }
@@ -1249,7 +1351,7 @@ onMounted(fetchAbilityMap)
   background: var(--user-surface-muted);
 
   &::before {
-    background: #94a3b8;
+    background: var(--user-text-subtle);
     box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.28);
   }
 }
@@ -1345,7 +1447,7 @@ onMounted(fetchAbilityMap)
   }
 
   span {
-    font-weight: 800;
+    font-weight: 600;
   }
 
   small {
@@ -1390,7 +1492,7 @@ onMounted(fetchAbilityMap)
   svg {
     flex: 0 0 auto;
     margin-top: 2px;
-    color: #16a34a;
+    color: var(--user-success-text);
   }
 
   strong,
@@ -1583,7 +1685,7 @@ onMounted(fetchAbilityMap)
   }
 
   &:hover {
-    transform: translateY(-1px);
+    box-shadow: var(--arena-shadow-hover, var(--user-shadow-sm));
   }
 }
 
@@ -1656,7 +1758,7 @@ onMounted(fetchAbilityMap)
 
 .power-radar__label {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   fill: rgba(203, 213, 225, 0.75);
 }
 
@@ -1675,7 +1777,7 @@ onMounted(fetchAbilityMap)
   span {
     display: block;
     font-size: 10.5px;
-    font-weight: 700;
+    font-weight: 600;
     color: rgba(203, 213, 225, 0.6);
   }
 
@@ -1683,7 +1785,7 @@ onMounted(fetchAbilityMap)
     display: block;
     margin-top: 3px;
     font-size: 14px;
-    color: #f8fafc;
+    color: #f6f6f4;
   }
 
   &.is-weak strong {
@@ -1710,7 +1812,7 @@ onMounted(fetchAbilityMap)
 
   span {
     font-size: 12.5px;
-    font-weight: 800;
+    font-weight: 600;
     color: #e5edf8;
   }
 
@@ -1770,6 +1872,12 @@ onMounted(fetchAbilityMap)
   padding: 28px 24px 46px;
   gap: 16px;
 
+  .cc-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+
   .growth-hero,
   .signal-card,
   .power-radar-card,
@@ -1781,17 +1889,17 @@ onMounted(fetchAbilityMap)
   .skill-card {
     border: 1.5px solid var(--arena-line);
     border-radius: var(--arena-radius-card);
-    background: #ffffff;
+    background: var(--user-surface);
     box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
   }
 
   .growth-hero {
-    border-color: #b9e7cd;
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 72%);
+    border-color: var(--user-primary-border);
+    background: linear-gradient(135deg, var(--user-primary-soft), var(--user-surface) 72%);
 
     h1 {
       font-size: 28px;
-      font-weight: 900;
+      font-weight: 600;
     }
   }
 
@@ -1802,24 +1910,24 @@ onMounted(fetchAbilityMap)
   }
 
   .next-training-card {
-    border: 1.5px solid #b9e7cd;
+    border: 1.5px solid var(--user-primary-border);
     border-radius: var(--arena-radius-card);
-    background: linear-gradient(135deg, #f0fbf4, #ffffff 76%);
+    background: linear-gradient(135deg, var(--user-primary-soft), var(--user-surface) 76%);
     box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
   }
 
   .signal-card {
     border-radius: 14px;
-    background: #ffffff;
+    background: var(--user-surface);
 
     &.signal-card--weak {
-      border-color: #f3ddc0;
-      background: #fffaf2;
+      border-color: color-mix(in srgb, var(--user-warning) 35%, transparent);
+      background: var(--user-warning-soft);
     }
 
     &.signal-card--usable {
-      border-color: #b9e7cd;
-      background: #f5fcf7;
+      border-color: var(--user-primary-border);
+      background: var(--user-canvas);
     }
   }
 
@@ -1829,7 +1937,7 @@ onMounted(fetchAbilityMap)
 
   .power-radar__ring,
   .power-radar__axis {
-    stroke: #dce4dd;
+    stroke: var(--user-border);
   }
 
   .power-radar__value {
@@ -1844,7 +1952,7 @@ onMounted(fetchAbilityMap)
 
   .power-radar__stat {
     border-radius: 13px;
-    background: #f5f7f4;
+    background: var(--user-surface-muted);
 
     span {
       color: var(--arena-sub);
@@ -1855,7 +1963,7 @@ onMounted(fetchAbilityMap)
     }
 
     &.is-weak strong {
-      color: #b4560a;
+      color: var(--user-warning-text);
     }
 
     &.is-strong strong {
@@ -1873,7 +1981,7 @@ onMounted(fetchAbilityMap)
   }
 
   .domain-rail {
-    background: #f8faf8;
+    background: var(--user-canvas);
   }
 
   .domain-item {
@@ -1891,7 +1999,7 @@ onMounted(fetchAbilityMap)
   }
 
   .skill-node-icon {
-    background: #f2f4f2;
+    background: var(--user-surface-muted);
 
     &.is-unlocked {
       background: var(--arena-grn-soft);
@@ -1912,13 +2020,17 @@ onMounted(fetchAbilityMap)
     border-color: var(--arena-grn);
     background: var(--arena-grn);
     box-shadow: 0 4px 0 var(--arena-grn-d);
-    font-weight: 800;
+    font-weight: 600;
   }
 }
 
 @media (max-width: 760px) {
   .arena-ability {
     padding: 16px 14px calc(28px + var(--user-mobile-nav-height, 0px));
+
+    .cc-metric-grid {
+      grid-template-columns: 1fr;
+    }
   }
 }
 
@@ -1943,7 +2055,7 @@ onMounted(fetchAbilityMap)
     margin-top: 7px;
     color: var(--arena-ink);
     font-size: 26px;
-    font-weight: 900;
+    font-weight: 600;
     line-height: 1.25;
   }
 
@@ -1994,7 +2106,7 @@ onMounted(fetchAbilityMap)
     span {
       color: var(--arena-grn-d);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 600;
     }
 
     h2,
@@ -2011,7 +2123,7 @@ onMounted(fetchAbilityMap)
       margin-top: 6px;
       color: var(--arena-ink);
       font-size: 26px;
-      font-weight: 900;
+      font-weight: 600;
       line-height: 1.25;
     }
   }
@@ -2040,7 +2152,7 @@ onMounted(fetchAbilityMap)
     padding: 9px 12px;
     border: 1px solid var(--arena-line);
     border-radius: 13px;
-    background: #f8faf8;
+    background: var(--user-canvas);
 
     &__ring {
       display: grid;
@@ -2056,10 +2168,10 @@ onMounted(fetchAbilityMap)
         aspect-ratio: 1;
         place-items: center;
         border-radius: 50%;
-        background: #ffffff;
+        background: var(--user-surface);
         color: var(--arena-grn-d);
         font-size: 14px;
-        font-weight: 900;
+        font-weight: 600;
       }
     }
 
@@ -2109,7 +2221,7 @@ onMounted(fetchAbilityMap)
 
     strong {
       font-size: 14px;
-      font-weight: 900;
+      font-weight: 600;
     }
 
     small {
@@ -2127,7 +2239,7 @@ onMounted(fetchAbilityMap)
       color: var(--arena-grn-d);
       font-size: 11px;
       font-style: normal;
-      font-weight: 800;
+      font-weight: 600;
     }
   }
 
@@ -2148,7 +2260,7 @@ onMounted(fetchAbilityMap)
     padding: 10px 12px;
     border: 1.5px solid var(--arena-line);
     border-radius: 14px;
-    background: #ffffff;
+    background: var(--user-surface);
     color: inherit;
     font: inherit;
     text-align: left;
@@ -2158,7 +2270,7 @@ onMounted(fetchAbilityMap)
     &:hover,
     &:focus-visible {
       border-color: var(--arena-grn);
-      transform: translateY(-1px);
+      box-shadow: var(--arena-shadow-hover, var(--user-shadow-sm));
     }
 
     &:focus-visible {
@@ -2167,18 +2279,18 @@ onMounted(fetchAbilityMap)
     }
 
     &.is-weak {
-      border-color: #f3ddc0;
-      background: #fffaf2;
+      border-color: color-mix(in srgb, var(--user-warning) 35%, transparent);
+      background: var(--user-warning-soft);
     }
 
     &.is-strong,
     &.is-competent {
-      border-color: #b9e7cd;
-      background: #f5fcf7;
+      border-color: var(--user-primary-border);
+      background: var(--user-canvas);
     }
 
     &.is-unassessed {
-      background: #f5f7f4;
+      background: var(--user-surface-muted);
     }
 
     > b {
@@ -2193,10 +2305,10 @@ onMounted(fetchAbilityMap)
     height: 28px;
     place-items: center;
     border-radius: 9px;
-    background: #eef2ee;
+    background: var(--user-surface-muted);
     color: var(--arena-mut);
     font-size: 12px;
-    font-weight: 900;
+    font-weight: 600;
 
     &.is-unlocked {
       background: var(--arena-grn-soft);
@@ -2255,16 +2367,16 @@ onMounted(fetchAbilityMap)
     display: grid;
     gap: 12px;
     padding: 18px;
-    border: 1.5px solid #f3ddc0;
+    border: 1.5px solid color-mix(in srgb, var(--user-warning) 35%, transparent);
     border-radius: var(--arena-radius-card);
-    background: linear-gradient(135deg, #fff7ec, #ffffff 76%);
+    background: linear-gradient(135deg, var(--user-warning-soft), var(--user-surface) 76%);
     box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
   }
 
   .priority-action-card {
     &.is-muted {
       border-color: var(--arena-line);
-      background: #f8faf8;
+      background: var(--user-canvas);
     }
 
     h2,
@@ -2275,7 +2387,7 @@ onMounted(fetchAbilityMap)
     h2 {
       color: var(--arena-ink);
       font-size: 19px;
-      font-weight: 900;
+      font-weight: 600;
       line-height: 1.35;
     }
 
@@ -2294,10 +2406,22 @@ onMounted(fetchAbilityMap)
     gap: 6px;
   }
 
+  .ability-evidence-card__details {
+    display: grid;
+    gap: 5px;
+
+    span {
+      color: var(--arena-sub);
+      font-size: 11px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+  }
+
   .priority-action-card__label {
     color: var(--arena-amber);
     font-size: 12px;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   .priority-action-card__meta {
@@ -2311,8 +2435,8 @@ onMounted(fetchAbilityMap)
   }
 
   .ability-evidence-card {
-    border-color: #d7ccff;
-    background: linear-gradient(135deg, var(--arena-vio-soft), #ffffff 76%);
+    border-color: color-mix(in srgb, var(--user-ai) 30%, transparent);
+    background: linear-gradient(135deg, var(--arena-vio-soft), var(--user-surface) 76%);
 
     strong {
       color: var(--arena-ink);
@@ -2331,14 +2455,14 @@ onMounted(fetchAbilityMap)
     justify-content: space-between;
     color: var(--arena-vio);
     font-size: 12px;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   :deep(.el-button--primary) {
     border-color: var(--arena-grn);
     background: var(--arena-grn);
     box-shadow: 0 4px 0 var(--arena-grn-d);
-    font-weight: 800;
+    font-weight: 600;
   }
 }
 

@@ -137,6 +137,8 @@ export interface PracticeSubmitDTO {
   answerContent: string
   answerDurationSeconds?: number
   source?: PracticeSource
+  recommendationItemId?: number
+  batchId?: number
   targetJobId?: number
 }
 

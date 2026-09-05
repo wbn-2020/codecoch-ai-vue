@@ -148,11 +148,11 @@ export const userNavigationGroups: UserNavigationGroup[] = [
         key: 'resume-workbench',
         label: '简历工作台',
         description: '创建、编辑和优化求职简历',
-        path: '/resumes',
+        path: '/resumes/workbench',
         icon: FileText,
-        routeNames: ['ResumeJobHub', 'ResumeCreate', 'ResumeEdit'],
-        exactPaths: ['/resumes', '/resumes/create'],
-        prefixes: ['/resumes']
+        routeNames: ['ResumeWorkbench', 'ResumeCreate', 'ResumeEdit'],
+        exactPaths: ['/resumes/workbench', '/resumes/create'],
+        prefixes: ['/resumes/']
       },
       {
         key: 'resume-management',
@@ -574,10 +574,12 @@ export const isUserNavigationItemVisible = (
 export const getVisibleUserNavigationGroups = (
   featureState: UserNavigationFeatureState = getUserNavigationFeatureState()
 ): UserNavigationGroup[] =>
-  userNavigationGroups.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => isUserNavigationItemVisible(item, featureState))
-  }))
+  userNavigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => isUserNavigationItemVisible(item, featureState))
+    }))
+    .filter((group) => group.items.length > 0)
 
 interface MatcherScore {
   priority: number

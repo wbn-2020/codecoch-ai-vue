@@ -88,7 +88,7 @@ describe('App route-load recovery', () => {
     wrapper.unmount()
   })
 
-  it('shows a root loading fallback before a lazy route has resolved', async () => {
+  it('keeps the routed shell visible while a lazy route is resolving', async () => {
     const wrapper = mountApp()
     const beforeEachHandler = router.beforeEach.mock.calls[0]?.[0] as
       | ((to: { fullPath: string }) => void)
@@ -97,8 +97,8 @@ describe('App route-load recovery', () => {
     beforeEachHandler?.({ fullPath: '/resumes/create' })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('正在加载页面')
-    expect(wrapper.find('[data-test="routed-content"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="routed-content"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('正在加载页面')
     wrapper.unmount()
   })
 })

@@ -1,4 +1,8 @@
 import request from '@/utils/request'
+import type {
+  JobApplicationAttachmentUploadOptions,
+  JobApplicationAttachmentVO
+} from '@/types/jobApplicationAttachment'
 import type { PageResult } from '@/types/api'
 import type { AgentContextImpactPreviewVO } from '@/types/agent'
 import type { EvidenceSourceVO, SuggestionQualityGateVO, SuggestionTraceVO } from '@/types/suggestion'
@@ -703,20 +707,60 @@ export const getApplicationsApi = (params?: { status?: string; includeArchived?:
 export const getApplicationStatsApi = () =>
   request.get<JobApplicationStatsVO, JobApplicationStatsVO>('/applications/stats')
 
+type JobApplicationSavePayload = Pick<JobApplicationVO,
+  | 'campaignId'
+  | 'targetJobId'
+  | 'resumeVersionId'
+  | 'matchReportId'
+  | 'companyName'
+  | 'jobTitle'
+  | 'source'
+  | 'status'
+  | 'appliedAt'
+  | 'nextFollowUpAt'
+  | 'clearNextFollowUp'
+  | 'note'
+  | 'expectedLockVersion'
+  | 'idempotencyKey'
+>
+
+const toJobApplicationSavePayload = (
+  data: Partial<JobApplicationVO>,
+  expectedLockVersion?: number,
+  idempotencyKey?: string
+): JobApplicationSavePayload => ({
+  campaignId: data.campaignId,
+  targetJobId: data.targetJobId,
+  resumeVersionId: data.resumeVersionId,
+  matchReportId: data.matchReportId,
+  companyName: data.companyName,
+  jobTitle: data.jobTitle,
+  source: data.source,
+  status: data.status,
+  appliedAt: data.appliedAt,
+  nextFollowUpAt: data.nextFollowUpAt || undefined,
+  clearNextFollowUp: Boolean(data.clearNextFollowUp),
+  note: data.note,
+  expectedLockVersion,
+  idempotencyKey
+})
+
 export const createApplicationApi = (data: Partial<JobApplicationVO>) =>
-  request.post<JobApplicationVO, JobApplicationVO>('/applications', data)
+  request.post<JobApplicationVO, JobApplicationVO>(
+    '/applications',
+    toJobApplicationSavePayload(data, undefined, data.idempotencyKey)
+  )
 
 export const updateApplicationApi = (id: number, data: Partial<JobApplicationVO>) => {
   const expectedLockVersion = data.expectedLockVersion ?? data.lockVersion
   const idempotencyKey = data.idempotencyKey
-    ?? (data.status && expectedLockVersion
-      ? `application-update:${id}:${expectedLockVersion}:${data.status}`
+    ?? (expectedLockVersion !== undefined
+      ? `application-update:${id}:${expectedLockVersion}:${data.status || 'DETAIL'}:${data.nextFollowUpAt || (data.clearNextFollowUp ? 'CLEAR_FOLLOW_UP' : 'UNCHANGED')}`
       : undefined)
-  return request.put<JobApplicationVO, JobApplicationVO>(`/applications/${id}`, {
-    ...data,
-    expectedLockVersion,
-    idempotencyKey
-  })
+  return request.put<JobApplicationVO, JobApplicationVO>(
+    `/applications/${id}`,
+    toJobApplicationSavePayload(data, expectedLockVersion, idempotencyKey)
+  )
 }
 
 export const archiveApplicationApi = (id: number, data: JobApplicationArchiveDTO) =>
@@ -733,6 +777,65 @@ export const getApplicationEventsApi = (id: number) =>
 
 export const createApplicationEventApi = (id: number, data: Partial<JobApplicationEventVO>) =>
   request.post<JobApplicationEventVO, JobApplicationEventVO>(`/applications/${id}/events`, data)
+
+const applicationAttachmentPath = (applicationId: number) =>
+  `/applications/${encodeURIComponent(String(applicationId))}/attachments`
+
+const applicationAttachmentFormData = (
+  file: File,
+  options?: JobApplicationAttachmentUploadOptions
+) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (options?.attachmentType) formData.append('attachmentType', options.attachmentType)
+  if (options?.displayName?.trim()) formData.append('displayName', options.displayName.trim())
+  return formData
+}
+
+export const getApplicationAttachmentsApi = (applicationId: number) =>
+  request
+    .get<JobApplicationAttachmentVO[], JobApplicationAttachmentVO[]>(
+      applicationAttachmentPath(applicationId)
+    )
+    .then((items) => items || [])
+
+export const uploadApplicationAttachmentApi = (
+  applicationId: number,
+  file: File,
+  options?: JobApplicationAttachmentUploadOptions
+) =>
+  request.post<JobApplicationAttachmentVO, JobApplicationAttachmentVO>(
+    applicationAttachmentPath(applicationId),
+    applicationAttachmentFormData(file, options)
+  )
+
+export const replaceApplicationAttachmentApi = (
+  applicationId: number,
+  attachmentId: number,
+  file: File,
+  options?: JobApplicationAttachmentUploadOptions
+) =>
+  request.put<JobApplicationAttachmentVO, JobApplicationAttachmentVO>(
+    `${applicationAttachmentPath(applicationId)}/${encodeURIComponent(String(attachmentId))}`,
+    applicationAttachmentFormData(file, options)
+  )
+
+export const deleteApplicationAttachmentApi = (
+  applicationId: number,
+  attachmentId: number
+) =>
+  request.delete<void, void>(
+    `${applicationAttachmentPath(applicationId)}/${encodeURIComponent(String(attachmentId))}`
+  )
+
+export const downloadApplicationAttachmentApi = (
+  applicationId: number,
+  attachmentId: number
+) =>
+  request.get<Blob, Blob>(
+    `${applicationAttachmentPath(applicationId)}/${encodeURIComponent(String(attachmentId))}/download`,
+    { responseType: 'blob' }
+  )
 
 export const createKnowledgeDocumentApi = (data: KnowledgeDocumentCreateDTO) =>
   request.post<KnowledgeDocumentVO, KnowledgeDocumentVO>('/agent/knowledge/documents', data)

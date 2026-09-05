@@ -1,52 +1,37 @@
 <template>
-  <div class="project-evidence-list page-shell">
-    <section class="evidence-hero">
-      <div class="hero-copy">
-        <p class="hero-kicker">
-          <Target :size="16" />
-          项目证据库
-        </p>
-        <h1>把项目经历整理成可证明的 Offer 证据</h1>
-        <p>
-          每个项目都要回答：能证明什么能力、还缺哪类证据、能否支撑简历表达、JD 匹配和面试追问。
-        </p>
-        <div class="hero-actions">
-          <el-button type="primary" size="large" @click="router.push('/project-evidence/create')">
-            <Plus :size="17" />
-            新建项目证据
-          </el-button>
-          <el-button size="large" @click="router.push('/resumes')">
-            <FileText :size="17" />
-            回到简历工作台
-          </el-button>
-        </div>
-      </div>
+  <main class="project-evidence-list page-shell cc-module-page">
+    <PageHeader
+      eyebrow="求职资料"
+      :icon="Target"
+      title="项目证据库"
+      description="将真实项目沉淀为可用于简历表达、JD 匹配和面试追问的证据。"
+    >
+      <template #actions>
+        <el-button @click="router.push('/resumes')">
+          <FileText :size="16" />
+          简历准备
+        </el-button>
+        <el-button type="primary" @click="router.push('/project-evidence/create')">
+          <Plus :size="16" />
+          新建项目证据
+        </el-button>
+      </template>
+    </PageHeader>
 
-      <div class="hero-panel">
-        <div>
-          <span>证据总量</span>
-          <strong>{{ totalEvidenceCount }}</strong>
-          <p>来自当前查询结果，不额外推断项目数量</p>
-        </div>
-        <div>
-          <span>本页可追问</span>
-          <strong>{{ readyEvidenceCount }}</strong>
-          <p>完整度达到可复用状态的项目</p>
-        </div>
-        <div>
-          <span>本页待补证据</span>
-          <strong>{{ gapEvidenceCount }}</strong>
-          <p>仍缺背景、贡献、结果或能力证据</p>
-        </div>
-      </div>
+    <ModuleTabs :items="moduleTabs" />
+
+    <section class="cc-metric-grid">
+      <MetricCard label="证据总量" :value="totalEvidenceCount" detail="来自当前查询结果，不额外推断项目数量。" />
+      <MetricCard label="可用于追问" :value="readyEvidenceCount" detail="完整度达到可复用状态的项目。" tone="success" />
+      <MetricCard label="待补充证据" :value="gapEvidenceCount" detail="仍缺背景、贡献、结果或能力证据。" :tone="gapEvidenceCount ? 'warning' : 'default'" />
     </section>
 
-    <section class="content-card evidence-toolbar">
-      <div>
-        <p class="section-kicker">证据筛选</p>
-        <h2>先找到最需要补强的项目</h2>
-      </div>
-      <div class="toolbar-controls">
+    <DataTableFrame
+      title="项目证据"
+      description="先找到最需要补强的项目，再进入详情完善证据。"
+    >
+      <template #filters>
+        <FilterBar>
         <el-input v-model.trim="query.keyword" clearable placeholder="搜索项目名称、技术栈或职责" @keyup.enter="handleSearch">
           <template #prefix>
             <Search :size="15" />
@@ -57,12 +42,14 @@
           <el-option label="还需要补证据" value="NEEDS_IMPROVEMENT" />
           <el-option label="暂不足以支撑表达" value="INCOMPLETE" />
         </el-select>
-        <el-button type="primary" plain @click="handleSearch">筛选证据</el-button>
-        <el-button @click="handleReset">重置</el-button>
-      </div>
-    </section>
+          <template #actions>
+            <el-button type="primary" @click="handleSearch">筛选</el-button>
+            <el-button @click="handleReset">重置</el-button>
+          </template>
+        </FilterBar>
+      </template>
 
-    <section class="content-card evidence-section" v-loading="loading">
+      <section class="evidence-section" v-loading="loading">
       <AppState
         v-if="loadError"
         type="error"
@@ -129,7 +116,7 @@
           </p>
 
           <div class="card-actions">
-            <el-button @click="router.push(`/project-evidence/${item.id}`)">
+            <el-button @click="openDetail(item)">
               查看证据
             </el-button>
             <el-button type="primary" plain @click="router.push(`/project-evidence/${item.id}/edit`)">
@@ -140,17 +127,19 @@
         </article>
       </div>
 
-      <AppState
+      <EmptyState
         v-else
-        type="empty"
         title="还没有可复用的项目证据"
         description="先沉淀一个真实项目，补齐背景、个人贡献、技术难点和量化结果，后续才能支撑简历、JD 匹配和面试追问。"
       >
-        <div class="state-actions">
+        <template #icon>
+          <BriefcaseBusiness :size="20" />
+        </template>
+        <template #actions>
           <el-button type="primary" @click="router.push('/project-evidence/create')">新建项目证据</el-button>
           <el-button @click="router.push('/resumes')">回到简历工作台</el-button>
-        </div>
-      </AppState>
+        </template>
+      </EmptyState>
 
       <div v-if="pagination.total > pagination.pageSize" class="pagination-wrap">
         <el-pagination
@@ -163,8 +152,9 @@
           @change="fetchList"
         />
       </div>
-    </section>
-  </div>
+      </section>
+    </DataTableFrame>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -184,6 +174,13 @@ import { useRouter } from 'vue-router'
 
 import { getProjectEvidenceListApi } from '@/api/projectEvidence'
 import AppState from '@/components/common/AppState.vue'
+import DataTableFrame from '@/components/user-ui/DataTableFrame.vue'
+import EmptyState from '@/components/user-ui/EmptyState.vue'
+import FilterBar from '@/components/user-ui/FilterBar.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { getCompletenessTone, normalizeMissingFields, summarizeSourceState } from '@/features/project-evidence'
 import type { ProjectEvidenceListVO, ProjectEvidenceQueryDTO } from '@/types/projectEvidence'
 import { toFriendlyMessage } from '@/utils/error'
@@ -202,6 +199,7 @@ const pagination = reactive({
   total: 0,
   pageSize: 8
 })
+const moduleTabs = useUserModuleTabs('resources')
 
 const totalEvidenceCount = computed(() => pagination.total || items.value.length)
 const readyEvidenceCount = computed(() => items.value.filter((item) => item.completenessStatus === 'READY').length)
@@ -268,14 +266,33 @@ const handleReset = () => {
   fetchList()
 }
 
+const openDetail = (item: ProjectEvidenceListVO) => {
+  void router.push({
+    path: `/project-evidence/${item.id}`,
+    query: {
+      from: 'list',
+      listId: String(item.id),
+      title: item.title || '',
+      role: item.role || ''
+    }
+  })
+}
+
 onMounted(fetchList)
 </script>
 
 <style scoped lang="scss">
 .project-evidence-list {
-  gap: 14px;
+  display: grid;
+  gap: 16px;
   min-width: 0;
-  color: var(--arena-ink);
+  color: var(--user-text);
+}
+
+.cc-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .evidence-hero,
@@ -310,7 +327,7 @@ onMounted(fetchList)
   margin: 0;
   color: var(--arena-grn-d);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -392,7 +409,7 @@ onMounted(fetchList)
   margin: 0;
   color: var(--arena-grn-d);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -450,8 +467,13 @@ onMounted(fetchList)
 }
 
 .evidence-title {
+  flex: 1 1 auto;
   min-width: 0;
   gap: 12px;
+
+  > div {
+    min-width: 0;
+  }
 
   h2 {
     margin: 0;
@@ -582,7 +604,7 @@ onMounted(fetchList)
   gap: 8px;
   color: var(--user-warning-text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .missing {
@@ -628,6 +650,10 @@ onMounted(fetchList)
 }
 
 @media (max-width: 1080px) {
+  .cc-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .evidence-hero {
     grid-template-columns: 1fr;
   }
@@ -648,6 +674,10 @@ onMounted(fetchList)
 }
 
 @media (max-width: 760px) {
+  .cc-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
   .evidence-hero {
     padding: 16px;
   }

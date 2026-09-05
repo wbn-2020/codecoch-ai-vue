@@ -5,6 +5,7 @@ import { resolveNotificationAction } from '@/features/notifications'
 import NotificationCenterView from '@/views/user/NotificationCenterView.vue'
 
 const routerPush = vi.hoisted(() => vi.fn())
+const routeQuery = vi.hoisted(() => ({ tab: undefined as string | undefined }))
 const requestPost = vi.hoisted(() => vi.fn())
 const confirmDangerActionPreview = vi.hoisted(() => vi.fn())
 const homeApiMocks = vi.hoisted(() => ({
@@ -22,6 +23,7 @@ const homeApiMocks = vi.hoisted(() => ({
 const notifyUnreadChanged = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: routeQuery }),
   useRouter: () => ({ push: routerPush })
 }))
 
@@ -94,6 +96,9 @@ const componentStubs = {
   ExternalLink: true,
   LayoutDashboard: true,
   RefreshCw: true,
+  UserAnnouncementPanel: {
+    template: '<div class="announcement-panel-stub"></div>'
+  },
   'el-alert': {
     props: ['title', 'description'],
     template: '<div class="el-alert-stub" :data-title="title" :data-description="description"></div>'
@@ -150,6 +155,7 @@ describe('NotificationCenterView deep link contract', () => {
     routerPush.mockResolvedValue(undefined)
     requestPost.mockReturnValue(Promise.resolve({}))
     confirmDangerActionPreview.mockResolvedValue(true)
+    routeQuery.tab = undefined
     vi.mocked(getUnreadCountApi).mockResolvedValue({ total: 1, unreadCount: 1 })
     vi.mocked(markNotificationReadApi).mockResolvedValue(null)
   })
@@ -299,6 +305,22 @@ describe('NotificationCenterView deep link contract', () => {
 
     expect(routerPush).toHaveBeenCalledWith('/questions/recommendations?batchId=8801')
     expect(routerPush).not.toHaveBeenCalledWith('/questions/8801')
+  })
+
+  it('opens the announcement section from the direct query entry', async () => {
+    routeQuery.tab = 'announcements'
+    vi.mocked(getNotificationsApi).mockResolvedValue({
+      records: [],
+      total: 0,
+      current: 1,
+      size: 20
+    })
+
+    const wrapper = await mountView()
+    const sectionButtons = wrapper.findAll('.notification-sections button')
+
+    expect(sectionButtons[1].attributes('aria-current')).toBe('page')
+    expect(wrapper.get('.announcement-panel-stub').attributes('style')).toBeUndefined()
   })
 
   it('uses the shared resolver result for calendar reminder navigation', async () => {

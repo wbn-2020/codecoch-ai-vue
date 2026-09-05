@@ -1,16 +1,18 @@
 <template>
-  <div class="page-shell v4-application-page">
-    <section class="v4-page-header">
-      <div>
-        <div class="v4-eyebrow">我的求职</div>
-        <h1>投递工作台</h1>
-        <p>处理今天的推进事项，集中查看每一条投递的下一步。</p>
-      </div>
-      <div class="v4-actions">
+  <main class="page-shell v4-application-page cc-module-page">
+    <PageHeader
+      eyebrow="投递管理"
+      :icon="BriefcaseBusiness"
+      title="投递工作台"
+      description="集中处理每条投递的当前阶段、下一步安排和求职周期。"
+    >
+      <template #actions>
         <el-button :icon="RefreshCw" circle :loading="loading" title="刷新投递记录" @click="load" />
         <el-button type="primary" :icon="Plus" @click="openCreate">新增投递</el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <AppState v-if="errorMessage" type="error" title="求职进度加载失败" :description="errorMessage">
       <el-button type="primary" @click="load">重试</el-button>
@@ -49,6 +51,13 @@
       />
 
       <template v-else>
+      <section class="cc-metric-grid application-metrics" aria-label="投递统计">
+        <MetricCard label="进行中" :value="statsNumber(applicationStats?.activeCount)" detail="仍在推进的求职机会。" />
+        <MetricCard label="今日必处理" :value="statsNumber(todayActionCount)" detail="逾期或今天到期的跟进事项。" tone="warning" />
+        <MetricCard label="面试中" :value="statsNumber(applicationStats?.interviewCount)" detail="处于面试阶段的机会。" tone="info" />
+        <MetricCard label="Offer" :value="statsNumber(applicationStats?.offerCount)" detail="当前已获得的 Offer。" tone="success" />
+      </section>
+
       <nav class="application-view-tabs" aria-label="投递工作台视图">
         <button
           type="button"
@@ -112,7 +121,7 @@
           </div>
           <div v-else class="today-empty">
             <CheckCircle2 :size="18" />
-            <span>今天没有待处理的跟进事项。</span>
+            <span>今天没有逾期或到期跟进事项。</span>
           </div>
         </div>
 
@@ -298,7 +307,13 @@
       </template>
     </template>
 
-    <el-dialog v-model="dialogVisible" title="求职进度" width="620px">
+    <el-dialog
+      v-model="dialogVisible"
+      class="application-edit-dialog"
+      title="求职进度"
+      width="min(720px, calc(100vw - 24px))"
+      @closed="resetAttachmentState"
+    >
       <el-form ref="applicationFormRef" :model="form" :rules="applicationFormRules" label-position="top">
         <el-form-item label="公司" prop="companyName">
           <el-input v-model.trim="form.companyName" />
@@ -359,9 +374,168 @@
           <el-input v-model="form.note" type="textarea" :rows="3" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
+
+      <section class="application-attachments" aria-labelledby="application-attachments-title">
+        <div class="application-attachments__head">
+          <div>
+            <h3 id="application-attachments-title">投递附件</h3>
+            <p>简历、求职信、作品集等材料，单个文件不超过 20 MB。</p>
+          </div>
+          <el-button
+            :icon="Paperclip"
+            :disabled="saving"
+            data-testid="select-application-attachments"
+            @click="openAttachmentPicker"
+          >
+            选择文件
+          </el-button>
+          <input
+            ref="attachmentInputRef"
+            class="attachment-file-input"
+            type="file"
+            multiple
+            @change="handleAttachmentSelection"
+          />
+          <input
+            ref="replacementInputRef"
+            class="attachment-file-input"
+            type="file"
+            @change="handleReplacementSelection"
+          />
+        </div>
+
+        <div class="attachment-permission-notice" role="note">
+          <LockKeyhole :size="16" aria-hidden="true" />
+          <span>附件仅当前账号可访问。新增投递会先保存记录，再上传已选择的文件。</span>
+        </div>
+
+        <div v-if="attachmentLoading" class="attachment-loading" aria-live="polite">
+          正在加载附件...
+        </div>
+        <div v-else-if="attachmentError" class="attachment-error" role="alert">
+          <span>{{ attachmentError }}</span>
+          <el-button
+            v-if="editingId"
+            link
+            type="primary"
+            :disabled="saving"
+            @click="loadApplicationAttachments(editingId)"
+          >
+            重试
+          </el-button>
+        </div>
+
+        <div v-if="attachments.length" class="attachment-list" data-testid="application-attachment-list">
+          <article v-for="item in attachments" :key="item.id" class="attachment-row">
+            <div class="attachment-row__meta">
+              <FileText :size="18" aria-hidden="true" />
+              <div>
+                <strong>{{ item.displayName || item.originalFilename || `附件 #${item.id}` }}</strong>
+                <span>
+                  {{ attachmentTypeLabel(item.attachmentType) }}
+                  <template v-if="item.fileSize"> · {{ formatAttachmentSize(item.fileSize) }}</template>
+                </span>
+              </div>
+            </div>
+            <div class="attachment-row__actions">
+              <el-button
+                link
+                type="primary"
+                :icon="Download"
+                :loading="attachmentDownloadIds.includes(item.id)"
+                :disabled="isAttachmentMutating(item.id)"
+                @click="downloadAttachment(item)"
+              >
+                下载
+              </el-button>
+              <el-button
+                link
+                :icon="RefreshCw"
+                :loading="isAttachmentMutating(item.id)"
+                :disabled="attachmentDownloadIds.includes(item.id)"
+                @click="requestAttachmentReplacement(item)"
+              >
+                替换
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                :icon="Trash2"
+                :loading="isAttachmentMutating(item.id)"
+                :disabled="attachmentDownloadIds.includes(item.id)"
+                @click="deleteAttachment(item)"
+              >
+                删除
+              </el-button>
+            </div>
+          </article>
+        </div>
+
+        <div v-if="pendingAttachments.length" class="attachment-pending-list" aria-live="polite">
+          <article
+            v-for="item in pendingAttachments"
+            :key="item.clientId"
+            class="attachment-row attachment-row--pending"
+          >
+            <div class="attachment-pending-fields">
+              <el-input
+                v-model.trim="item.displayName"
+                size="small"
+                maxlength="255"
+                aria-label="附件显示名称"
+              />
+              <el-select v-model="item.attachmentType" size="small" aria-label="附件类型">
+                <el-option
+                  v-for="option in attachmentTypeOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <span class="attachment-pending-file">
+                {{ item.file.name }} · {{ formatAttachmentSize(item.file.size) }}
+              </span>
+              <span
+                :class="['attachment-pending-status', `is-${item.status.toLowerCase()}`]"
+              >
+                {{ pendingAttachmentStatusLabel(item) }}
+              </span>
+              <span v-if="item.error" class="attachment-pending-error">{{ item.error }}</span>
+            </div>
+            <div class="attachment-row__actions">
+              <el-button
+                v-if="item.status === 'FAILED' && editingId"
+                link
+                type="primary"
+                :icon="RefreshCw"
+                :disabled="saving"
+                @click="retryPendingAttachment(item)"
+              >
+                重试
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                :icon="X"
+                :disabled="item.status === 'UPLOADING' || saving"
+                @click="removePendingAttachment(item.clientId)"
+              >
+                移除
+              </el-button>
+            </div>
+          </article>
+        </div>
+
+        <p
+          v-if="!attachmentLoading && !attachmentError && !attachments.length && !pendingAttachments.length"
+          class="attachment-empty"
+        >
+          尚未添加附件。
+        </p>
+      </section>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="save">{{ applicationSaveLabel }}</el-button>
       </template>
     </el-dialog>
 
@@ -535,12 +709,28 @@
         <el-button type="primary" :disabled="!selectedDraft" @click="saveSelectedDraftAsEvent">保存为事件记录</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { ArrowUpRight, CalendarDays, CheckCircle2, FolderKanban, MoreHorizontal, Plus, RefreshCw, RotateCcw } from 'lucide-vue-next'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import {
+  ArrowUpRight,
+  BriefcaseBusiness,
+  CalendarDays,
+  CheckCircle2,
+  Download,
+  FileText,
+  FolderKanban,
+  LockKeyhole,
+  MoreHorizontal,
+  Paperclip,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+  X
+} from 'lucide-vue-next'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -549,12 +739,17 @@ import {
   createApplicationEventApi,
   archiveApplicationApi,
   deleteApplicationApi,
+  deleteApplicationAttachmentApi,
+  downloadApplicationAttachmentApi,
   getApplicationEventsApi,
+  getApplicationAttachmentsApi,
   getApplicationStatsApi,
   getApplicationsApi,
   getResumeVersionsApi,
+  replaceApplicationAttachmentApi,
   restoreApplicationApi,
   updateApplicationApi,
+  uploadApplicationAttachmentApi,
   type JobApplicationEventVO,
   type JobApplicationStatsVO,
   type JobApplicationVO,
@@ -563,6 +758,10 @@ import {
 import { generateApplicationEventAiReviewApi } from '@/api/careerGrowth'
 import { getResumesApi } from '@/api/resume'
 import AppState from '@/components/common/AppState.vue'
+import MetricCard from '@/components/user-ui/MetricCard.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { appConfig } from '@/config'
 import ApplicationEventReviewDialog from '@/views/application/components/ApplicationEventReviewDialog.vue'
 import ApplicationEventReviewFields from '@/views/application/components/ApplicationEventReviewFields.vue'
@@ -605,6 +804,14 @@ import {
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
 import { formatLocalDateTime } from '@/utils/format'
+import {
+  downloadBlobReliably,
+  reliableDownloadOptionsForFile
+} from '@/features/reliable-download'
+import type {
+  JobApplicationAttachmentType,
+  JobApplicationAttachmentVO
+} from '@/types/jobApplicationAttachment'
 import type { ResumeVO } from '@/types/resume'
 
 const route = useRoute()
@@ -613,6 +820,7 @@ const applicationWorkspaceEnabled = computed(() => appConfig.enableV7CampaignWor
 
 const statusOptions = applicationStatusOptions
 const followUpFilterOptions = applicationFollowUpFilterOptions
+const moduleTabs = useUserModuleTabs('progress')
 
 const sourceOptions = [
   { label: 'BOSS 直聘', value: 'BOSS' },
@@ -637,6 +845,27 @@ const eventTypeOptions = [
   { label: '面试反馈复盘', value: 'INTERVIEW_FEEDBACK_REVIEW' },
   { label: '关闭记录', value: 'CLOSED' }
 ]
+
+const attachmentTypeOptions: Array<{ label: string; value: JobApplicationAttachmentType }> = [
+  { label: '简历', value: 'RESUME' },
+  { label: '求职信', value: 'COVER_LETTER' },
+  { label: '作品集', value: 'PORTFOLIO' },
+  { label: '证书', value: 'CERTIFICATE' },
+  { label: '其他材料', value: 'OTHER' }
+]
+
+type PendingAttachmentStatus = 'READY' | 'UPLOADING' | 'FAILED'
+
+interface PendingApplicationAttachment {
+  clientId: string
+  file: File
+  displayName: string
+  attachmentType: JobApplicationAttachmentType
+  status: PendingAttachmentStatus
+  error?: string
+}
+
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 const loading = ref(false)
 const hasLoadedApplications = ref(false)
@@ -678,6 +907,15 @@ const events = ref<JobApplicationEventVO[]>([])
 const eventsError = ref('')
 const applicationFormRef = ref<FormInstance>()
 const eventFormRef = ref<FormInstance>()
+const attachmentInputRef = ref<HTMLInputElement>()
+const replacementInputRef = ref<HTMLInputElement>()
+const attachments = ref<JobApplicationAttachmentVO[]>([])
+const pendingAttachments = ref<PendingApplicationAttachment[]>([])
+const attachmentLoading = ref(false)
+const attachmentError = ref('')
+const attachmentMutationIds = ref<number[]>([])
+const attachmentDownloadIds = ref<number[]>([])
+const replacementTarget = ref<JobApplicationAttachmentVO>()
 
 const form = reactive<Partial<JobApplicationVO>>({
   status: 'SAVED',
@@ -713,6 +951,9 @@ const applicationFormRules: FormRules<Partial<JobApplicationVO>> = {
   jobTitle: [{ required: true, whitespace: true, message: '请填写岗位名称。', trigger: 'blur' }],
   status: [{ required: true, message: '请选择投递状态。', trigger: 'change' }]
 }
+
+const applicationSaveLabel = computed(() =>
+  pendingAttachments.value.length ? '保存并上传附件' : '保存')
 
 const eventFormRules: FormRules<Partial<JobApplicationEventVO>> = {
   eventType: [{ required: true, whitespace: true, message: '请选择或填写事件类型。', trigger: 'change' }],
@@ -783,12 +1024,18 @@ const byNextFollowUp = (left: JobApplicationVO, right: JobApplicationVO) => {
   const rightTime = right.nextFollowUpAt || '9999-12-31 23:59:59'
   return leftTime.localeCompare(rightTime)
 }
-const todayFocusApplications = computed(() =>
+const todayActionApplications = computed(() =>
   rawApplications.value
     .filter((item) => !item.archivedAt)
     .filter((item) => isApplicationActiveStatus(item.status))
+    .filter((item) => ['overdue', 'due-today'].includes(followUpState(item).key))
     .sort((left, right) => focusPriority(left) - focusPriority(right) || byNextFollowUp(left, right))
-    .slice(0, 3)
+)
+const todayFocusApplications = computed(() => todayActionApplications.value.slice(0, 3))
+const todayActionCount = computed(
+  () => applicationStats.value
+    ? statsNumber(applicationStats.value.overdueFollowUpCount) + statsNumber(applicationStats.value.dueTodayFollowUpCount)
+    : todayActionApplications.value.length
 )
 const upcomingScheduleApplications = computed(() =>
   rawApplications.value
@@ -1013,13 +1260,16 @@ const previewApplicationSave = () =>
     action: editingId.value ? '更新一条求职进度' : '新增一条求职进度',
     target: applicationTargetText(),
     impact:
-      '会写入求职进度列表，并可能被后续今日行动、求职复盘、成长画像和训练建议引用；状态、来源和跟进时间会影响下一步提醒。',
+      '会写入求职进度列表，并可能被后续今日行动、求职复盘、成长档案和训练建议引用；状态、来源和跟进时间会影响下一步提醒。',
     rollback: '保存后不会自动恢复旧状态；如公司、岗位、状态或跟进时间填错，需要再次编辑该进度修正。',
     audit: '可按求职进度记录、更新时间和关联事件追踪本次变更。',
     tips: [
       '确认公司、岗位和状态不是临时占位。',
       '确认下次跟进时间会作为后续行动建议参考。',
-      form.resumeVersionId ? '已关联简历版本。' : '未关联简历版本时，后续复盘可能缺少投递简历快照。'
+      form.resumeVersionId ? '已关联简历版本。' : '未关联简历版本时，后续复盘可能缺少投递简历快照。',
+      pendingAttachments.value.length
+        ? `已选择 ${pendingAttachments.value.length} 个附件；投递保存成功后才会逐个上传。`
+        : '当前没有待上传附件。'
     ],
     confirmButtonText: '确认保存'
   })
@@ -1083,6 +1333,218 @@ const loadStats = async () => {
 
 const load = async () => {
   await Promise.allSettled([loadApplications(), loadStats()])
+}
+
+const attachmentTypeLabel = (value?: string) =>
+  attachmentTypeOptions.find((item) => item.value === value)?.label || '其他材料'
+
+const formatAttachmentSize = (bytes?: number) => {
+  const value = Number(bytes || 0)
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 10 * 1024 ? 1 : 0)} KB`
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const pendingAttachmentStatusLabel = (item: PendingApplicationAttachment) => {
+  if (item.status === 'UPLOADING') return '上传中'
+  if (item.status === 'FAILED') return '上传失败'
+  return editingId.value ? '等待保存后上传' : '等待投递保存后上传'
+}
+
+const resetAttachmentState = () => {
+  attachments.value = []
+  pendingAttachments.value = []
+  attachmentLoading.value = false
+  attachmentError.value = ''
+  attachmentMutationIds.value = []
+  attachmentDownloadIds.value = []
+  replacementTarget.value = undefined
+  if (attachmentInputRef.value) attachmentInputRef.value.value = ''
+  if (replacementInputRef.value) replacementInputRef.value.value = ''
+}
+
+const loadApplicationAttachments = async (applicationId: number) => {
+  attachmentLoading.value = true
+  attachmentError.value = ''
+  try {
+    attachments.value = await getApplicationAttachmentsApi(applicationId)
+  } catch (error) {
+    attachments.value = []
+    attachmentError.value = `附件加载失败：${getErrorMessage(error)}`
+  } finally {
+    attachmentLoading.value = false
+  }
+}
+
+const validateAttachmentFile = (file: File) => {
+  if (!file.name.trim()) return '附件名称不能为空。'
+  if (file.size <= 0) return `${file.name} 是空文件，未加入上传队列。`
+  if (file.size > MAX_ATTACHMENT_BYTES) return `${file.name} 超过 20 MB，未加入上传队列。`
+  return ''
+}
+
+const openAttachmentPicker = () => {
+  attachmentInputRef.value?.click()
+}
+
+const handleAttachmentSelection = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const selectedFiles = Array.from(input.files || [])
+  selectedFiles.forEach((file) => {
+    const validationError = validateAttachmentFile(file)
+    if (validationError) {
+      ElMessage.warning(validationError)
+      return
+    }
+    pendingAttachments.value.push({
+      clientId: `${Date.now()}:${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`,
+      file,
+      displayName: file.name,
+      attachmentType: 'OTHER',
+      status: 'READY'
+    })
+  })
+  input.value = ''
+}
+
+const removePendingAttachment = (clientId: string) => {
+  pendingAttachments.value = pendingAttachments.value.filter((item) => item.clientId !== clientId)
+}
+
+const uploadPendingAttachment = async (
+  applicationId: number,
+  item: PendingApplicationAttachment
+) => {
+  item.status = 'UPLOADING'
+  item.error = ''
+  try {
+    const uploaded = await uploadApplicationAttachmentApi(applicationId, item.file, {
+      attachmentType: item.attachmentType,
+      displayName: item.displayName || item.file.name
+    })
+    attachments.value = [
+      ...attachments.value.filter((attachment) => attachment.id !== uploaded.id),
+      uploaded
+    ].sort((left, right) => (left.sortOrder || 0) - (right.sortOrder || 0))
+    removePendingAttachment(item.clientId)
+    return true
+  } catch (error) {
+    item.status = 'FAILED'
+    item.error = getErrorMessage(error)
+    return false
+  }
+}
+
+const uploadPendingAttachments = async (applicationId: number) => {
+  const queued = [...pendingAttachments.value]
+  let failed = 0
+  for (const item of queued) {
+    if (!await uploadPendingAttachment(applicationId, item)) failed += 1
+  }
+  return { attempted: queued.length, failed }
+}
+
+const retryPendingAttachment = async (item: PendingApplicationAttachment) => {
+  if (!editingId.value || item.status === 'UPLOADING') return
+  const succeeded = await uploadPendingAttachment(editingId.value, item)
+  if (succeeded) {
+    ElMessage.success('附件已上传')
+  } else {
+    ElMessage.error(`附件上传失败：${item.error || '请稍后重试。'}`)
+  }
+}
+
+const setAttachmentMutation = (attachmentId: number, active: boolean) => {
+  attachmentMutationIds.value = active
+    ? Array.from(new Set([...attachmentMutationIds.value, attachmentId]))
+    : attachmentMutationIds.value.filter((id) => id !== attachmentId)
+}
+
+const isAttachmentMutating = (attachmentId: number) =>
+  attachmentMutationIds.value.includes(attachmentId)
+
+const setAttachmentDownloading = (attachmentId: number, active: boolean) => {
+  attachmentDownloadIds.value = active
+    ? Array.from(new Set([...attachmentDownloadIds.value, attachmentId]))
+    : attachmentDownloadIds.value.filter((id) => id !== attachmentId)
+}
+
+const downloadAttachment = async (item: JobApplicationAttachmentVO) => {
+  if (!editingId.value || attachmentDownloadIds.value.includes(item.id)) return
+  setAttachmentDownloading(item.id, true)
+  try {
+    const blob = await downloadApplicationAttachmentApi(editingId.value, item.id)
+    const filename = item.originalFilename || item.displayName || `attachment-${item.id}`
+    downloadBlobReliably(
+      blob,
+      reliableDownloadOptionsForFile(filename, item.mimeType, MAX_ATTACHMENT_BYTES)
+    )
+    ElMessage.success('附件下载已开始')
+  } catch (error) {
+    ElMessage.error(`附件下载失败：${getErrorMessage(error)}`)
+  } finally {
+    setAttachmentDownloading(item.id, false)
+  }
+}
+
+const requestAttachmentReplacement = (item: JobApplicationAttachmentVO) => {
+  if (isAttachmentMutating(item.id)) return
+  replacementTarget.value = item
+  replacementInputRef.value?.click()
+}
+
+const handleReplacementSelection = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  const target = replacementTarget.value
+  input.value = ''
+  replacementTarget.value = undefined
+  if (!file || !target || !editingId.value) return
+  const validationError = validateAttachmentFile(file)
+  if (validationError) {
+    ElMessage.warning(validationError)
+    return
+  }
+  setAttachmentMutation(target.id, true)
+  try {
+    const replaced = await replaceApplicationAttachmentApi(editingId.value, target.id, file, {
+      attachmentType: target.attachmentType || 'OTHER',
+      displayName: target.displayName || file.name
+    })
+    attachments.value = attachments.value.map((item) => item.id === replaced.id ? replaced : item)
+    ElMessage.success('附件已替换')
+  } catch (error) {
+    ElMessage.error(`附件替换失败：${getErrorMessage(error)}`)
+  } finally {
+    setAttachmentMutation(target.id, false)
+  }
+}
+
+const deleteAttachment = async (item: JobApplicationAttachmentVO) => {
+  if (!editingId.value || isAttachmentMutating(item.id)) return
+  try {
+    await ElMessageBox.confirm(
+      `删除后将无法从投递记录中下载“${item.displayName || item.originalFilename || `附件 #${item.id}`}”。`,
+      '删除投递附件',
+      {
+        type: 'warning',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+  setAttachmentMutation(item.id, true)
+  try {
+    await deleteApplicationAttachmentApi(editingId.value, item.id)
+    attachments.value = attachments.value.filter((attachment) => attachment.id !== item.id)
+    ElMessage.success('附件已删除')
+  } catch (error) {
+    ElMessage.error(`附件删除失败：${getErrorMessage(error)}`)
+  } finally {
+    setAttachmentMutation(item.id, false)
+  }
 }
 
 const loadResumeOptions = async () => {
@@ -1228,6 +1690,7 @@ const resolveDeepLink = async () => {
 
 const openCreate = () => {
   editingId.value = undefined
+  resetAttachmentState()
   Object.assign(form, {
     id: undefined,
     campaignId: undefined,
@@ -1251,10 +1714,30 @@ const openCreate = () => {
 
 const openEdit = (item: JobApplicationVO) => {
   editingId.value = item.id
+  resetAttachmentState()
   Object.assign(form, item)
   dialogVisible.value = true
+  void loadApplicationAttachments(item.id)
   void prepareResumeSelection(item.resumeId)
   void nextTick(() => applicationFormRef.value?.clearValidate())
+}
+
+const applySavedApplication = (saved: JobApplicationVO) => {
+  const index = rawApplications.value.findIndex((item) => item.id === saved.id)
+  if (index >= 0) {
+    rawApplications.value.splice(index, 1, {
+      ...rawApplications.value[index],
+      ...saved
+    })
+  } else {
+    rawApplications.value.unshift(saved)
+  }
+  if (selectedApplication.value?.id === saved.id) {
+    selectedApplication.value = {
+      ...selectedApplication.value,
+      ...saved
+    }
+  }
 }
 
 const save = async () => {
@@ -1265,21 +1748,59 @@ const save = async () => {
   if (!confirmed) return
   saving.value = true
   try {
+    let saved: JobApplicationVO
     if (editingId.value) {
       const original = rawApplications.value.find((item) => item.id === editingId.value)
       const clearNextFollowUp = Boolean(
         original?.nextFollowUpAt && !form.nextFollowUpAt
       )
-      await updateApplicationApi(editingId.value, {
-        ...form,
+      saved = await updateApplicationApi(editingId.value, {
+        campaignId: form.campaignId,
+        targetJobId: form.targetJobId,
+        resumeVersionId: form.resumeVersionId,
+        matchReportId: form.matchReportId,
+        companyName: form.companyName,
+        jobTitle: form.jobTitle,
+        source: form.source,
+        status: form.status,
+        appliedAt: form.appliedAt,
+        nextFollowUpAt: form.nextFollowUpAt || undefined,
+        note: form.note,
+        expectedLockVersion: original?.lockVersion,
         ...(clearNextFollowUp ? { clearNextFollowUp: true } : {})
       })
     } else {
-      await createApplicationApi(form)
+      saved = await createApplicationApi({
+        targetJobId: form.targetJobId,
+        resumeVersionId: form.resumeVersionId,
+        matchReportId: form.matchReportId,
+        companyName: form.companyName,
+        jobTitle: form.jobTitle,
+        source: form.source,
+        status: form.status,
+        appliedAt: form.appliedAt,
+        nextFollowUpAt: form.nextFollowUpAt || undefined,
+        note: form.note
+      })
     }
-    dialogVisible.value = false
-    ElMessage.success('已保存')
+
+    applySavedApplication(saved)
+    editingId.value = saved.id
+    Object.assign(form, saved)
+    const attachmentResult = await uploadPendingAttachments(saved.id)
     await load()
+
+    if (attachmentResult.failed > 0) {
+      ElMessage.warning(
+        `投递已保存，但有 ${attachmentResult.failed} 个附件上传失败。失败项已保留，可直接重试。`
+      )
+      return
+    }
+
+    dialogVisible.value = false
+    ElMessage.success(
+      attachmentResult.attempted > 0 ? '投递和附件已保存' : '已保存'
+    )
   } catch (error) {
     ElMessage.error(getErrorMessage(error))
   } finally {
@@ -1672,6 +2193,12 @@ onMounted(async () => {
   gap: 16px;
 }
 
+.cc-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .v4-page-header,
 .v4-actions,
 .panel-heading,
@@ -1724,7 +2251,7 @@ onMounted(async () => {
   margin: 0;
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .v4-actions,
@@ -1743,36 +2270,33 @@ onMounted(async () => {
 
 .application-view-tabs {
   display: flex;
-  width: fit-content;
-  max-width: 100%;
   gap: 4px;
-  padding: 4px;
+  min-width: 0;
+  gap: 4px;
   overflow-x: auto;
-  border: 1px solid var(--app-border);
-  border-radius: 14px;
-  background: var(--app-surface);
+  border-bottom: 1px solid var(--user-border);
 }
 
 .application-view-tabs button {
   display: inline-flex;
-  min-height: 34px;
+  min-height: 37px;
   align-items: center;
   gap: 7px;
   padding: 0 12px;
   border: 0;
-  border-radius: 10px;
+  border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--app-text-muted);
+  color: var(--user-text-muted);
   cursor: pointer;
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .application-view-tabs button.is-active {
-  background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
-  color: var(--arena-grn-d, var(--app-primary-hover));
+  border-bottom-color: var(--user-primary);
+  color: var(--user-primary);
 }
 
 .application-view-tabs span {
@@ -1782,7 +2306,7 @@ onMounted(async () => {
   padding: 0 5px;
   place-items: center;
   border-radius: 999px;
-  background: var(--app-surface-muted);
+  background: var(--user-surface-muted);
   color: inherit;
   font-size: 11px;
 }
@@ -1902,7 +2426,7 @@ onMounted(async () => {
   height: 36px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid #b9e7cd;
+  border: 1px solid var(--user-primary-border);
   border-radius: 12px;
   color: var(--arena-grn-d, var(--app-primary-hover));
   background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
@@ -1975,7 +2499,7 @@ onMounted(async () => {
 
 .campaign-entry__icon {
   border-color: rgba(124, 92, 252, 0.24);
-  color: var(--arena-vio, #7c5cfc);
+  color: var(--arena-vio, #6f5c93);
   background: var(--arena-vio-soft, rgba(124, 92, 252, 0.12));
 }
 
@@ -2017,7 +2541,7 @@ onMounted(async () => {
 }
 
 .funnel-overview .is-risk {
-  color: var(--arena-red, #e5484d);
+  color: var(--arena-red, #b03a3a);
 }
 
 .status-funnel {
@@ -2188,7 +2712,7 @@ onMounted(async () => {
   margin: 0;
   color: var(--app-text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.5;
 }
 
@@ -2227,11 +2751,11 @@ onMounted(async () => {
 }
 
 .follow-up-note--overdue {
-  color: var(--arena-red, #e5484d);
+  color: var(--arena-red, #b03a3a);
 }
 
 .follow-up-note--due-today {
-  color: var(--arena-amber, #f79009);
+  color: var(--arena-amber, #b4690e);
 }
 
 .follow-up-note--upcoming {
@@ -2240,6 +2764,195 @@ onMounted(async () => {
 
 .record-note {
   margin: 8px 0 0;
+}
+
+.application-attachments {
+  display: grid;
+  gap: 12px;
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--app-border);
+}
+
+.application-attachments__head,
+.attachment-row,
+.attachment-row__meta,
+.attachment-row__actions,
+.attachment-permission-notice,
+.attachment-error {
+  display: flex;
+  gap: 10px;
+}
+
+.application-attachments__head {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.application-attachments__head h3 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.application-attachments__head p,
+.attachment-empty {
+  margin: 3px 0 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+:global(.application-edit-dialog) {
+  box-sizing: border-box;
+  max-width: calc(100vw - 24px);
+}
+
+:global(.application-edit-dialog .el-dialog__body) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.attachment-file-input {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.attachment-permission-notice {
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--app-surface-muted);
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.attachment-permission-notice svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.attachment-loading,
+.attachment-error {
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.attachment-error {
+  border-color: color-mix(in srgb, var(--arena-red, #b03a3a) 42%, var(--app-border));
+  background: color-mix(in srgb, var(--arena-red, #b03a3a) 7%, var(--app-surface));
+  color: var(--arena-red, #b03a3a);
+}
+
+.attachment-list,
+.attachment-pending-list {
+  display: grid;
+  gap: 8px;
+}
+
+.attachment-row {
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+}
+
+.attachment-row--pending {
+  align-items: flex-start;
+  background: var(--app-surface-muted);
+}
+
+.attachment-row__meta {
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.attachment-row__meta svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--arena-grn-d, var(--app-primary-hover));
+}
+
+.attachment-row__meta > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.attachment-row__meta strong,
+.attachment-pending-file,
+.attachment-pending-error {
+  overflow-wrap: anywhere;
+}
+
+.attachment-row__meta strong {
+  color: var(--app-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.attachment-row__meta span,
+.attachment-pending-file {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.attachment-row__actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.attachment-pending-fields {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.45fr);
+  gap: 8px 10px;
+}
+
+.attachment-pending-file,
+.attachment-pending-error {
+  grid-column: 1 / -1;
+}
+
+.attachment-pending-status {
+  width: fit-content;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.attachment-pending-status.is-uploading {
+  color: var(--arena-grn-d, var(--app-primary-hover));
+}
+
+.attachment-pending-status.is-failed,
+.attachment-pending-error {
+  color: var(--arena-red, #b03a3a);
+}
+
+.attachment-pending-error {
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .empty-actions {
@@ -2277,6 +2990,10 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
+  .cc-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .v4-page-header,
   .v4-row-head,
   .event-row__head {
@@ -2299,6 +3016,10 @@ onMounted(async () => {
 }
 
 @media (max-width: 640px) {
+  .cc-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
   .v4-page-header,
   .records-toolbar,
   .panel-heading,
@@ -2326,6 +3047,32 @@ onMounted(async () => {
   }
 
   .record-next-step {
+    grid-column: auto;
+  }
+
+  .application-attachments__head,
+  .attachment-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .application-attachments__head :deep(.el-button),
+  .attachment-row__actions,
+  .attachment-row__actions :deep(.el-button) {
+    width: 100%;
+  }
+
+  .attachment-row__actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  }
+
+  .attachment-pending-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .attachment-pending-file,
+  .attachment-pending-error {
     grid-column: auto;
   }
 }

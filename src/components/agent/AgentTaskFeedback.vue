@@ -370,7 +370,7 @@ watch(
   gap: 6px;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: uppercase;
 }

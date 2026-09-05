@@ -17,6 +17,7 @@ export interface AdminListQuery extends PageQuery {
   mapperId?: string
   sqlCommandType?: string
   minCostMs?: number
+  governanceStatus?: string
 }
 
 export interface AdminLogSummaryVO {
@@ -41,6 +42,12 @@ export interface AsyncTaskVO {
   taskType?: string
   taskName?: string
   status: string
+  executionId?: string
+  parentExecutionId?: string
+  runId?: number
+  attemptNo?: number
+  idempotencyKey?: string
+  terminalReasonCode?: string
   retryCount?: number
   maxRetryCount?: number
   deadLetter?: boolean | number
@@ -56,6 +63,13 @@ export interface AsyncTaskVO {
   resultPreview?: string
   resultHash?: string
   rawFieldsAvailable?: boolean
+  governanceStatus?: string
+  governanceReason?: string
+  governanceOwner?: string
+  governanceUpdatedAt?: string
+  retryPreviewHash?: string
+  failureClass?: string
+  ageMinutes?: number
   createdAt?: string
   updatedAt?: string
   finishedAt?: string
@@ -73,6 +87,22 @@ export interface AdminTaskImpactPreviewVO {
   riskLevel?: string
   requiredPermission?: string
   requiredNote?: string
+}
+
+export interface AdminTaskGovernancePreviewVO {
+  id: number
+  bizType?: string
+  bizId?: string
+  taskStatus?: string
+  governanceStatus?: string
+  recommendedGovernanceStatus?: string
+  failureClass?: string
+  recommendedOwner?: string
+  ageMinutes?: number
+  retryAllowed?: boolean
+  previewHash: string
+  impact?: string
+  allowedGovernanceStatuses?: string[]
 }
 
 export interface AdminNotificationVO {
@@ -112,6 +142,12 @@ export interface AdminOperationConfirmPayload {
 export interface AdminTaskActionPayload extends AdminOperationConfirmPayload {
   note: string
   dryRun: boolean
+}
+
+export interface AdminTaskGovernanceActionPayload extends AdminTaskActionPayload {
+  governanceStatus: string
+  governanceOwner?: string
+  previewHash: string
 }
 
 export interface OperationLogVO {

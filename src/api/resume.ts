@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { RESUME_UPLOAD_TIMEOUT_MS } from '@/features/resume-upload-session'
 import type { PageResult } from '@/types/api'
 import type {
   ApplyResumeOptimizeResultDTO,
@@ -74,6 +75,7 @@ const normalizeResume = <T extends ResumeVO | ResumeDetailVO>(resume: T | null |
     workExperience: item.workExperience || item.workSummary || '',
     education: item.education || item.educationExperience || '',
     educationExperience: item.educationExperience || item.education || '',
+    presentationConfig: item.presentationConfig,
     isDefault: item.isDefault ?? 0,
     status: item.status ?? 0,
     projects
@@ -115,7 +117,10 @@ const toResumePayload = (data: ResumeCreateDTO | ResumeUpdateDTO) => ({
   educationExperience: data.educationExperience || data.education,
   education: data.education || data.educationExperience,
   summary: data.summary,
-  isDefault: data.isDefault
+  isDefault: data.isDefault,
+  saveAsDraft: data.saveAsDraft,
+  presentationConfig: data.presentationConfig,
+  document: data.document
 })
 
 const toProjectPayload = (data: ResumeProjectDTO) => ({
@@ -142,9 +147,16 @@ const toProjectPayload = (data: ResumeProjectDTO) => ({
 })
 
 export const getResumesApi = (params?: ResumeQueryDTO) => {
+  const requestParams = params
+    ? {
+        ...params,
+        page: params.pageNo,
+        size: params.pageSize
+      }
+    : undefined
   return request
     .get<PageResult<ResumeVO> | ResumeVO[], PageResult<ResumeVO> | ResumeVO[]>('/resumes', {
-      params
+      params: requestParams
     })
     .then((result) => {
       const page = normalizePageResult<ResumeVO, ResumeVO | null>(result, params, normalizeResumeListItem, { allowArrayFallback: true })
@@ -161,10 +173,50 @@ export const createResumeApi = (data: ResumeCreateDTO) => {
     .then(requireResumeDetail)
 }
 
-export const uploadResumeFileApi = (file: File) => {
+export interface ResumeUploadOptions {
+  signal?: AbortSignal
+  onProgress?: (percent: number, loaded: number, total?: number) => void
+  duplicateDecision?: ResumeDuplicateDecision
+}
+
+export type ResumeDuplicateDecision = 'REUSE' | 'REPARSE' | 'CANCEL'
+
+export interface ResumeUploadDecisionVO extends Omit<
+  ResumeUploadVO,
+  'fileId' | 'analysisRecordId' | 'parseStatus'
+> {
+  fileId?: number | null
+  analysisRecordId?: number | null
+  parseStatus?: ResumeUploadVO['parseStatus'] | 'CANCELLED' | null
+  contentSha256?: string
+  duplicate?: boolean
+  decisionRequired?: boolean
+  requestedDecision?: ResumeDuplicateDecision | null
+  recommendedDecision?: ResumeDuplicateDecision | null
+  appliedDecision?: ResumeDuplicateDecision | 'UPLOAD_NEW' | null
+  allowedDecisions?: ResumeDuplicateDecision[]
+  operationStatus?: string
+  cancellable?: boolean
+  retryable?: boolean
+}
+
+export const uploadResumeFileApi = (file: File, options: ResumeUploadOptions = {}) => {
   const formData = new FormData()
   formData.append('file', file)
-  return request.post<ResumeUploadVO, ResumeUploadVO>('/resumes/upload', formData)
+  if (options.duplicateDecision) {
+    formData.append('duplicateDecision', options.duplicateDecision)
+  }
+  return request.post<ResumeUploadDecisionVO, ResumeUploadDecisionVO>('/resumes/upload', formData, {
+    signal: options.signal,
+    timeout: RESUME_UPLOAD_TIMEOUT_MS,
+    onUploadProgress: (event) => {
+      const total = event.total
+      const percent = total && total > 0
+        ? Math.min(100, Math.round((event.loaded / total) * 100))
+        : 0
+      options.onProgress?.(percent, event.loaded, total)
+    }
+  })
 }
 
 export const getResumeParseTaskApi = (analysisRecordId: number) => {
@@ -275,6 +327,10 @@ export const deleteResumeApi = (id: number) => {
 
 export const setDefaultResumeApi = (id: number) => {
   return request.put<SetDefaultResumeVO, SetDefaultResumeVO>(`/resumes/${id}/default`)
+}
+
+export const clearDefaultResumeApi = (id: number) => {
+  return request.delete<SetDefaultResumeVO, SetDefaultResumeVO>(`/resumes/${id}/default`)
 }
 
 export const createResumeProjectApi = (resumeId: number, data: ResumeProjectDTO) => {

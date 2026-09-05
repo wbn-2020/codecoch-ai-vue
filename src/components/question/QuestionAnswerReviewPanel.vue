@@ -325,7 +325,7 @@ onBeforeUnmount(() => {
   margin: 0 0 6px;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .answer-review-panel h2,
@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
   > span {
     color: var(--app-text-muted);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   div {
@@ -372,7 +372,7 @@ onBeforeUnmount(() => {
     background: var(--user-primary-soft);
     color: var(--user-primary);
     font-style: normal;
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -382,7 +382,7 @@ onBeforeUnmount(() => {
 
   label {
     color: var(--app-text);
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -403,7 +403,7 @@ onBeforeUnmount(() => {
     margin-bottom: 8px;
     color: var(--app-text-muted);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   strong {
@@ -446,7 +446,7 @@ onBeforeUnmount(() => {
   p {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   h3 {
@@ -497,7 +497,7 @@ onBeforeUnmount(() => {
     margin-bottom: 8px;
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   p {

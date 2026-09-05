@@ -1,5 +1,7 @@
 <template>
   <div class="job-experiment page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="page-hero">
       <div>
         <p class="hero-kicker">求职实验</p>
@@ -168,10 +170,13 @@ import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-vue-next'
 
 import { getJobExperimentsApi } from '@/api/jobExperiment'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import { confidenceLabel, statusLabel } from '@/features/job-experiment'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { JobSearchExperimentListVO, JobSearchExperimentQueryDTO } from '@/types/jobExperiment'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('progress')
 const route = useRoute()
 const loading = ref(false)
 const errorMessage = ref('')
@@ -352,14 +357,14 @@ onMounted(fetchList)
   margin: 0;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: none;
 }
 
 h1 {
   margin: 6px 0;
   font-size: 26px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .page-hero p:last-child,
@@ -420,7 +425,7 @@ h1 {
   margin: 0;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .agent-suggestion h2,

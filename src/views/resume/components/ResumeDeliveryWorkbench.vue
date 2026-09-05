@@ -285,7 +285,7 @@
             <div class="section-toolbar">
               <div>
                 <h3>ATS 模板与正式文件</h3>
-                <p>当前模板坚持单栏、无表格、无文本框和无页眉页脚。</p>
+                <p>ATS 解析优先：单栏、无表格、无文本框、无页眉页脚；设计版式请在预览区使用「打印设计版」。</p>
               </div>
             </div>
 
@@ -306,7 +306,7 @@
                   :disabled="!templates.length"
                 >
                   <el-option
-                    v-for="template in templates"
+                    v-for="template in activeTemplates"
                     :key="templateKey(template)"
                     :label="`${template.templateName} · v${template.templateVersion}`"
                     :value="templateKey(template)"
@@ -315,11 +315,20 @@
               </el-form-item>
             </el-form>
 
+            <el-alert
+              v-if="selectedTemplate && !selectedTemplateIsFormal"
+              type="warning"
+              show-icon
+              :closable="false"
+              title="当前模板仅支持预览"
+              description="正式 PDF/DOCX 只支持已注册的 ATS 模板，请切换到正式模板。"
+            />
+
             <div class="export-actions">
               <el-button
                 type="primary"
                 :loading="exportingFormat === 'PDF'"
-                :disabled="Boolean(exportingFormat) || hasUnsavedChanges"
+                :disabled="Boolean(exportingFormat) || hasUnsavedChanges || !selectedTemplateIsFormal"
                 @click="createExport('PDF')"
               >
                 <FileType2 :size="16" />
@@ -327,7 +336,7 @@
               </el-button>
               <el-button
                 :loading="exportingFormat === 'DOCX'"
-                :disabled="Boolean(exportingFormat) || hasUnsavedChanges"
+                :disabled="Boolean(exportingFormat) || hasUnsavedChanges || !selectedTemplateIsFormal"
                 @click="createExport('DOCX')"
               >
                 <FileText :size="16" />
@@ -375,8 +384,10 @@
             <div class="paper-stack">
               <ResumeDocumentPreview
                 :draft="stableDraft"
+                :document="stableDocument"
                 :template-code="selectedTemplate?.templateCode || preferredTemplateCode"
                 :density="selectedTemplate?.templateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
+                :presentation-config="selectedPresentation"
               />
             </div>
           </section>
@@ -490,9 +501,19 @@ import {
   suggestionStatusMeta
 } from '@/features/resume-delivery'
 import {
+  isFormalResumeTemplateCode,
   normalizeResumeTemplateCode,
   type ResumeTemplateCode
 } from '@/features/resume-document'
+import {
+  mergeResumeTemplatePresentation,
+  normalizeResumePresentation
+} from '@/features/resume-presentation'
+import { normalizeResumeDocument } from '@/features/resume-workbench/document-normalizer'
+import {
+  downloadBlobReliably,
+  reliableDownloadOptionsForFile
+} from '@/features/reliable-download'
 import type {
   ResumeArtifactVO,
   ResumeAtsTemplateVO,
@@ -542,6 +563,8 @@ const sectionErrors = reactive({
 })
 const artifactTimers = new Map<number, number>()
 const artifactPollAttempts = new Map<number, number>()
+let loadGeneration = 0
+let disposed = false
 
 const suggestionDraft = reactive({
   sectionKey: '',
@@ -552,6 +575,7 @@ const suggestionDraft = reactive({
 })
 
 const versionSnapshot = computed<Record<string, unknown>>(() => currentVersion.value?.snapshot || {})
+const stableDocument = computed(() => normalizeResumeDocument(versionSnapshot.value.document))
 const stableDraft = computed<ResumeDeliveryDraft>(() => {
   const snapshot = versionSnapshot.value
   const text = (...keys: string[]) =>
@@ -569,7 +593,8 @@ const stableDraft = computed<ResumeDeliveryDraft>(() => {
     educationExperience: text('educationExperience', 'education'),
     projects: Array.isArray(snapshot.projects)
       ? snapshot.projects.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-      : []
+      : [],
+    presentationConfig: normalizeResumePresentation(snapshot.presentationConfig)
   }
 })
 
@@ -587,6 +612,29 @@ const selectedTemplate = computed(() =>
   templates.value.find((template) => templateKey(template) === selectedTemplateKey.value)
 )
 
+const selectedPresentation = computed(() => {
+  const template = selectedTemplate.value
+  const templateCode = template?.templateCode || normalizeResumeTemplateCode(props.preferredTemplateCode)
+  const basePresentation = stableDraft.value.presentationConfig || normalizeResumePresentation(undefined, {
+    templateCode
+  })
+  return normalizeResumePresentation(
+    mergeResumeTemplatePresentation(
+      basePresentation,
+      template || { templateCode, templateVersion: 1 }
+    ),
+    { templateCode }
+  )
+})
+
+const activeTemplates = computed(() =>
+  templates.value.filter((template) => !template.status || template.status === 'ACTIVE')
+)
+
+const selectedTemplateIsFormal = computed(() =>
+  isFormalResumeTemplateCode(selectedTemplate.value?.templateCode)
+)
+
 const emitSelectedTemplate = () => {
   if (!selectedTemplate.value) return
   emit('template-change', normalizeResumeTemplateCode(selectedTemplate.value.templateCode))
@@ -599,53 +647,80 @@ const chooseCurrentVersion = (versions: ResumeVersionVO[]) =>
     || (Number(b.id || 0) - Number(a.id || 0))
   )[0] || null
 
-const loadVersions = async () => {
-  if (!props.resumeId) {
-    currentVersion.value = null
+const isCurrentLoad = (generation: number, resumeId: number | undefined) =>
+  !disposed && generation === loadGeneration && resumeId === props.resumeId
+
+const loadVersions = async (
+  generation = loadGeneration,
+  resumeId = props.resumeId
+) => {
+  if (!resumeId) {
+    if (isCurrentLoad(generation, resumeId)) currentVersion.value = null
     return
   }
-  currentVersion.value = chooseCurrentVersion(await getResumeVersionsApi(props.resumeId))
+  const version = chooseCurrentVersion(await getResumeVersionsApi(resumeId))
+  if (isCurrentLoad(generation, resumeId)) currentVersion.value = version
 }
 
-const loadSuggestions = async () => {
-  if (!props.resumeId) return
+const loadSuggestions = async (
+  generation = loadGeneration,
+  resumeId = props.resumeId,
+  versionId = currentVersion.value?.id
+) => {
+  if (!resumeId) return
   try {
-    sectionErrors.suggestions = ''
-    const rows = await getResumeSuggestionsApi({ resumeId: props.resumeId })
+    if (isCurrentLoad(generation, resumeId)) sectionErrors.suggestions = ''
+    const rows = await getResumeSuggestionsApi({ resumeId })
+    if (!isCurrentLoad(generation, resumeId)) return
     suggestions.value = rows
-      .map((item) => normalizeResumeSuggestion(item, currentVersion.value?.id, rows))
+      .map((item) => normalizeResumeSuggestion(item, versionId, rows))
     const selectableIds = new Set(suggestions.value.filter((item) => isBatchCandidate(item)).map((item) => item.id))
     selectedBatchSuggestionIds.value = selectedBatchSuggestionIds.value.filter((id) => selectableIds.has(id))
   } catch (error) {
+    if (!isCurrentLoad(generation, resumeId)) return
     sectionErrors.suggestions = getErrorMessage(error, '逐句建议加载失败，请稍后刷新。')
     suggestions.value = []
   }
 }
 
-const loadAudits = async () => {
-  if (!props.resumeId) return
+const loadAudits = async (
+  generation = loadGeneration,
+  resumeId = props.resumeId
+) => {
+  if (!resumeId) return
   try {
-    sectionErrors.audits = ''
-    audits.value = (await getResumeClaimAuditsApi(props.resumeId)).map(normalizeResumeAudit)
+    if (isCurrentLoad(generation, resumeId)) sectionErrors.audits = ''
+    const rows = await getResumeClaimAuditsApi(resumeId)
+    if (!isCurrentLoad(generation, resumeId)) return
+    audits.value = rows.map(normalizeResumeAudit)
   } catch (error) {
+    if (!isCurrentLoad(generation, resumeId)) return
     sectionErrors.audits = getErrorMessage(error, '事实审计记录加载失败，请稍后刷新。')
     audits.value = []
   }
 }
 
-const loadDelivery = async () => {
+const loadDelivery = async (
+  generation = loadGeneration,
+  resumeId = props.resumeId,
+  versionId = currentVersion.value?.id
+) => {
+  if (!isCurrentLoad(generation, resumeId)) return
   clearArtifactPolling()
   try {
-    sectionErrors.delivery = ''
+    if (isCurrentLoad(generation, resumeId)) sectionErrors.delivery = ''
     const [templateRows, artifactRows] = await Promise.all([
       getResumeAtsTemplatesApi(),
-      currentVersion.value ? getResumeArtifactsApi(currentVersion.value.id) : Promise.resolve([])
+      versionId ? getResumeArtifactsApi(versionId) : Promise.resolve([])
     ])
-    templates.value = templateRows.map(normalizeResumeTemplate)
+    if (!isCurrentLoad(generation, resumeId)) return
+    templates.value = templateRows
+      .map(normalizeResumeTemplate)
+      .filter((template) => !template.status || template.status === 'ACTIVE')
     artifacts.value = artifactRows.map(normalizeResumeArtifact)
     artifacts.value
       .filter((artifact) => artifact.status === 'GENERATING')
-      .forEach((artifact) => scheduleArtifactPoll(artifact.id, currentVersion.value?.id))
+      .forEach((artifact) => scheduleArtifactPoll(artifact.id, versionId))
     if (!selectedTemplateKey.value || !templates.value.some((item) => templateKey(item) === selectedTemplateKey.value)) {
       const preferredCode = normalizeResumeTemplateCode(props.preferredTemplateCode)
       const preferred = templates.value.find((item) => item.templateCode === preferredCode)
@@ -657,25 +732,39 @@ const loadDelivery = async () => {
     }
     emitSelectedTemplate()
   } catch (error) {
+    if (!isCurrentLoad(generation, resumeId)) return
     sectionErrors.delivery = getErrorMessage(error, 'ATS 模板或导出文件加载失败，请稍后刷新。')
   }
 }
 
 const loadAll = async () => {
-  if (!props.resumeId) {
+  const generation = ++loadGeneration
+  const resumeId = props.resumeId
+  if (!resumeId) {
     currentVersion.value = null
+    templates.value = []
+    artifacts.value = []
+    suggestions.value = []
+    audits.value = []
     return
   }
   loading.value = true
   loadError.value = ''
   try {
-    await loadVersions()
-    await Promise.all([loadSuggestions(), loadAudits(), loadDelivery()])
+    await loadVersions(generation, resumeId)
+    if (!isCurrentLoad(generation, resumeId)) return
+    const versionId = currentVersion.value?.id
+    await Promise.all([
+      loadSuggestions(generation, resumeId, versionId),
+      loadAudits(generation, resumeId),
+      loadDelivery(generation, resumeId, versionId)
+    ])
   } catch (error) {
+    if (!isCurrentLoad(generation, resumeId)) return
     loadError.value = getErrorMessage(error, '简历版本加载失败，请先确认简历已经保存。')
     currentVersion.value = null
   } finally {
-    loading.value = false
+    if (isCurrentLoad(generation, resumeId)) loading.value = false
   }
 }
 
@@ -900,19 +989,45 @@ const clearArtifactTimer = (id: number) => {
   artifactTimers.delete(id)
 }
 
-const scheduleArtifactPoll = (id: number, resumeVersionId = currentVersion.value?.id) => {
+const scheduleArtifactPoll = (
+  id: number,
+  resumeVersionId = currentVersion.value?.id,
+  generation = loadGeneration
+) => {
+  if (
+    disposed
+    || generation !== loadGeneration
+    || resumeVersionId !== currentVersion.value?.id
+  ) return
   clearArtifactTimer(id)
   const attempts = artifactPollAttempts.get(id) || 0
   if (attempts >= 10) return
   artifactPollAttempts.set(id, attempts + 1)
   artifactTimers.set(id, window.setTimeout(async () => {
+    if (
+      disposed
+      || generation !== loadGeneration
+      || resumeVersionId !== currentVersion.value?.id
+    ) return
     try {
       const artifact = normalizeResumeArtifact(await getResumeArtifactApi(id))
-      if (resumeVersionId !== currentVersion.value?.id) return
+      if (
+        disposed
+        || generation !== loadGeneration
+        || resumeVersionId !== currentVersion.value?.id
+      ) return
       upsertArtifact(artifact)
-      if (artifact.status === 'GENERATING') scheduleArtifactPoll(id, resumeVersionId)
+      if (artifact.status === 'GENERATING') {
+        scheduleArtifactPoll(id, resumeVersionId, generation)
+      }
     } catch {
-      if (resumeVersionId === currentVersion.value?.id) scheduleArtifactPoll(id, resumeVersionId)
+      if (
+        !disposed
+        && generation === loadGeneration
+        && resumeVersionId === currentVersion.value?.id
+      ) {
+        scheduleArtifactPoll(id, resumeVersionId, generation)
+      }
     }
   }, 1500))
 }
@@ -923,26 +1038,49 @@ const createExport = async (format: ResumeExportFormat) => {
     ElMessage.warning('请先保存当前简历，再导出最新稳定版本。')
     return
   }
+  if (!selectedTemplateIsFormal.value) {
+    ElMessage.warning('当前模板仅支持预览，请先切换到正式 ATS 模板。')
+    return
+  }
+  const resumeVersionId = currentVersion.value.id
+  const generation = loadGeneration
   exportingFormat.value = format
   try {
     const template = selectedTemplate.value
     const result = await createResumeExportApi({
-      resumeVersionId: currentVersion.value.id,
+      resumeVersionId,
       templateCode: template?.templateCode,
       templateVersion: template?.templateVersion,
       format
     })
-    if (result.artifact) {
-      const artifact = normalizeResumeArtifact(result.artifact)
-      upsertArtifact(artifact)
-      if (artifact.status === 'GENERATING') scheduleArtifactPoll(artifact.id)
+    if (
+      disposed
+      || generation !== loadGeneration
+      || resumeVersionId !== currentVersion.value?.id
+    ) return
+    if (!result.artifact) {
+      ElMessage.warning(`${format} 导出请求已提交，但暂未返回文件状态，请刷新 Artifact 清单。`)
+      return
     }
-    ElMessage.success(`${format} 导出已创建。`)
+    const artifact = normalizeResumeArtifact(result.artifact)
+    upsertArtifact(artifact)
+    if (artifact.status === 'GENERATING') {
+      scheduleArtifactPoll(artifact.id, resumeVersionId, generation)
+      ElMessage.success(`${format} 导出任务已创建，正在生成文件。`)
+    } else if (artifact.status === 'READY') {
+      ElMessage.success(`${format} 文件已生成，可以下载。`)
+    } else if (artifact.status === 'FAILED') {
+      ElMessage.error(artifact.errorMessage || `${format} 导出失败，请查看 Artifact 错误原因。`)
+    } else {
+      ElMessage.warning(`${format} 导出状态待确认，请刷新 Artifact 清单。`)
+    }
   } catch (error) {
     ElMessage.error(getErrorMessage(error, `${format} 导出失败，请查看服务端字体或文件服务配置。`))
-    await loadDelivery()
+    if (!disposed && generation === loadGeneration && resumeVersionId === currentVersion.value?.id) {
+      await loadDelivery(generation, props.resumeId, resumeVersionId)
+    }
   } finally {
-    exportingFormat.value = ''
+    if (generation === loadGeneration) exportingFormat.value = ''
   }
 }
 
@@ -951,12 +1089,11 @@ const downloadArtifact = async (artifact: ResumeArtifactVO) => {
   downloadingArtifacts.value = new Set(downloadingArtifacts.value).add(artifact.id)
   try {
     const blob = await downloadResumeArtifactApi(artifact.id)
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = artifact.fileName
-    anchor.click()
-    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    downloadBlobReliably(
+      blob,
+      reliableDownloadOptionsForFile(artifact.fileName, artifact.mimeType)
+    )
+    ElMessage.success(`${artifact.fileName} 已开始下载。`)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '文件下载失败，请刷新 artifact 状态后重试。'))
   } finally {
@@ -991,7 +1128,11 @@ watch(() => props.preferredTemplateCode, (templateCode) => {
 })
 watch(selectedTemplateKey, emitSelectedTemplate)
 onMounted(loadAll)
-onBeforeUnmount(clearArtifactPolling)
+onBeforeUnmount(() => {
+  disposed = true
+  loadGeneration += 1
+  clearArtifactPolling()
+})
 
 defineExpose({
   createExport

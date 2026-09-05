@@ -1,5 +1,7 @@
 <template>
   <div class="daily-task-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="daily-hero">
       <div class="hero-copy">
         <div class="eyebrow">
@@ -163,12 +165,15 @@ import { checkinApi, completeTaskApi, skipTaskApi } from '@/api/dailyTask'
 import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import { getStudyPlanDailyViewApi, getStudyPlansApi } from '@/api/studyPlan'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { StudyPlanDailyViewVO, StudyPlanListVO, StudyTaskStatus, StudyTaskVO } from '@/types/studyPlan'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateInTimezone } from '@/utils/format'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 
 const fallbackBusinessDate = formatDateInTimezone(new Date(), 'Asia/Shanghai')
 const businessDate = ref(fallbackBusinessDate)
@@ -360,7 +365,7 @@ onMounted(async () => {
   margin: 8px 0;
   color: var(--user-text);
   font-size: 26px;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1.3;
 }
 
@@ -385,7 +390,7 @@ onMounted(async () => {
 .section-kicker {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .hero-actions {
@@ -412,7 +417,7 @@ onMounted(async () => {
 .hero-summary strong {
   color: var(--user-text);
   font-size: 19px;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1.25;
 }
 
@@ -556,14 +561,14 @@ onMounted(async () => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   h3 {
     margin: 6px 0;
     color: var(--user-text);
     font-size: 19px;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   p {

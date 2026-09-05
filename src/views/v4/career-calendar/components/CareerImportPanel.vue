@@ -118,6 +118,8 @@ import {
   previewCareerCsvImportApi,
   previewCareerIcsImportApi
 } from '@/api/careerGrowth'
+import { hashCareerImportFile } from '@/features/career-import-content'
+import { downloadBlobReliably } from '@/features/reliable-download'
 import type {
   CareerCsvMapping,
   CareerDuplicatePolicy,
@@ -146,6 +148,7 @@ const downloadingErrors = ref(false)
 const importFormat = ref<'CSV' | 'ICS'>('CSV')
 const duplicatePolicy = ref<CareerDuplicatePolicy>('SKIP')
 const selectedFile = ref<File>()
+const selectedFileHash = ref('')
 const fileInputKey = ref(0)
 const importPreview = ref<CareerImportPreviewVO>()
 const importResult = ref<CareerImportResultVO>()
@@ -154,33 +157,70 @@ const csvMapping = ref<CareerCsvMapping>({})
 const importAccept = computed(() => importFormat.value === 'CSV' ? '.csv,text/csv' : '.ics,text/calendar')
 const importSummary = computed(() => importResult.value || importPreview.value)
 
-const selectImportFile = (event: Event) => {
+const selectImportFile = async (event: Event) => {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (file && file.size > 2 * 1024 * 1024) {
     selectedFile.value = undefined
+    selectedFileHash.value = ''
     input.value = ''
     ElMessage.warning('导入文件不能超过 2 MB。')
     return
   }
   selectedFile.value = file
+  selectedFileHash.value = ''
   importPreview.value = undefined
   importResult.value = undefined
   csvMapping.value = {}
+  fileInputKey.value += 1
+  if (file) {
+    try {
+      selectedFileHash.value = await hashCareerImportFile(file)
+    } catch {
+      selectedFile.value = undefined
+      ElMessage.error('无法校验导入文件内容，请重新选择文件。')
+    }
+  }
+}
+
+const normalizeSuggestedCsvMapping = (
+  preview: CareerImportPreviewVO,
+  current: CareerCsvMapping
+) => {
+  const suggested = { ...preview.suggestedMapping }
+  const titleHeader = preview.headers.find((header) => header.trim().toLowerCase() === 'title')
+  if (titleHeader && preview.supportedFields.includes('event_title') && !current.event_title) {
+    suggested.event_title = titleHeader
+    if (
+      suggested.job_title?.trim().toLowerCase() === 'title'
+      && !current.job_title
+    ) {
+      delete suggested.job_title
+    }
+  }
+  return suggested
 }
 
 const previewImport = async () => {
-  if (!selectedFile.value || previewing.value) return
+  if (!selectedFile.value || !selectedFileHash.value || previewing.value) return
   previewing.value = true
   try {
     const preview = importFormat.value === 'CSV'
-      ? await previewCareerCsvImportApi(selectedFile.value, props.timezone, csvMapping.value)
+      ? await previewCareerCsvImportApi(
+          selectedFile.value,
+          props.timezone,
+          csvMapping.value,
+          selectedFileHash.value
+        )
       : await previewCareerIcsImportApi(selectedFile.value, props.timezone)
+    if (preview.contentHash && preview.contentHash !== selectedFileHash.value) {
+      throw new Error('预览内容与当前选择的文件不一致，请重新选择文件。')
+    }
     importPreview.value = preview
     importResult.value = undefined
     if (importFormat.value === 'CSV') {
       csvMapping.value = {
-        ...preview.suggestedMapping,
+        ...normalizeSuggestedCsvMapping(preview, csvMapping.value),
         ...csvMapping.value
       }
     }
@@ -192,11 +232,18 @@ const previewImport = async () => {
 }
 
 const commitImport = async () => {
-  if (!selectedFile.value || !importPreview.value || importing.value) return
+  if (!selectedFile.value || !selectedFileHash.value || !importPreview.value || importing.value) return
   importing.value = true
   try {
     importResult.value = importFormat.value === 'CSV'
-      ? await importCareerCsvApi(selectedFile.value, props.timezone, duplicatePolicy.value, csvMapping.value)
+      ? await importCareerCsvApi(
+          selectedFile.value,
+          props.timezone,
+          duplicatePolicy.value,
+          csvMapping.value,
+          selectedFileHash.value,
+          importPreview.value.contentHash || selectedFileHash.value
+        )
       : await importCareerIcsApi(selectedFile.value, props.timezone)
     const result = importResult.value
     if (result.errorCount || result.duplicateCount) {
@@ -212,23 +259,18 @@ const commitImport = async () => {
   }
 }
 
-const downloadBlob = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
-}
-
 const downloadImportErrors = async () => {
   if (!importResult.value?.batchId || downloadingErrors.value) return
   downloadingErrors.value = true
   try {
     const blob = await downloadCareerImportErrorsApi(importResult.value.batchId)
-    downloadBlob(blob, `career-import-${importResult.value.batchId}-errors.csv`)
+    downloadBlobReliably(blob, {
+      filename: `career-import-${importResult.value.batchId}-errors.csv`,
+      allowedExtensions: ['csv'],
+      allowedMimeTypes: ['text/csv', 'application/csv', 'application/vnd.ms-excel'],
+      maxBytes: 20 * 1024 * 1024
+    })
+    ElMessage.success('错误行 CSV 已开始下载。')
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '错误行下载失败，请稍后重试。'))
   } finally {
@@ -277,6 +319,7 @@ const dispositionLabel = (value?: string) => dispositionLabels[String(value || '
 
 watch(importFormat, () => {
   selectedFile.value = undefined
+  selectedFileHash.value = ''
   importPreview.value = undefined
   importResult.value = undefined
   csvMapping.value = {}

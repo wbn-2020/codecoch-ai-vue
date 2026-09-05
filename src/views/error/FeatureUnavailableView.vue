@@ -46,7 +46,7 @@ const capabilityMap: Record<string, { availability: string; actions: FeatureActi
       { label: '查看任务中心', to: '/agent/tasks' }
     ]
   },
-  成长画像: {
+  成长档案: {
     availability: '需要连续训练、任务完成和画像聚合数据达到可解释范围后再开放。',
     actions: [
       { label: '查看训练分析', to: '/analytics/personal', type: 'primary' },

@@ -2,10 +2,27 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getJobExperimentDetailApi } from '@/api/jobExperiment'
+import type { JobSearchExperimentDetailVO } from '@/types/jobExperiment'
 import JobExperimentDetailView from '@/views/job-experiment/JobExperimentDetailView.vue'
 
 const routerPush = vi.hoisted(() => vi.fn())
 const routerReplace = vi.hoisted(() => vi.fn())
+
+type Deferred<T> = {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+}
+
+const deferred = <T>(): Deferred<T> => {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({
@@ -58,12 +75,21 @@ const componentStubs = {
   'el-select': {
     template: '<select><slot /></select>'
   },
+  'el-skeleton': {
+    template: '<div class="el-skeleton-stub" v-bind="$attrs">材料加载中</div>'
+  },
   'el-table': {
     template: '<div class="el-table-stub"><slot /></div>'
   },
   'el-table-column': true,
   'el-tag': {
     template: '<span class="el-tag-stub"><slot /></span>'
+  },
+  'el-tab-pane': {
+    template: '<div><slot /></div>'
+  },
+  'el-tabs': {
+    template: '<div><slot /></div>'
   }
 }
 
@@ -120,6 +146,7 @@ describe('JobExperimentDetailView', () => {
     await buttons.find((button) => button.text() === '返回列表')?.trigger('click')
     await buttons.find((button) => button.text() === '进入复盘')?.trigger('click')
     await wrapper.findAll('button').find((button) => button.text() === '查看详细材料')?.trigger('click')
+    await flushPromises()
     await wrapper.findAll('button').find((button) => button.text() === '打开下一步任务')?.trigger('click')
 
     expect(routerPush).toHaveBeenCalledWith('/job-experiments?demoFlag=true')
@@ -262,5 +289,99 @@ describe('JobExperimentDetailView', () => {
 
     expect(wrapper.text()).not.toContain('OLD_SAMPLE_WARNING')
     expect(wrapper.text()).not.toContain('OLD_UNSUPPORTED_CONCLUSION')
+  })
+
+  it('loads materials at the real detail refresh boundary and reuses the successful result', async () => {
+    const materials = deferred<JobSearchExperimentDetailVO>()
+    const wrapper = await mountDetail()
+    vi.mocked(getJobExperimentDetailApi).mockReturnValueOnce(materials.promise)
+
+    await wrapper.findAll('button').find((button) => button.text() === '查看详细材料')?.trigger('click')
+
+    expect(getJobExperimentDetailApi).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="experiment-materials-loading"]').exists()).toBe(true)
+
+    materials.resolve({
+      id: 9,
+      title: '演示投递实验',
+      status: 'RUNNING',
+      demoFlag: 1,
+      strategy: {
+        actionUrl: '/agent/today'
+      },
+      relations: [],
+      reviews: [],
+      metrics: {
+        applicationCount: 8,
+        feedbackCount: 2,
+        interviewInviteCount: 1,
+        interviewCompletedCount: 1,
+        offerCount: 0,
+        rejectedCount: 1,
+        resumeVersionCount: 1,
+        targetJobCount: 1,
+        projectEvidenceCount: 2,
+        agentTaskCount: 1,
+        sampleCount: 8,
+        confidenceLevel: 'MEDIUM',
+        sampleInsufficient: true,
+        facts: []
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="experiment-materials-loading"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('8')
+
+    await wrapper.findAll('button').find((button) => button.text() === '收起')?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === '查看详细材料')?.trigger('click')
+    await flushPromises()
+
+    expect(getJobExperimentDetailApi).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the main detail visible when materials fail and retries only the material request', async () => {
+    const wrapper = await mountDetail()
+    vi.mocked(getJobExperimentDetailApi)
+      .mockRejectedValueOnce(new Error('材料服务暂时不可用'))
+      .mockResolvedValueOnce({
+        id: 9,
+        title: '演示投递实验',
+        status: 'RUNNING',
+        demoFlag: 1,
+        relations: [],
+        reviews: [],
+        metrics: {
+          applicationCount: 6,
+          feedbackCount: 2,
+          interviewInviteCount: 1,
+          interviewCompletedCount: 0,
+          offerCount: 0,
+          rejectedCount: 1,
+          resumeVersionCount: 1,
+          targetJobCount: 1,
+          projectEvidenceCount: 1,
+          agentTaskCount: 1,
+          sampleCount: 6,
+          confidenceLevel: 'LOW',
+          sampleInsufficient: true,
+          facts: []
+        }
+      })
+
+    await wrapper.findAll('button').find((button) => button.text() === '查看详细材料')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('演示投递实验')
+    expect(wrapper.text()).toContain('实验材料加载失败')
+    expect(wrapper.text()).toContain('材料服务暂时不可用')
+    expect(getJobExperimentDetailApi).toHaveBeenCalledTimes(2)
+
+    await wrapper.findAll('button').find((button) => button.text() === '重试加载材料')?.trigger('click')
+    await flushPromises()
+
+    expect(getJobExperimentDetailApi).toHaveBeenCalledTimes(3)
+    expect(wrapper.text()).not.toContain('实验材料加载失败')
+    expect(wrapper.text()).toContain('6')
   })
 })

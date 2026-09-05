@@ -9,6 +9,7 @@ const interviewRoom = readSource('src/views/interview/InterviewRoomView.vue')
 const resumeMatch = readSource('src/views/v3/ResumeMatchView.vue')
 const resumePrepare = readSource('src/views/resume/ArenaPrepareView.vue')
 const resumeEditor = readSource('src/views/resume/ResumeEditView.vue')
+const resumeWorkbenchShell = readSource('src/views/resume/components/ResumeWorkbenchShell.vue')
 const abilityMap = readSource('src/views/ability-map/AbilityMapView.vue')
 const arenaInterviewCreate = readSource('src/views/interview/ArenaInterviewCreateView.vue')
 const interviewReport = readSource('src/views/interview/InterviewReportView.vue')
@@ -46,11 +47,18 @@ describe('direction D critical flows', () => {
   })
 
   it('mounts the resume workspace panes in left-to-right keyboard order', () => {
-    expect(resumeEditor).toContain('id="resume-panel-advice-mount"')
-    expect(resumeEditor).toContain('id="resume-panel-preview-mount"')
-    expect(resumeEditor).toContain('<Teleport defer to="#resume-panel-advice-mount">')
-    expect(resumeEditor).toContain('<Teleport defer to="#resume-panel-preview-mount">')
-    expect(resumeEditor).toContain('.workspace-teleport-target {\n  display: contents;')
+    expect(resumeEditor).toContain('<ResumeWorkbenchShell')
+    expect(resumeEditor).toContain('<template #preview>')
+    expect(resumeEditor).toContain('<template #editor>')
+    expect(resumeEditor).toContain('resume-workbench-pane--preview')
+    expect(resumeEditor).toContain('resume-workbench-pane--editor')
+    // v22 列序：editor 居中（col 2），preview 居右（col 3），由 Shell :slotted 托管
+    expect(resumeWorkbenchShell).toMatch(
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;/
+    )
+    expect(resumeWorkbenchShell).toMatch(
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;/
+    )
   })
 
   it('keeps every skill node itself tappable for training in the skill tree', () => {
@@ -87,7 +95,7 @@ describe('direction D critical flows', () => {
   it('keeps the ability-map entry action aligned with the Direction D prototype', () => {
     expect(tools).toContain('<span class="arena-tools__enter">进入 ›</span>')
     expect(tools).toMatch(
-      /\.arena-tools__enter\s*\{[\s\S]*?color:\s*var\(--arena-grn-d\);[\s\S]*?font-size:\s*13px;[\s\S]*?font-weight:\s*800;/
+      /\.arena-tools__enter\s*\{[\s\S]*?color:\s*var\(--arena-grn-d\);[\s\S]*?font-size:\s*13px;[\s\S]*?font-weight:\s*600;/
     )
   })
 

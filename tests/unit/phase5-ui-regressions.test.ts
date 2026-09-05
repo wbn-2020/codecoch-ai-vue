@@ -64,7 +64,8 @@ describe('Phase5 user UI regressions', () => {
               domainCode: 'PROJECT',
               domainName: normalDomainName,
               description: normalDescription,
-              summary: normalSummary
+              summary: normalSummary,
+              evidenceCount: 1
             }
           ]
         }
@@ -106,7 +107,7 @@ describe('Phase5 user UI regressions', () => {
     })
 
     expect(abilityMap).toMatchObject({
-      hasTrainingData: false,
+      hasTrainingData: true,
       assessedSkillCount: 0,
       weakSkillCount: 0,
       strongSkillCount: 0
@@ -120,6 +121,43 @@ describe('Phase5 user UI regressions', () => {
       name: 'HashMap 与集合选型',
       domainName: '集合框架',
       status: 'UNASSESSED',
+      confidence: 'UNKNOWN',
+      evidenceCount: 2
+    })
+  })
+
+  it('fails closed when aggregate counts or strong labels have no supporting evidence', () => {
+    const abilityMap = normalizeAbilityMap({
+      hasTrainingData: true,
+      assessedSkillCount: 8,
+      weakSkillCount: 3,
+      strongSkillCount: 5,
+      domains: [{
+        domainCode: 'JAVA',
+        domainName: 'Java',
+        assessedCount: 8,
+        weakCount: 3,
+        skills: [{
+          code: 'JAVA_CORE',
+          name: 'Java 基础',
+          domainCode: 'JAVA',
+          domainName: 'Java',
+          status: 'STRONG',
+          evidenceCount: 0,
+          confidence: 'HIGH'
+        }]
+      }]
+    })
+
+    expect(abilityMap).toMatchObject({
+      hasTrainingData: false,
+      assessedSkillCount: 0,
+      weakSkillCount: 0,
+      strongSkillCount: 0
+    })
+    expect(abilityMap.domains[0].skills[0]).toMatchObject({
+      status: 'UNASSESSED',
+      evidenceCount: 0,
       confidence: 'UNKNOWN'
     })
   })

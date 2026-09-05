@@ -105,6 +105,7 @@ export interface QuestionRecommendationItemVO {
   practiceStatus?: string
   canPractice?: boolean
   practiceQuestionId?: number
+  practiceKind?: 'QUESTION_BANK' | 'PRIVATE_RECOMMENDATION' | string
   sourceType?: QuestionRecommendationSourceType
   sourceId?: number
   trustStatus?: QuestionRecommendationTrustStatus

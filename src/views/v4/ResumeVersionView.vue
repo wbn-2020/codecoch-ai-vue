@@ -1,12 +1,12 @@
 <template>
-  <div class="page-shell v4-version-page">
-    <section class="v4-page-header">
-      <div>
-        <div class="v4-eyebrow">简历版本管理</div>
-        <h1>简历版本</h1>
-        <p>创建快照、复制版本、对比版本差异、回滚版本，并记录 AI 优化建议采纳情况。</p>
-      </div>
-      <div class="v4-actions">
+  <main class="page-shell v4-version-page cc-module-page">
+    <PageHeader
+      eyebrow="简历准备"
+      :icon="History"
+      title="简历版本"
+      description="创建快照、复制版本、对比版本差异、回滚版本，并记录 AI 优化建议采纳情况。"
+    >
+      <template #actions>
         <el-select
           v-model="resumeId"
           filterable
@@ -29,8 +29,10 @@
           进入岗位匹配
         </el-button>
         <el-button type="primary" :disabled="!resumeId" :loading="saving" @click="create">创建版本</el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <AppState v-if="errorMessage" type="error" title="简历版本加载失败" :description="errorMessage">
       <el-button type="primary" @click="load">重试</el-button>
@@ -170,12 +172,12 @@
         <el-button type="primary" :loading="saving" @click="applySuggestion">应用版本并记录</el-button>
       </template>
     </el-dialog>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { GitCompareArrows } from 'lucide-vue-next'
+import { GitCompareArrows, History } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -192,6 +194,9 @@ import {
   type ResumeVersionVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { ResumeVO } from '@/types/resume'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
@@ -199,6 +204,7 @@ import { createOperationIdempotencyKey } from '@/utils/idempotency'
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('prepare')
 const initialResumeId = Number(route.params.id)
 const resumeId = ref<number | undefined>(Number.isFinite(initialResumeId) && initialResumeId > 0 ? initialResumeId : undefined)
 const resumes = ref<ResumeVO[]>([])
@@ -610,7 +616,7 @@ onMounted(async () => {
 .section-kicker {
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .v4-actions,

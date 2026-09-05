@@ -74,7 +74,7 @@ const failedMessage = computed(() => {
   span {
     color: var(--user-success);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   strong {

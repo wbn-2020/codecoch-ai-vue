@@ -140,6 +140,10 @@ export interface JobReadinessSnapshotVO {
   targetJobId: number
   jdAnalysisId?: number
   snapshotHash?: string
+  sourceHash?: string
+  schemaVersion?: string
+  validationStatus?: string
+  repairBatchId?: string
   overallScore?: number
   overallLevel?: string
   readinessScore?: number
@@ -159,6 +163,9 @@ export interface JobReadinessSnapshotVO {
   mustMissingCount?: number
   summary?: unknown
   matrix?: unknown
+  historyFallback?: boolean
+  regenerated?: boolean
+  invalidLatestSnapshotId?: number
   generatedAt?: string
   createdAt?: string
   dimensions: JobReadinessDimensionVO[]

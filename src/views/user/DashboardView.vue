@@ -38,7 +38,7 @@
           <code>
             <span>业务日：{{ businessDate }}</span>
             <span>生成时间：{{ formatDateTime(overview?.generatedAt) }}</span>
-            <span>Agent 今日计划：{{ allAgentTasksDone ? '已完成' : `${todayDoneCount}/${todayTotalCount}` }}</span>
+            <span>Agent 今日计划：{{ dailyPlanStatusText }}</span>
             <span>默认下一步：{{ primaryNextAction.title }}</span>
             <span>错题复盘：{{ wrongQuestions.length }} 道待关注</span>
           </code>
@@ -340,12 +340,14 @@ import { useRouter } from 'vue-router'
 
 import {
   fetchCachedDashboardOverview,
+  fetchCachedLatestDailyPlan,
   fetchCachedTodayAgentTasks,
   fetchCachedWrongQuestions
 } from '@/composables/useUserHomeDataCache'
 import AppState from '@/components/common/AppState.vue'
+import { dailyPlanStateLabel, resolveDailyPlanState } from '@/features/daily-plan-state'
 import { useAuthStore } from '@/stores/auth'
-import type { AgentTaskVO } from '@/types/agent'
+import type { AgentTaskVO, DailyPlanVO } from '@/types/agent'
 import type { UserDashboardEntryStatusVO, UserDashboardOverviewVO } from '@/types/dashboard'
 import type { WrongQuestionVO } from '@/types/question'
 import { getErrorMessage } from '@/utils/error'
@@ -375,6 +377,7 @@ const wrongQuestions = ref<WrongQuestionVO[]>([])
 const agentTasksLoading = ref(false)
 const agentTasksError = ref('')
 const agentTasks = ref<AgentTaskVO[]>([])
+const dailyPlan = ref<DailyPlanVO | null>(null)
 let secondaryDataCancelled = false
 
 const displayName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || 'CodeCoachAI 用户')
@@ -382,10 +385,48 @@ const entryStatuses = computed(() => overview.value?.entryStatuses || [])
 const businessDate = computed(() => overview.value?.businessDate || formatDateInTimezone(new Date(), 'Asia/Shanghai'))
 const todayTotalCount = computed(() => agentTasks.value.length)
 const todayDoneCount = computed(() => agentTasks.value.filter((task) => task.status === 'DONE').length)
-const allAgentTasksDone = computed(() => todayTotalCount.value > 0 && todayDoneCount.value === todayTotalCount.value)
+const dailyPlanSnapshot = computed(() => resolveDailyPlanState({
+  plan: dailyPlan.value,
+  tasks: agentTasks.value
+}))
+const dailyPlanState = computed(() => dailyPlanSnapshot.value.state)
+const allAgentTasksDone = computed(() => dailyPlanState.value === 'COMPLETED')
+const dailyPlanStatusText = computed(() => {
+  if (dailyPlanState.value === 'ACTIVE') return `${todayDoneCount.value}/${todayTotalCount.value}`
+  return dailyPlanStateLabel(dailyPlanState.value)
+})
+const dashboardClosedTaskStatuses = new Set([
+  'DONE',
+  'COMPLETED',
+  'SKIPPED',
+  'DEFERRED',
+  'EXPIRED',
+  'CANCELED',
+  'CANCELLED'
+])
+const isDashboardActionableTask = (task: AgentTaskVO) =>
+  !dashboardClosedTaskStatuses.has(String(task.status || '').toUpperCase())
 
 const primaryNextAction = computed(() => {
-  const firstTodo = agentTasks.value.find((task) => task.status !== 'DONE' && task.status !== 'SKIPPED')
+  if (dailyPlanState.value === 'PROCESSING') {
+    return {
+      title: '今日计划正在生成',
+      cta: '查看生成进度',
+      path: '/agent/today',
+      icon: Clock3
+    }
+  }
+
+  if (dailyPlanState.value === 'FAILED') {
+    return {
+      title: '今日计划生成失败',
+      cta: '处理失败',
+      path: '/agent/today',
+      icon: AlertTriangle
+    }
+  }
+
+  const firstTodo = agentTasks.value.find(isDashboardActionableTask)
   if (firstTodo) {
     return {
       title: displayAgentTaskTitle(firstTodo),
@@ -399,6 +440,15 @@ const primaryNextAction = computed(() => {
     return {
       title: '今日计划已完成',
       cta: '查看完成记录',
+      path: '/agent/today',
+      icon: BookOpenCheck
+    }
+  }
+
+  if (dailyPlanState.value === 'NO_TODO') {
+    return {
+      title: '今日暂无待推进任务',
+      cta: '查看任务记录',
       path: '/agent/today',
       icon: BookOpenCheck
     }
@@ -431,7 +481,31 @@ const primaryNextAction = computed(() => {
 })
 
 const todayFocusCards = computed(() => {
-  const openTasks = agentTasks.value.filter((task) => task.status !== 'DONE' && task.status !== 'SKIPPED').slice(0, 3)
+  if (dailyPlanState.value === 'PROCESSING') {
+    return [{
+      key: 'agent-processing',
+      index: 1,
+      title: '今日计划正在生成',
+      desc: '生成任务已进入处理流程，可以离开页面后稍后再查看。',
+      reason: '状态来自最新计划运行记录',
+      path: '/agent/today',
+      badge: '生成中'
+    }]
+  }
+
+  if (dailyPlanState.value === 'FAILED') {
+    return [{
+      key: 'agent-failed',
+      index: 1,
+      title: '今日计划生成失败',
+      desc: dailyPlan.value?.failureSuggestion || dailyPlan.value?.errorMessage || '本次运行没有产生可消费的今日任务。',
+      reason: dailyPlan.value?.terminalReasonCode || dailyPlan.value?.errorCode || '请进入今日任务页处理',
+      path: '/agent/today',
+      badge: '失败'
+    }]
+  }
+
+  const openTasks = agentTasks.value.filter(isDashboardActionableTask).slice(0, 3)
   if (openTasks.length) {
     return openTasks.map((task, index) => ({
       key: `agent-${task.id}`,
@@ -453,6 +527,18 @@ const todayFocusCards = computed(() => {
       reason: '状态来自今日 Agent 任务记录',
       path: '/agent/today',
       badge: '已完成'
+    }]
+  }
+
+  if (dailyPlanState.value === 'NO_TODO') {
+    return [{
+      key: 'agent-no-todo',
+      index: 1,
+      title: '今日暂无待推进任务',
+      desc: '现有任务均已跳过、推迟、过期或取消，不会计入已完成。',
+      reason: '可进入今日任务页查看记录或重新生成计划',
+      path: '/agent/today',
+      badge: '无待办'
     }]
   }
 
@@ -491,7 +577,7 @@ const metrics = computed<MetricItem[]>(() => [
   {
     label: 'Agent 今日任务',
     value: `${todayDoneCount.value}/${todayTotalCount.value}`,
-    hint: agentTasksError.value ? '打开今日任务页重试' : primaryNextAction.value.title,
+    hint: agentTasksError.value ? '打开今日任务页重试' : `${dailyPlanStatusText.value} · ${primaryNextAction.value.title}`,
     icon: BookOpenCheck,
     tone: 'tone-green',
     path: '/agent/today'
@@ -695,15 +781,39 @@ const fetchWrongQuestions = async (force: unknown = true) => {
 const fetchAgentTasks = async (force: unknown = true) => {
   agentTasksLoading.value = true
   agentTasksError.value = ''
-  try {
-    const result = await fetchCachedTodayAgentTasks(businessDate.value, shouldForceRefresh(force))
-    agentTasks.value = result.tasks || []
-  } catch (error) {
-    agentTasks.value = []
-    agentTasksError.value = getErrorMessage(error, '今日任务暂时加载失败，可以先进入今日任务页重试。')
-  } finally {
-    agentTasksLoading.value = false
+  const [tasksResult, planResult] = await Promise.allSettled([
+    fetchCachedTodayAgentTasks(businessDate.value, shouldForceRefresh(force)),
+    fetchCachedLatestDailyPlan(businessDate.value, shouldForceRefresh(force))
+  ])
+
+  if (planResult.status === 'fulfilled') {
+    dailyPlan.value = planResult.value
+  } else {
+    dailyPlan.value = null
   }
+
+  if (tasksResult.status === 'fulfilled') {
+    agentTasks.value = tasksResult.value.tasks || []
+  } else if (planResult.status === 'fulfilled') {
+    agentTasks.value = planResult.value.tasks || []
+  } else {
+    agentTasks.value = []
+  }
+
+  const snapshot = resolveDailyPlanState({
+    plan: dailyPlan.value,
+    tasks: agentTasks.value
+  })
+  const hasUsableFallback = agentTasks.value.length > 0
+    || snapshot.state === 'PROCESSING'
+    || snapshot.state === 'FAILED'
+
+  if ((tasksResult.status === 'rejected' || planResult.status === 'rejected') && !hasUsableFallback) {
+    const error = tasksResult.status === 'rejected' ? tasksResult.reason : planResult.status === 'rejected' ? planResult.reason : null
+    agentTasksError.value = getErrorMessage(error, '今日计划与任务暂时加载失败，可以先进入今日任务页重试。')
+  }
+
+  agentTasksLoading.value = false
 }
 
 const deferSecondaryDashboardData = (callback: () => void, timeout = 1200, fallbackDelay = 240) => {

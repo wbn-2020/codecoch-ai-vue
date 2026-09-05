@@ -1,41 +1,32 @@
 <template>
   <!-- @deprecated Legacy unreachable practice setup view; current routes use QuestionPracticeSessionView and QuestionTrainingHubView. -->
   <div class="practice-page page-shell">
-    <section class="hero-band">
-      <div class="hero-copy">
-        <p class="hero-kicker">
-          <Dumbbell :size="16" />
-          练习模式
-        </p>
-        <h1>把刷题变成一轮完整训练</h1>
-        <p>支持随机抽题、按分类专项、错题重刷和收藏练习。答题后可继续看参考答案和 AI 点评，不虚构完成态。</p>
-        <div class="hero-actions">
-          <el-button @click="router.push('/questions')">
-            <BookOpen :size="16" />
-            题库浏览
-          </el-button>
-          <el-button @click="router.push('/dashboard')">
-            <LayoutDashboard :size="16" />
-            今日计划
-          </el-button>
-        </div>
-      </div>
+    <PageHeader
+      class="practice-page__head"
+      title="把刷题变成一轮完整训练"
+      description="支持随机抽题、按分类专项、错题重刷和收藏练习。答题后可继续看参考答案和 AI 点评，不虚构完成态。"
+    >
+      <template #eyebrow>
+        <Dumbbell :size="13" aria-hidden="true" />
+        练习模式
+      </template>
+      <template #actions>
+        <el-button @click="router.push('/questions')">
+          <BookOpen :size="16" />
+          题库浏览
+        </el-button>
+        <el-button @click="router.push('/dashboard')">
+          <LayoutDashboard :size="16" />
+          今日计划
+        </el-button>
+      </template>
+    </PageHeader>
 
-      <aside class="hero-panel">
-        <div class="hero-panel__stat">
-          <span>模式</span>
-          <strong>{{ practiceModeLabel(config.mode) }}</strong>
-        </div>
-        <div class="hero-panel__stat">
-          <span>题数</span>
-          <strong>{{ config.count }}</strong>
-        </div>
-        <div class="hero-panel__stat">
-          <span>计时</span>
-          <strong>{{ elapsedText }}</strong>
-        </div>
-        <p>先选题，再答题，再复盘，把每轮练习变成可追踪的训练记录。</p>
-      </aside>
+    <section class="practice-metrics">
+      <StatCard label="模式" :value="practiceModeLabel(config.mode)" />
+      <StatCard label="题数" :value="config.count" />
+      <StatCard label="计时" :value="elapsedText" />
+      <p class="practice-metrics__note">先选题，再答题，再复盘，把每轮练习变成可追踪的训练记录。</p>
     </section>
 
     <section v-if="!practicing" class="content-card practice-setup">
@@ -190,12 +181,12 @@
           </div>
         </div>
         <div class="result-stats">
-          <div class="stat-card"><span>总题数</span><strong>{{ questions.length }}</strong></div>
-          <div class="stat-card"><span>已答</span><strong>{{ answeredCount }}</strong></div>
-          <div class="stat-card"><span>正确</span><strong class="is-success">{{ correctCount }}</strong></div>
-          <div class="stat-card"><span>跳过</span><strong>{{ skippedCount }}</strong></div>
-          <div class="stat-card"><span>正确率</span><strong>{{ accuracyText }}</strong></div>
-          <div class="stat-card"><span>用时</span><strong>{{ elapsedText }}</strong></div>
+          <StatCard label="总题数" :value="questions.length" />
+          <StatCard label="已答" :value="answeredCount" />
+          <StatCard label="正确" :value="correctCount" tone="success" />
+          <StatCard label="跳过" :value="skippedCount" />
+          <StatCard label="正确率" :value="accuracyText" />
+          <StatCard label="用时" :value="elapsedText" />
         </div>
       </div>
     </section>
@@ -216,6 +207,8 @@ import {
   updateQuestionMasteryApi
 } from '@/api/question'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import StatCard from '@/components/user-ui/StatCard.vue'
 import type { FavoriteQuestionVO, QuestionDetailVO, WrongQuestionVO } from '@/types/question'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
@@ -499,19 +492,27 @@ onBeforeUnmount(stopTimer)
   gap: 16px;
 }
 
-.hero-band {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(230px, 270px);
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
-  box-shadow: none;
+// PageHeader 自带 margin-bottom，交给 grid gap 统一控制节奏
+.practice-page__head {
+  margin-bottom: 0;
 }
 
-.hero-kicker,
-.hero-actions,
+.practice-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.practice-metrics__note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--user-text-muted);
+  font-size: var(--user-text-body-sm, 13px);
+  line-height: 1.6;
+}
+
 .setup-head,
 .question-header,
 .answer-actions,
@@ -522,73 +523,27 @@ onBeforeUnmount(stopTimer)
   gap: 10px;
 }
 
-.hero-kicker,
 .section-kicker {
   margin: 0;
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.hero-copy h1,
 .question-title,
 .setup-head h2 {
   margin: 0;
   color: var(--user-text);
 }
 
-.hero-copy h1 {
-  font-size: 24px;
-  line-height: 1.3;
-}
-
-.hero-copy p,
-.hero-panel p,
 .section-desc,
 .progress-info,
 .question-content,
 .answer-actions .hint,
 .side-card p {
   color: var(--user-text-muted);
-}
-
-.hero-copy p {
-  max-width: 680px;
-  margin: 8px 0 0;
-  line-height: 1.6;
-}
-
-.hero-actions {
-  flex-wrap: wrap;
-  margin-top: 14px;
-}
-
-.hero-panel {
-  display: grid;
-  gap: 12px;
-  padding: 18px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
-  align-content: start;
-}
-
-.hero-panel__stat {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.hero-panel__stat span {
-  color: var(--user-text-muted);
-  font-size: 12px;
-}
-
-.hero-panel__stat strong {
-  color: var(--user-text);
-  font-size: 18px;
 }
 
 .practice-setup,
@@ -602,12 +557,16 @@ onBeforeUnmount(stopTimer)
 }
 
 .setup-head h2 {
-  font-size: 20px;
+  font-size: var(--user-text-h2, 22px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1.35;
 }
 
 .section-desc {
   margin: 6px 0 0;
+  font-size: var(--user-text-body-sm, 13px);
+  line-height: 1.6;
 }
 
 .practice-config {
@@ -632,7 +591,7 @@ onBeforeUnmount(stopTimer)
   gap: 16px;
   padding: 16px 20px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
 }
 
@@ -641,7 +600,7 @@ onBeforeUnmount(stopTimer)
   flex-wrap: wrap;
   gap: 16px;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--user-text-body-sm, 13px);
 }
 
 .workspace-grid {
@@ -654,7 +613,7 @@ onBeforeUnmount(stopTimer)
   min-width: 0;
   padding: 18px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
 }
 
@@ -665,12 +624,14 @@ onBeforeUnmount(stopTimer)
 .question-index {
   margin-left: auto;
   color: var(--user-text-muted);
-  font-size: 13px;
+  font-size: var(--user-text-body-sm, 13px);
 }
 
 .question-title {
   margin-top: 16px;
-  font-size: 20px;
+  font-size: var(--user-text-h2, 22px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1.5;
 }
 
@@ -678,7 +639,7 @@ onBeforeUnmount(stopTimer)
   margin-top: 14px;
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 12px;
+  border-radius: var(--user-radius-lg, 14px);
   background: var(--user-surface-muted);
 }
 
@@ -693,7 +654,7 @@ onBeforeUnmount(stopTimer)
 
 .answer-actions .hint {
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--user-text-caption, 12px);
 }
 
 .result-area {
@@ -706,12 +667,13 @@ onBeforeUnmount(stopTimer)
 .ai-comment-block {
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 12px;
+  border-radius: var(--user-radius-lg, 14px);
   background: var(--user-surface-muted);
 
   h3 {
     margin: 0 0 10px;
-    font-size: 15px;
+    font-size: var(--user-text-h4, 15px);
+    font-weight: 600;
     color: var(--user-text-muted);
   }
 }
@@ -729,53 +691,30 @@ onBeforeUnmount(stopTimer)
 .side-card {
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
 }
 
 .side-card span,
 .side-card p {
   color: var(--user-text-muted);
+  font-size: var(--user-text-caption, 12px);
 }
 
 .side-card strong {
   display: block;
   margin: 8px 0;
   color: var(--user-text);
+  font-size: var(--user-text-h4, 15px);
+  font-weight: 600;
 }
 
 .result-stats {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
   min-width: 0;
-  flex-wrap: wrap;
-  gap: 8px;
   margin-top: 16px;
-}
-
-.stat-card {
-  min-width: 0;
-  flex: 1 1 130px;
-  padding: 10px 12px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
-  text-align: center;
-
-  span {
-    display: block;
-    color: var(--user-text-muted);
-    font-size: 12px;
-  }
-
-  strong {
-    display: block;
-    margin-top: 6px;
-    font-size: 22px;
-  }
-
-  .is-success {
-    color: #16a34a;
-  }
 }
 
 .result-final-actions {
@@ -786,7 +725,6 @@ onBeforeUnmount(stopTimer)
 }
 
 @media (max-width: 980px) {
-  .hero-band,
   .workspace-grid {
     grid-template-columns: 1fr;
   }
@@ -798,22 +736,10 @@ onBeforeUnmount(stopTimer)
 }
 
 @media (max-width: 720px) {
-  .hero-band {
-    padding: 16px;
-  }
-
-  .hero-copy h1 {
-    font-size: 22px;
-  }
-
   .setup-head,
   .result-final-actions {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .result-stats {
-    display: flex;
   }
 
   .answer-actions .hint {

@@ -15,7 +15,12 @@ import {
   isAdminMobileReadonlyViewport
 } from '@/utils/adminMobileReadonly'
 import { emitAuthCleared, emitAuthRefreshed } from '@/utils/authEvents'
-import { emitRequestError } from '@/utils/errorEvents'
+import {
+  emitRequestError,
+  enrichRequestErrorDiagnostic,
+  formatRequestErrorNotice,
+  type RequestErrorDiagnostic
+} from '@/utils/errorEvents'
 import { toFriendlyMessage } from '@/utils/error'
 import { showUserMessage } from '@/utils/userMessage'
 import { buildSafeRedirectFromLocation, sanitizeDiagnosticUrl } from '@/utils/routeSecurity'
@@ -34,11 +39,17 @@ declare module 'axios' {
   export interface AxiosRequestConfig {
     preserveEnvelope?: boolean
     silentError?: boolean
+    errorModule?: string
+    errorRequestKey?: string
+    errorRoutePath?: string
   }
 
   export interface InternalAxiosRequestConfig {
     preserveEnvelope?: boolean
     silentError?: boolean
+    errorModule?: string
+    errorRequestKey?: string
+    errorRoutePath?: string
     _authSessionBound?: boolean
     _authSessionGeneration?: number
     _authSessionId?: string
@@ -184,6 +195,36 @@ const requestPathOnly = (url: string) => {
   }
 }
 
+const currentRoutePath = () => {
+  if (typeof window === 'undefined') return undefined
+  return sanitizeDiagnosticUrl(
+    `${window.location.pathname}${window.location.search}${window.location.hash}`
+  )
+}
+
+const inferRequestModule = (config?: InternalAxiosRequestConfig) => {
+  const explicit = String(config?.errorModule || '').trim()
+  if (explicit) return explicit
+
+  const segments = requestPathOnly(String(config?.url || ''))
+    .split('/')
+    .filter(Boolean)
+  if (!segments.length) return undefined
+  if (segments[0] === 'admin') return segments.slice(0, 2).join('-')
+
+  const aliases: Record<string, string> = {
+    agent: 'daily-plan',
+    application: 'job-application',
+    applications: 'job-application',
+    interview: 'interview-report',
+    resumes: 'resume',
+    resume: 'resume',
+    skill: 'skill-profile',
+    study: 'study-plan'
+  }
+  return aliases[segments[0]] || segments[0]
+}
+
 const AUTH_REFRESH_EXCLUDED_PATHS = new Set([
   '/auth/login',
   '/auth/register',
@@ -312,13 +353,24 @@ const emitResponseDiagnostic = (
     traceId?: string
   }
 ) => {
-  emitRequestError({
+  const diagnostic = enrichRequestErrorDiagnostic({
     method: String(config?.method || 'GET').toUpperCase(),
     url: sanitizeDiagnosticUrl(config?.url),
     status: payload.status,
     code: payload.code,
     message: redactSensitiveText(toFriendlyMessage(payload.message, '请求失败，请稍后重试。')),
-    traceId: payload.traceId
+    traceId: payload.traceId,
+    routePath: config?.errorRoutePath ?? currentRoutePath(),
+    module: inferRequestModule(config),
+    requestKey: config?.errorRequestKey
+  })
+  emitRequestError(diagnostic)
+  return diagnostic
+}
+
+const showResponseError = (diagnostic: Omit<RequestErrorDiagnostic, 'id' | 'occurredAt'>) => {
+  showUserMessage.error(formatRequestErrorNotice(diagnostic), {
+    groupingKey: diagnostic.requestKey || diagnostic.traceId || diagnostic.message
   })
 }
 
@@ -519,6 +571,8 @@ const retryAfterRefresh = async (config?: RetryableRequestConfig) => {
 }
 
 request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  config.errorRoutePath ??= currentRoutePath()
+
   if (isDemoReadOnlyWrite(config)) {
     const message = '当前为体验模式，暂不保存本次更改。'
     emitLocalBlockDiagnostic(config, message)
@@ -585,37 +639,35 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
         return retryAfterRefresh(config)
       }
       if (!silentError) {
-        emitResponseDiagnostic(config, {
+        const diagnostic = emitResponseDiagnostic(config, {
           code: result.code,
           message: result.message,
           traceId: responseTraceId(result.traceId, response)
         })
-        showUserMessage.error(toFriendlyMessage(result.message, '登录失败，请检查账号信息后重试。'))
+        showResponseError(diagnostic)
       }
       return Promise.reject(result)
     }
 
     if (result.code === HTTP_STATUS_CODE.FORBIDDEN) {
       if (!silentError) {
-        emitResponseDiagnostic(response.config as InternalAxiosRequestConfig, {
+        const diagnostic = emitResponseDiagnostic(response.config as InternalAxiosRequestConfig, {
           code: result.code,
           message: result.message,
           traceId: responseTraceId(result.traceId, response)
         })
-      }
-      if (!silentError) {
-        showUserMessage.error(toFriendlyMessage(result.message, '当前账号无权执行该操作，操作未提交。'))
+        showResponseError(diagnostic)
       }
       return Promise.reject(result)
     }
 
     if (!silentError) {
-      emitResponseDiagnostic(response.config as InternalAxiosRequestConfig, {
+      const diagnostic = emitResponseDiagnostic(response.config as InternalAxiosRequestConfig, {
         code: result.code,
         message: result.message,
         traceId: responseTraceId(result.traceId, response)
       })
-      showUserMessage.error(toFriendlyMessage(result.message, '请求失败，请稍后重试'))
+      showResponseError(diagnostic)
     }
     return Promise.reject(result)
 }
@@ -652,13 +704,13 @@ const handleResponseError = async (error: AxiosError<RequestErrorPayload | Blob>
         '登录失败，请检查账号信息后重试。'
       )
       if (!config?.silentError) {
-        emitResponseDiagnostic(config, {
+        const diagnostic = emitResponseDiagnostic(config, {
           status: error.response.status,
           code: responsePayload?.code || HTTP_STATUS_CODE.UNAUTHENTICATED,
           message,
           traceId: responseTraceId(responsePayload?.traceId, error.response)
         })
-        showUserMessage.error(message)
+        showResponseError(diagnostic)
       }
       return Promise.reject(responsePayload || error)
     }
@@ -671,13 +723,13 @@ const handleResponseError = async (error: AxiosError<RequestErrorPayload | Blob>
         '当前账号无权执行该操作，操作未提交。'
       )
       if (!silentError) {
-        emitResponseDiagnostic(config, {
+        const diagnostic = emitResponseDiagnostic(config, {
           status: error.response.status,
           code: responsePayload?.code || HTTP_STATUS_CODE.FORBIDDEN,
           message,
           traceId: responseTraceId(responsePayload?.traceId, error.response)
         })
-        showUserMessage.error(message)
+        showResponseError(diagnostic)
       }
       return Promise.reject(responsePayload || error)
     }
@@ -687,13 +739,13 @@ const handleResponseError = async (error: AxiosError<RequestErrorPayload | Blob>
       '\u7f51\u7edc\u5f02\u5e38\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002'
     )
     if (!silentError) {
-      emitResponseDiagnostic(config, {
+      const diagnostic = emitResponseDiagnostic(config, {
         status: error.response?.status,
         code: responsePayload?.code,
         message,
         traceId: responseTraceId(responsePayload?.traceId, error.response)
       })
-      showUserMessage.error(message)
+      showResponseError(diagnostic)
     }
     return Promise.reject(decodedBlobPayload || error)
 }

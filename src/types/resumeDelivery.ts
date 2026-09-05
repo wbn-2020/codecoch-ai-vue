@@ -1,3 +1,5 @@
+import type { ResumePresentationConfig } from './resumePresentation'
+
 export type ResumeSuggestionStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'UNDONE' | 'UNKNOWN'
 export type ResumeSuggestionDecisionType = 'ACCEPT' | 'REJECT' | 'UNDO'
 export type ResumeSuggestionRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN'
@@ -178,6 +180,7 @@ export interface ResumeDeliveryDraft {
   workExperience?: string
   educationExperience?: string
   projects?: Array<Record<string, unknown>>
+  presentationConfig?: ResumePresentationConfig
 }
 
 export interface ResumeSuggestionView extends ResumeSuggestionVO {

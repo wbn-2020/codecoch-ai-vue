@@ -1,12 +1,14 @@
 <template>
-  <div class="page-shell">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">{{ detail?.title || '题目详情' }}</h1>
-        <p class="page-subtitle">查看题目内容，提交练习答案，并维护收藏和掌握状态。</p>
-      </div>
-      <el-button @click="router.back()">返回</el-button>
-    </div>
+  <div class="question-detail-page page-shell">
+    <PageHeader
+      class="question-detail-page__head"
+      :title="detail?.title || '题目详情'"
+      description="查看题目内容，提交练习答案，并维护收藏和掌握状态。"
+    >
+      <template #actions>
+        <el-button @click="router.back()">返回</el-button>
+      </template>
+    </PageHeader>
 
     <section class="content-card" v-loading="loading">
       <div v-if="detail" class="content-card__body detail-layout">
@@ -105,6 +107,7 @@ import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import QuestionAnswerReviewPanel from '@/components/question/QuestionAnswerReviewPanel.vue'
 import QuestionMeta from '@/components/question/QuestionMeta.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
 import { answerResultOptions, masteryOptions, MASTERY_STATUS } from '@/constants/enums'
 import type { MasteryStatus, QuestionAnswerDTO, QuestionDetailVO, QuestionTagVO } from '@/types/question'
 import { getRouteNumberParam } from '@/utils/route'
@@ -211,8 +214,13 @@ onMounted(fetchDetail)
 </script>
 
 <style scoped lang="scss">
-.page-shell {
+.question-detail-page {
   min-width: 0;
+}
+
+// PageHeader 自带 margin-bottom，交给 .page-shell 的 grid gap 统一控制节奏
+.question-detail-page__head {
+  margin-bottom: 0;
 }
 
 .detail-layout {
@@ -230,7 +238,11 @@ onMounted(fetchDetail)
 
   h2 {
     margin: 0 0 12px;
-    font-size: 18px;
+    color: var(--user-text);
+    font-size: var(--user-text-h3, 17px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
   }
 }
 
@@ -247,7 +259,7 @@ onMounted(fetchDetail)
   align-self: start;
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 }
 
@@ -257,12 +269,14 @@ onMounted(fetchDetail)
 
 .side-title {
   margin-bottom: 10px;
-  font-weight: 700;
+  color: var(--user-text);
+  font-size: var(--user-text-body-sm, 13px);
+  font-weight: 600;
 }
 
 .side-muted {
   color: var(--user-text-muted);
-  font-size: 13px;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.6;
 }
 

@@ -17,6 +17,7 @@ const resumeApiMocks = vi.hoisted(() => ({
   getResumeOptimizeResultApi: vi.fn(),
   getResumeDetailApi: vi.fn(),
   optimizeResumeApi: vi.fn(),
+  clearDefaultResumeApi: vi.fn(),
   setDefaultResumeApi: vi.fn(),
   updateResumeApi: vi.fn(),
   updateResumeProjectApi: vi.fn()
@@ -27,15 +28,27 @@ const resumeVersionApiMocks = vi.hoisted(() => ({
   getResumeVersionsApi: vi.fn()
 }))
 
+const routerMocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  registerLeaveGuard: vi.fn()
+}))
+
+const elementPlusMocks = vi.hoisted(() => ({
+  alert: vi.fn(),
+  confirm: vi.fn()
+}))
+
 vi.mock('vue-router', () => ({
   useRoute: () => ({
     params: { id: '2' },
     query: {}
   }),
   useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn()
-  })
+    push: routerMocks.push,
+    replace: routerMocks.replace
+  }),
+  onBeforeRouteLeave: routerMocks.registerLeaveGuard
 }))
 
 vi.mock('@/api/resume', () => resumeApiMocks)
@@ -51,10 +64,7 @@ vi.mock('element-plus', () => ({
     success: vi.fn(),
     warning: vi.fn()
   },
-  ElMessageBox: {
-    alert: vi.fn(),
-    confirm: vi.fn()
-  }
+  ElMessageBox: elementPlusMocks
 }))
 
 const stubs = {
@@ -98,7 +108,20 @@ describe('ResumeEditView', () => {
     vi.clearAllMocks()
     setActivePinia(createPinia())
     resumeApiMocks.getResumeOptimizeRecordsApi.mockResolvedValue([])
-    resumeApiMocks.updateResumeApi.mockResolvedValue(undefined)
+    resumeApiMocks.updateResumeApi.mockResolvedValue({
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      draft: false,
+      projects: []
+    })
+    resumeApiMocks.clearDefaultResumeApi.mockResolvedValue(undefined)
     resumeApiMocks.setDefaultResumeApi.mockResolvedValue(undefined)
     resumeVersionApiMocks.getResumeVersionsApi.mockResolvedValue([])
     resumeVersionApiMocks.createResumeVersionApi.mockResolvedValue({
@@ -107,6 +130,7 @@ describe('ResumeEditView', () => {
       versionNo: 1,
       currentFlag: 1
     })
+    elementPlusMocks.confirm.mockResolvedValue(true)
   })
 
   it('hides the editor when the requested resume is unavailable', async () => {
@@ -166,6 +190,399 @@ describe('ResumeEditView', () => {
     expect(resumeVersionApiMocks.createResumeVersionApi).toHaveBeenCalledWith(2, {
       sourceType: 'MANUAL_SAVE'
     })
+  })
+
+  it('keeps the draft visible and allows retry after a save failure', async () => {
+    resumeApiMocks.getResumeDetailApi.mockResolvedValue({
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      projects: []
+    })
+    resumeApiMocks.updateResumeApi
+      .mockRejectedValueOnce(new Error('保存服务暂时不可用'))
+      .mockResolvedValueOnce({
+        id: 2,
+        resumeName: 'Java 后端简历',
+        realName: '测试用户',
+        targetPosition: 'Java 工程师',
+        skills: 'Java, Spring Boot',
+        summary: '',
+        workSummary: '',
+        education: '',
+        isDefault: 0,
+        draft: false,
+        projects: []
+      })
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: {
+          loading: () => undefined
+        },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    await wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('简历尚未保存')
+    expect(wrapper.text()).toContain('保存服务暂时不可用')
+    expect(wrapper.text()).toContain('Java 后端简历')
+
+    await wrapper.findAll('button').find((button) => button.text().includes('重试保存'))!.trigger('click')
+    await flushPromises()
+
+    expect(resumeApiMocks.updateResumeApi).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).not.toContain('简历尚未保存')
+  })
+
+  it('clears default status and reads the saved detail back after refresh', async () => {
+    const initialDetail = {
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '初始摘要',
+      workSummary: '',
+      education: '',
+      isDefault: 1,
+      projects: []
+    }
+    const refreshedDetail = {
+      ...initialDetail,
+      summary: '保存后的摘要',
+      isDefault: 0
+    }
+    resumeApiMocks.getResumeDetailApi
+      .mockResolvedValueOnce(initialDetail)
+      .mockResolvedValueOnce(refreshedDetail)
+    resumeApiMocks.updateResumeApi.mockResolvedValue({
+      ...initialDetail,
+      summary: '保存后的摘要',
+      isDefault: 1,
+      draft: false
+    })
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: {
+          loading: () => undefined
+        },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { form: { isDefault: number } }
+    vm.form.isDefault = 0
+    await wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+
+    expect(resumeApiMocks.updateResumeApi).toHaveBeenCalledWith(2, expect.objectContaining({
+      isDefault: 0,
+      summary: '初始摘要'
+    }))
+    expect(resumeApiMocks.clearDefaultResumeApi).toHaveBeenCalledWith(2)
+    expect(resumeApiMocks.getResumeDetailApi).toHaveBeenCalledTimes(2)
+    expect(vm.form.isDefault).toBe(0)
+    expect((wrapper.vm as unknown as { form: { summary: string } }).form.summary).toBe('保存后的摘要')
+  })
+
+  it('creates a new stable version after a draft save followed by complete save', async () => {
+    const detail = {
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '初始摘要',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      draft: false,
+      projects: []
+    }
+    resumeApiMocks.getResumeDetailApi.mockResolvedValue(detail)
+    resumeApiMocks.updateResumeApi.mockResolvedValue(detail)
+    resumeVersionApiMocks.getResumeVersionsApi.mockResolvedValue([{ id: 1, resumeId: 2 }])
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: { loading: () => undefined },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    await wrapper.findAll('.resume-workbench-topbar__action')
+      .find((button) => button.text().includes('保存草稿'))!
+      .trigger('click')
+    await flushPromises()
+    await wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+
+    expect(resumeApiMocks.updateResumeApi).toHaveBeenCalledTimes(2)
+    expect(resumeVersionApiMocks.getResumeVersionsApi).toHaveBeenCalledWith(2)
+    expect(resumeVersionApiMocks.createResumeVersionApi).toHaveBeenCalledWith(2, {
+      sourceType: 'MANUAL_SAVE'
+    })
+  })
+
+  it('persists inline edits to existing projects during complete resume save', async () => {
+    const project = {
+      projectId: 7,
+      projectName: '招聘平台',
+      projectTime: '2025.01 - 2025.06',
+      projectBackground: '招聘业务',
+      technicalChallenges: '服务拆分',
+      optimizationResult: '稳定性提升'
+    }
+    const detail = {
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '初始摘要',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      draft: false,
+      projects: [project]
+    }
+    resumeApiMocks.getResumeDetailApi.mockResolvedValue(detail)
+    resumeApiMocks.updateResumeApi.mockResolvedValue(detail)
+    resumeApiMocks.updateResumeProjectApi.mockResolvedValue(project)
+    resumeVersionApiMocks.getResumeVersionsApi.mockResolvedValue([])
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: { loading: () => undefined },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      projects: Array<{ projectId: number; projectName: string }>
+    }
+    vm.projects[0].projectName = '招聘平台重构'
+
+    await wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+
+    expect(resumeApiMocks.updateResumeProjectApi).toHaveBeenCalledWith(
+      2,
+      7,
+      expect.objectContaining({ projectName: '招聘平台重构' })
+    )
+    expect(resumeVersionApiMocks.createResumeVersionApi).toHaveBeenCalledWith(2, {
+      sourceType: 'MANUAL_SAVE'
+    })
+  })
+
+  it('reconciles created project ids before creating a stable version', async () => {
+    const detail = {
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '初始摘要',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      draft: false,
+      projects: []
+    }
+    resumeApiMocks.getResumeDetailApi
+      .mockResolvedValueOnce(detail)
+      .mockResolvedValue({
+        ...detail,
+        projects: [{
+          projectId: 701,
+          projectName: '新项目',
+          projectTime: '2026.01 - 2026.06'
+        }]
+      })
+    resumeApiMocks.updateResumeApi.mockResolvedValue(detail)
+    resumeApiMocks.createResumeProjectApi.mockResolvedValue({
+      projectId: 701,
+      projectName: '新项目',
+      projectTime: '2026.01 - 2026.06'
+    })
+    resumeVersionApiMocks.getResumeVersionsApi.mockResolvedValue([])
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: { loading: () => undefined },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { projects: Array<Record<string, unknown>> }
+    vm.projects.push({
+      projectId: -101,
+      projectName: '新项目',
+      projectTime: '2026.01 - 2026.06',
+      projectBackground: '',
+      technicalChallenges: '',
+      optimizationResult: ''
+    })
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+
+    expect(resumeApiMocks.updateResumeApi).toHaveBeenCalledTimes(1)
+    expect(vm.projects[0].projectId).toBe(701)
+    expect(resumeVersionApiMocks.createResumeVersionApi).toHaveBeenCalledWith(2, {
+      sourceType: 'MANUAL_SAVE'
+    })
+  })
+
+  it('keeps failed project drafts dirty and blocks stable version creation', async () => {
+    const detail = {
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '初始摘要',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      draft: false,
+      projects: []
+    }
+    resumeApiMocks.getResumeDetailApi.mockResolvedValue(detail)
+    resumeApiMocks.updateResumeApi.mockResolvedValue(detail)
+    resumeApiMocks.createResumeProjectApi.mockRejectedValue(new Error('项目保存失败'))
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: { loading: () => undefined },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      projects: Array<Record<string, unknown>>
+      hasUnsavedResumeChanges: boolean
+      saveError: string
+    }
+    vm.projects.push({
+      projectId: -101,
+      projectName: '失败项目草稿',
+      projectTime: '',
+      projectBackground: '',
+      technicalChallenges: '',
+      optimizationResult: ''
+    })
+
+    await wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+
+    expect(vm.hasUnsavedResumeChanges).toBe(true)
+    expect(vm.saveError).toContain('项目未保存成功')
+    expect(resumeVersionApiMocks.createResumeVersionApi).not.toHaveBeenCalled()
+  })
+
+  it('does not reload over edits made while a save request is pending', async () => {
+    const detail = {
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '初始摘要',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      draft: false,
+      projects: []
+    }
+    let resolveUpdate!: (value: typeof detail) => void
+    resumeApiMocks.getResumeDetailApi.mockResolvedValue(detail)
+    resumeApiMocks.updateResumeApi.mockReturnValue(new Promise((resolve) => {
+      resolveUpdate = resolve
+    }))
+    resumeVersionApiMocks.getResumeVersionsApi.mockResolvedValue([])
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: { loading: () => undefined },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      form: { summary: string }
+      hasUnsavedResumeChanges: boolean
+    }
+    const initialDetailCalls = resumeApiMocks.getResumeDetailApi.mock.calls.length
+    const savePromise = wrapper.find('.resume-workbench-topbar__action--primary').trigger('click')
+    await flushPromises()
+    vm.form.summary = '保存期间的新摘要'
+    resolveUpdate(detail)
+    await savePromise
+    await flushPromises()
+
+    expect(resumeApiMocks.getResumeDetailApi).toHaveBeenCalledTimes(initialDetailCalls)
+    expect(vm.form.summary).toBe('保存期间的新摘要')
+    expect(vm.hasUnsavedResumeChanges).toBe(true)
+  })
+
+  it('asks for confirmation before leaving with unsaved changes', async () => {
+    const detail = {
+      id: 2,
+      resumeName: 'Java 后端简历',
+      realName: '测试用户',
+      targetPosition: 'Java 工程师',
+      skills: 'Java, Spring Boot',
+      summary: '初始摘要',
+      workSummary: '',
+      education: '',
+      isDefault: 0,
+      draft: false,
+      projects: []
+    }
+    resumeApiMocks.getResumeDetailApi.mockResolvedValue(detail)
+
+    const wrapper = mount(ResumeEditView, {
+      global: {
+        directives: { loading: () => undefined },
+        stubs
+      }
+    })
+
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { form: { summary: string } }
+    vm.form.summary = '未保存的新摘要'
+    await wrapper.vm.$nextTick()
+    const leaveGuard = routerMocks.registerLeaveGuard.mock.calls.at(-1)?.[0] as
+      (() => Promise<boolean>) | undefined
+    expect(leaveGuard).toBeDefined()
+
+    elementPlusMocks.confirm.mockRejectedValueOnce(new Error('cancel'))
+    await expect(leaveGuard!()).resolves.toBe(false)
+    expect(elementPlusMocks.confirm).toHaveBeenCalled()
+
+    elementPlusMocks.confirm.mockResolvedValueOnce(true)
+    await expect(leaveGuard!()).resolves.toBe(true)
   })
 
   it('grants resume_section XP once only after a successful AI suggestion application', async () => {
@@ -247,38 +664,52 @@ describe('ResumeEditView', () => {
   })
 
   it('keeps the canvas central and both inspector modes in the right workbench column', () => {
-    const source = readFileSync(
+    const editSource = readFileSync(
       resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
       'utf8'
     )
-    const workbenchStyles = source.slice(source.lastIndexOf('// Resume workbench v2'))
+    const shellSource = readFileSync(
+      resolve(process.cwd(), 'src/views/resume/components/ResumeWorkbenchShell.vue'),
+      'utf8'
+    )
 
-    expect(workbenchStyles).toContain('grid-template-columns: 220px minmax(640px, 1fr) 370px')
-    expect(workbenchStyles).toMatch(/\.preview-column\s*\{[\s\S]*?grid-column:\s*2;/)
-    expect(workbenchStyles).toMatch(/\.editor-main,\s*[\s\S]*?\.editor-aside\s*\{[\s\S]*?grid-column:\s*3;/)
-    expect(workbenchStyles).toMatch(
-      /\.preview-column,\s*[\s\S]*?\.editor-aside\s*\{[\s\S]*?position:\s*static;[\s\S]*?align-self:\s*stretch;[\s\S]*?height:\s*100%;/
+    expect(editSource).toContain('<ResumeWorkbenchShell')
+    expect(editSource).toContain('class="resume-workbench-pane--preview content-card mobile-pane-preview"')
+    expect(editSource).toContain('class="editor-column resume-workbench-pane--editor mobile-pane-editor"')
+    expect(editSource).toContain('class="editor-column resume-workbench-pane--inspector mobile-pane-inspector"')
+    expect(editSource).toContain('id="resume-tab-review"')
+    expect(editSource).toContain('id="resume-tab-ai"')
+    expect(editSource).toContain('id="resume-panel-inspector"')
+    expect(shellSource).toContain('minmax(0, var(--workbench-editor-width))')
+    // v22 列序：preview 居右（col 3），editor 居中（col 2），由 Shell :slotted 托管
+    expect(shellSource).toMatch(
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*3;/
     )
-    expect(workbenchStyles).toMatch(
-      /\.editor-aside > \.side-panel:not\(\.section-nav-card\)\s*\{[\s\S]*?display:\s*block;/
+    expect(shellSource).toMatch(
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*2;/
     )
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
   })
 
   it('switches the resume workspace to stable mobile panes at the tablet breakpoint', () => {
-    const source = readFileSync(
+    const editSource = readFileSync(
       resolve(process.cwd(), 'src/views/resume/ResumeEditView.vue'),
       'utf8'
     )
-    const workbenchStyles = source.slice(source.lastIndexOf('// Resume workbench v2'))
+    const shellSource = readFileSync(
+      resolve(process.cwd(), 'src/views/resume/components/ResumeWorkbenchShell.vue'),
+      'utf8'
+    )
+    const workbenchStyles = editSource.slice(editSource.lastIndexOf('// Resume workbench v2'))
 
-    expect(workbenchStyles).toMatch(/\.preview-column\s*\{[\s\S]*?overflow:\s*hidden;/)
     expect(workbenchStyles).toMatch(/\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?overflow:\s*auto;[\s\S]*?scrollbar-gutter:\s*stable both-edges;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.editor-workspace\s*\{[\s\S]*?display:\s*block;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.mobile-pane-edit,\s*[\s\S]*?\.mobile-pane-preview\s*\{[\s\S]*?display:\s*none;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-edit \.mobile-pane-edit\s*\{[\s\S]*?display:\s*flex;/)
-    expect(workbenchStyles).toMatch(/@media \(max-width: 1020px\)[\s\S]*?\.is-mobile-preview \.mobile-pane-preview\s*\{[\s\S]*?display:\s*flex;/)
+    expect(workbenchStyles).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
+    expect(shellSource).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout\s*\{[\s\S]*?display:\s*block;/)
+    expect(shellSource).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout > :slotted\(\.mobile-pane-editor\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.mobile-pane-inspector\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.mobile-pane-preview\)\s*\{[\s\S]*?display:\s*none;/)
+    expect(shellSource).toMatch(/\.resume-workbench-layout\.is-mobile-edit > :slotted\(\.mobile-pane-editor\)\s*\{[\s\S]*?display:\s*flex;/)
+    expect(shellSource).toContain('.resume-workbench-layout.is-mobile-review > :slotted(.mobile-pane-inspector)')
+    expect(shellSource).toContain('.resume-workbench-layout.is-mobile-ai > :slotted(.mobile-pane-inspector)')
+    expect(shellSource).toMatch(/\.resume-workbench-layout\.is-mobile-preview > :slotted\(\.mobile-pane-preview\)\s*\{[\s\S]*?display:\s*flex;/)
+    expect(shellSource).toContain('visibility: visible;')
   })
 
   it('keeps mobile preview inside its pane and keeps the save action sticky', () => {
@@ -294,10 +725,10 @@ describe('ResumeEditView', () => {
     )
     expect(workbenchStyles).not.toMatch(/\.resume-paper-stage\s*\{[\s\S]*?width:\s*max-content;/)
     expect(workbenchStyles).toMatch(
-      /@media \(max-width: 1020px\)[\s\S]*?\.resume-paper-wrap\s*\{[\s\S]*?overflow-x:\s*hidden;/
+      /@media \(max-width: 1260px\)[\s\S]*?\.resume-paper-wrap\s*\{[\s\S]*?overflow-x:\s*hidden;/
     )
     expect(workbenchStyles).toMatch(
-      /@media \(max-width: 1020px\)[\s\S]*?\.resume-paper-stage\s*\{[\s\S]*?zoom:\s*1;/
+      /@media \(max-width: 1260px\)[\s\S]*?\.resume-paper-stage\s*\{[\s\S]*?zoom:\s*1;/
     )
     expect(workbenchStyles).toMatch(
       /\.form-actions\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?bottom:\s*0;/
@@ -319,6 +750,8 @@ describe('ResumeEditView', () => {
     expect(source).toMatch(
       /await formRef\.value\.validate\(\)[\s\S]*?catch \(failure\) \{[\s\S]*?await handleFormValidationFailure\(failure\)/
     )
-    expect(source).toContain("@update:model-value=\"clearResolvedValidation('skills', $event)\"")
+    // The skills field is a group editor now, so validation clears when the groups are applied
+    // instead of on a textarea model update.
+    expect(source).toContain("clearResolvedValidation('skills', form.skills)")
   })
 })

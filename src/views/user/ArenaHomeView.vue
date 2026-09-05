@@ -1,235 +1,246 @@
 <template>
   <div class="arena arena-home">
     <div class="arena-home__page">
-      <!-- 页头：问候 + 求职准备度 -->
-      <div class="arena-between arena-home__head">
-        <div>
-          <div class="arena-home__level">
-            求职准备 · {{ weekdayLabel }}
+      <HeroBand class="arena-home__head">
+        <template #eyebrow>{{ weekdayLabel }} · {{ businessDate }}</template>
+        <template #title>{{ greetingName }}，{{ headTitle }}</template>
+        <template #sub>
+          {{ allAgentTasksDone
+            ? '今天的任务已记录完成，回顾训练过程或安排下一步。'
+            : missions.length
+              ? `还有 ${missions.length} 项待推进任务，优先完成最重要的一项。`
+              : '根据现有资料补齐今天的第一项行动，建立稳定的求职闭环。' }}
+        </template>
+        <template #actions>
+          <button class="arena-btn arena-btn--sec" type="button" @click="go('/career-calendar')">
+            <CalendarDays :size="14" aria-hidden="true" />
+            跳到日历
+          </button>
+          <button class="arena-btn arena-btn--pri" type="button" @click="handlePrimaryAction">
+            <Sparkles :size="14" aria-hidden="true" />
+            {{ allAgentTasksDone ? '查看今日记录' : '生成今日计划' }}
+          </button>
+        </template>
+      </HeroBand>
+
+      <ModuleTabs :items="moduleTabs" />
+
+      <!-- V-01 · 今日关键指标（忠于原型 .kpi-row / .kpi）-->
+      <section class="arena-home__kpi-row" aria-label="今日关键指标">
+        <article
+          v-for="kpi in kpiCards"
+          :key="kpi.key"
+          class="arena-home__kpi"
+          :style="{ '--kpi-c': kpi.color }"
+        >
+          <span class="arena-home__kpi-icon">
+            <component :is="kpi.icon" :size="16" aria-hidden="true" />
+          </span>
+          <div class="arena-home__kpi-main">
+            <p class="arena-home__kpi-label">{{ kpi.label }}</p>
+            <p class="arena-home__kpi-val">{{ kpi.value }}</p>
           </div>
-          <h1 class="arena-h1 arena-home__title">{{ greetingName }}，{{ headTitle }}</h1>
-        </div>
-        <div class="arena-card arena-home__power">
-          <div
-            class="arena-ring"
-            :style="{
-              width: '56px',
-              height: '56px',
-              background: `conic-gradient(var(--arena-grn) 0 ${readinessRingScore}%, var(--arena-line) ${readinessRingScore}% 100%)`
-            }"
-          >
-            <div class="arena-ring__hole" style="width: 44px; height: 44px">
-              <b style="font-size: 15px; line-height: 1">{{ readinessDisplayScore }}</b>
-              <span class="arena-tiny" style="font-size: 8px; font-weight: 800">准备度</span>
-            </div>
-          </div>
-          <div>
-            <div style="font-size: 12px; font-weight: 800">Offer 就绪度</div>
-            <div class="arena-tiny" style="margin-top: 2px">
-              {{ readinessSummary }}
-            </div>
-          </div>
-        </div>
-      </div>
+          <span class="arena-home__kpi-delta" :class="{ 'is-up': kpi.tone === 'up' }">{{ kpi.delta }}</span>
+          <svg class="arena-home__kpi-spark" :viewBox="'0 0 ' + sparkW + ' ' + sparkH" preserveAspectRatio="none" aria-hidden="true">
+            <path :d="kpi.sparkFill" class="arena-home__kpi-spark-fill" />
+            <path :d="kpi.sparkLine" class="arena-home__kpi-spark-line" />
+          </svg>
+        </article>
+      </section>
 
       <!-- 加载骨架 -->
-      <div v-if="loading" class="arena-col" style="margin-top: 22px">
-        <div v-for="i in 3" :key="i" class="arena-card arena-home__skeleton"></div>
-      </div>
-
-      <!-- 错误态 -->
-      <div v-else-if="loadError" class="arena-card arena-home__error">
-        <b>今日任务未能加载</b>
-        <p class="arena-p">不影响已有进度，刷新重试一下。</p>
-        <button class="arena-btn arena-btn--pri" style="padding: 11px 22px" @click="loadAll(true)">重新加载</button>
+      <div v-if="loading" class="arena-home__grid">
+        <div class="arena-home__col">
+          <div v-for="i in 2" :key="i" class="arena-card arena-home__skeleton"></div>
+        </div>
+        <div class="arena-home__col">
+          <div v-for="i in 3" :key="i" class="arena-card arena-home__skeleton arena-home__skeleton--stat"></div>
+        </div>
       </div>
 
       <div v-else class="arena-home__grid">
-        <div class="arena-col">
-          <!-- 空态：无任务 -->
-          <template v-if="missions.length === 0">
-            <div class="arena-card arena-card--hero arena-home__boss">
-              <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-                <span class="arena-chip arena-chip--grn-solid">{{ allAgentTasksDone ? '今日完成' : '新的一天' }}</span>
-                <span class="arena-tiny">{{ allAgentTasksDone ? `业务日 ${businessDate}` : '约 8 分钟起步' }}</span>
-              </div>
-              <h2 class="arena-h2" style="margin-top: 13px">
-                {{ allAgentTasksDone ? '今天的训练已全部完成' : '今天还没有任务，先安排第一项' }}
-              </h2>
-              <p class="arena-p" style="margin-top: 9px">
-                {{ allAgentTasksDone
-                  ? '今日 Agent 任务均已记录为完成，可以查看完成记录或等待下一业务日。'
-                  : hasResume
-                    ? '生成今日计划，AI 教练会根据目标岗位安排重点任务。'
-                    : '先完成一份可用简历，再根据岗位要求进行匹配与训练。' }}
-              </p>
-              <div class="arena-row" style="margin-top: 18px">
-                <button
-                  class="arena-btn arena-btn--pri"
-                  style="padding: 13px 24px"
-                  @click="go(allAgentTasksDone || hasResume ? '/agent/today' : '/resumes')"
-                >
-                  {{ allAgentTasksDone ? '查看今日完成记录' : hasResume ? '生成今日计划' : '创建简历' }}
-                </button>
-              </div>
-            </div>
-          </template>
+        <!-- 左列：闭环引导 + 今日任务清单 -->
+        <div class="arena-home__col">
+          <div v-if="taskError" class="arena-card arena-home__notice">
+            <b>今日任务暂时无法更新</b>
+            <p>{{ taskError }}{{ tasks.length ? ' 当前展示上次成功加载的任务。' : '' }}</p>
+            <button class="arena-btn arena-btn--sec" :disabled="loading" @click="retryTasks">重新加载任务</button>
+          </div>
 
-          <template v-else>
-            <!-- 今日优先任务 -->
-            <div class="arena-card arena-card--hero arena-home__boss">
-              <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-                <span class="arena-chip arena-chip--grn-solid">今日优先任务</span>
-                <span class="arena-tiny">约 {{ missions[0].minutes }} 分钟</span>
+          <section class="arena-card arena-home__guide">
+            <div class="arena-home__guide-head">
+              <div>
+                <p class="arena-home__guide-kicker">
+                  {{ missions.length
+                    ? `今日计划进行中 · ${completedTaskCount} / ${tasks.length} 已完成`
+                    : `新的一天 · 约 ${guideMinutes} 分钟起步` }}
+                </p>
+                <h2>{{ guideTitle }}</h2>
               </div>
-              <h2 class="arena-h2" style="margin-top: 13px">{{ missions[0].title }}</h2>
-              <p class="arena-p" style="margin-top: 9px">{{ missions[0].reason }}</p>
-              <div class="arena-row" style="margin-top: 18px">
-                <button
-                  class="arena-btn arena-btn--pri"
-                  style="padding: 13px 24px"
-                  :disabled="completingId === missions[0].id"
-                  @click="enterMission(missions[0])"
-                >
-                  开始处理
-                </button>
-                <button
-                  class="arena-btn arena-btn--sec"
-                  style="padding: 12px 18px; font-size: 13.5px"
-                  :disabled="completingId === missions[0].id"
-                  @click="completeMission(missions[0])"
-                >
-                  {{ completingId === missions[0].id ? '正在保存…' : '标记为已完成' }}
-                </button>
-                <button
-                  class="arena-btn arena-btn--sec"
-                  style="padding: 12px 18px; font-size: 13.5px"
-                  @click="router.push('/questions/practice?mode=random&count=5')"
-                >
-                  先热身 5 题
-                </button>
-              </div>
+              <span class="arena-home__eyebrow arena-home__eyebrow--ai">AI 教练</span>
             </div>
+            <p class="arena-home__guide-copy">{{ guideCopy }}</p>
+            <div class="arena-home__chips">
+              <span v-for="chip in guideChips" :key="chip" class="arena-home__chip">{{ chip }}</span>
+            </div>
+            <button
+              v-if="showPlanAction"
+              class="arena-btn arena-btn--pri arena-home__guide-cta"
+              type="button"
+              @click="handlePrimaryAction"
+            >
+              {{ planActionLabel }}
+            </button>
+          </section>
 
-            <!-- 后续任务 -->
-            <div v-if="sideMissions.length" class="arena-home__side-grid">
-              <div v-for="(m, idx) in sideMissions" :key="m.id" class="arena-card arena-home__side">
-                <div class="arena-between">
-                  <span class="arena-chip arena-chip--grn">后续任务 {{ idx + 1 }}</span>
-                  <span class="arena-xp-tag">约 {{ m.minutes }} 分钟</span>
-                </div>
-                <div class="arena-h3" style="margin-top: 11px">{{ m.title }}</div>
-                <div class="arena-tiny" style="margin-top: 3px">{{ m.reason }} · {{ m.minutes }} 分钟</div>
-                <div class="arena-row" style="margin-top: 10px; gap: 12px">
-                  <button class="arena-btn arena-btn--txt" @click="enterMission(m)">去完成 →</button>
+          <section class="arena-card arena-home__list">
+            <div class="arena-home__list-head">
+              <h3>今日任务清单</h3>
+              <span class="arena-home__list-ratio">{{ completedTaskCount }} / {{ tasks.length }}</span>
+            </div>
+            <div v-if="taskRows.length" class="arena-home__list-body">
+              <div v-for="row in taskRows" :key="row.id" class="arena-home__task" :class="{ 'is-done': row.done }">
+                <label class="arena-home__check">
+                  <input
+                    type="checkbox"
+                    :checked="row.done"
+                    :disabled="row.done && completingId !== row.id"
+                    @change="completeMission(row)"
+                  />
+                  <span class="arena-home__box" aria-hidden="true"></span>
+                  <span class="arena-home__task-txt">{{ row.title }}</span>
+                </label>
+                <span class="arena-home__task-min">{{ row.minutes }} 分钟</span>
+                <div v-if="!row.done" class="arena-home__task-actions">
                   <button
                     class="arena-btn arena-btn--txt"
-                    :disabled="completingId === m.id"
-                    @click="completeMission(m)"
+                    type="button"
+                    :disabled="completingId === row.id"
+                    @click="enterMission(row)"
                   >
-                    {{ completingId === m.id ? '正在保存…' : '标记为已完成' }}
+                    去完成
+                  </button>
+                  <button
+                    class="arena-btn arena-btn--txt"
+                    type="button"
+                    :disabled="completingId === row.id"
+                    @click="completeMission(row)"
+                  >
+                    {{ completingId === row.id ? '正在保存…' : '标记为已完成' }}
                   </button>
                 </div>
               </div>
             </div>
-          </template>
-
-          <!-- 每日任务进度 -->
-          <div class="arena-card arena-card--treasure arena-home__chest">
-            <span style="font-size: 22px">✓</span>
-            <div style="flex: 1">
-              <div class="arena-h3" style="font-size: 13.5px">
-                {{ gameProfile.chestReady ? '今日任务已全部完成' : `完成全部 ${gameProfile.todayMissionTotal || 3} 项任务，更新今日记录` }}
-              </div>
-              <div class="arena-tiny" style="margin-top: 1px">
-                {{ gameProfile.chestReady ? '确认后将更新连续完成记录' : '完成后将更新连续完成记录' }}
-              </div>
-            </div>
-            <div class="arena-row" style="gap: 4px">
-              <span
-                v-for="i in Math.max(gameProfile.todayMissionTotal, 3)"
-                :key="i"
-                :class="i <= gameProfile.todayMissionDone ? 'arena-check' : 'arena-lock'"
-              >{{ i <= gameProfile.todayMissionDone ? '✓' : i }}</span>
-            </div>
-            <button
-              v-if="gameProfile.chestReady"
-              class="arena-btn arena-btn--pri"
-              style="padding: 10px 18px; font-size: 13px"
-              @click="claimChest"
-            >
-              确认完成
-            </button>
-          </div>
+            <p v-else-if="taskError" class="arena-home__list-empty">任务恢复前不会展示“今天没有任务”的空状态。</p>
+            <p v-else class="arena-home__list-empty">今天还没有任务，先生成今日计划。</p>
+          </section>
         </div>
 
-        <!-- 右栏 -->
-        <div class="arena-col">
-          <div class="arena-card arena-home__panel">
-            <div class="arena-h3">本周完成记录</div>
-            <div class="arena-streak" style="margin-top: 14px">
-              <div v-for="d in weekStreak" :key="d.label" class="arena-streak__day">
-                <div
-                  class="arena-streak__box"
-                  :class="d.state === 'done' ? 'arena-streak__box--done' : d.state === 'today' ? 'arena-streak__box--today' : 'arena-streak__box--todo'"
-                >{{ d.state === 'todo' ? '·' : '🔥' }}</div>
-                <div class="arena-tiny" :style="d.state === 'today' ? 'color: var(--arena-amber); font-weight: 800' : ''" style="margin-top: 4px; font-size: 10px">
-                  {{ d.label }}
-                </div>
-              </div>
+        <!-- 右列：就绪度 / 本周完成度 / 建议依据 -->
+        <div class="arena-home__col arena-home__col--rail">
+          <StatCard
+            label="Offer 就绪度"
+            :value="readinessDisplayScore"
+            :detail="readinessSummary"
+            :tone="readinessTone"
+            :progress="readinessScore"
+            test-id="readiness-metric"
+          />
+
+          <StatCard
+            label="本周完成度"
+            :value="`${weekCompletedCount} / ${weekTaskTotal}`"
+            :detail="weekTrend.length ? `近 7 日累计投入 ${weekMinutesTotal} 分钟` : '近 7 日完成数据加载中'"
+            :progress="weekCompletionProgress"
+          />
+
+          <section class="arena-card arena-home__evidence">
+            <div class="arena-home__list-head arena-home__list-head--plain">
+              <h3>建议依据</h3>
+              <span class="arena-home__eyebrow arena-home__eyebrow--ai">AI</span>
             </div>
-            <div class="arena-home__streak-note">
-              连续完成 <b style="color: var(--arena-amber)">{{ gameProfile.streakDays }} 天</b>
-              <span v-if="gameProfile.streakTodayDone"> · 今天已完成</span>
-              <span v-else> · 完成一项任务即可延续</span>
+            <div class="arena-home__evidence-body">
+              <p>{{ evidenceNote?.body || '完成简历、岗位和训练记录后，AI 会把下一步建议与你的真实资料关联起来。' }}</p>
+              <p class="arena-home__muted">更新简历版本后会自动回填到岗位匹配。</p>
             </div>
+          </section>
+
+          <div v-if="overviewError" class="arena-card arena-home__notice">
+            <b>资料概览暂时无法更新</b>
+            <p>{{ overviewError }}{{ hasOverview ? ' 当前展示上次成功加载的资料。' : '' }}</p>
+            <button class="arena-btn arena-btn--sec" :disabled="loading" @click="loadAll(true)">重新加载资料</button>
           </div>
 
-          <div class="arena-card arena-home__panel arena-home__offer">
-            <div class="arena-h3">求职准备清单</div>
-            <div class="arena-col" style="margin-top: 13px; gap: 10px; font-size: 12.5px">
-              <div class="arena-row" style="gap: 9px">
-                <span :style="`color: ${hasResume ? 'var(--arena-grn)' : 'var(--arena-mut)'}`">{{ hasResume ? '✓' : '○' }}</span>
-                <span :style="hasResume ? '' : 'color: var(--arena-mut)'">做出匹配简历</span>
-              </div>
-              <div class="arena-row" style="gap: 9px">
-                <span :style="`color: ${interviewCount >= 3 ? 'var(--arena-grn)' : 'var(--arena-mut)'}`">{{ interviewCount >= 3 ? '✓' : '○' }}</span>
-                <span :style="interviewCount >= 3 ? '' : 'color: var(--arena-mut)'">
-                  完成 3 场模拟面试（{{ Math.min(interviewCount, 3) }}/3）
-                </span>
-              </div>
-              <div class="arena-row" style="gap: 9px">
-                <span :style="`color: ${readinessScore !== undefined && readinessScore >= 80 ? 'var(--arena-grn)' : 'var(--arena-mut)'}`">{{ readinessScore !== undefined && readinessScore >= 80 ? '✓' : '○' }}</span>
-                <span :style="readinessScore !== undefined && readinessScore >= 80 ? '' : 'color: var(--arena-mut)'">
-                  {{ readinessScore === undefined ? '准备度尚无可解释快照' : `准备度达到 80（${readinessScore}/80）` }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="arena-card arena-home__ai-note">
-            <div class="arena-row" style="gap: 8px">
-              <span class="arena-ai-badge">✦ AI</span>
-              <b style="font-size: 12.5px">{{ evidenceNote?.title || '建议依据' }}</b>
-            </div>
-            <p class="arena-tiny" style="margin-top: 8px; line-height: 1.6">
-              {{ evidenceNote?.body || '完成简历、岗位和训练记录后，AI 会把下一步建议与你的真实资料关联起来。' }}
-            </p>
+          <div v-if="readinessError" class="arena-card arena-home__notice">
+            <b>准备度暂时无法更新</b>
+            <p>{{ readinessError }}{{ readinessSnapshot ? ' 当前展示上次成功加载的准备度。' : '' }}</p>
+            <button class="arena-btn arena-btn--sec" :disabled="loading" @click="loadAll(true)">重新加载准备度</button>
           </div>
         </div>
       </div>
+
+      <!-- V-01 · 数据洞察：训练时长面积图 + 目标完成环形图（忠于原型 today.overview）-->
+      <section v-if="!loading" class="arena-home__insights" aria-label="今日数据洞察">
+        <article class="arena-card arena-home__card arena-home__chart">
+          <header class="arena-home__chart-head">
+            <h3>本周训练时长</h3>
+            <span class="arena-home__eyebrow arena-home__eyebrow--ai">近 7 日</span>
+          </header>
+          <svg v-if="hasArea" class="arena-home__area" :viewBox="'0 0 ' + AREA_W + ' ' + AREA_H" preserveAspectRatio="none" role="img" aria-label="本周训练时长趋势">
+            <defs>
+              <linearGradient :id="areaFillId" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" :stop-color="areaLineColor" stop-opacity="0.26" />
+                <stop offset="100%" :stop-color="areaLineColor" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path :d="areaFillPath" :fill="'url(#' + areaFillId + ')'" />
+            <path :d="areaLinePath" fill="none" :stroke="areaLineColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+            <circle v-for="(pt, i) in areaPoints" :key="i" :cx="pt.x" :cy="pt.y" r="3" :fill="areaLineColor" />
+            <text v-for="(d, i) in areaDayLabels" :key="'d' + i" :x="d.x" y="164" class="arena-home__area-label">{{ d.label }}</text>
+          </svg>
+          <p v-else class="arena-home__list-empty">近 7 日训练数据加载中，稍后自动回填。</p>
+        </article>
+
+        <article class="arena-card arena-home__card arena-home__donut">
+          <header class="arena-home__chart-head">
+            <h3>目标完成</h3>
+            <span class="arena-home__eyebrow arena-home__eyebrow--ai">本周</span>
+          </header>
+          <div class="arena-home__donut-wrap">
+            <svg class="arena-home__donut-svg" viewBox="0 0 140 140" role="img" :aria-label="'目标完成 ' + weekCompletionProgress + '%'">
+              <circle cx="70" cy="70" r="56" fill="none" stroke="var(--user-border)" stroke-width="12" />
+              <circle
+                cx="70" cy="70" r="56" fill="none"
+                :stroke="areaLineColor" stroke-width="12" stroke-linecap="round"
+                :stroke-dasharray="donutCirc"
+                :stroke-dashoffset="donutOffset"
+                transform="rotate(-90 70 70)"
+              />
+              <text x="70" y="68" text-anchor="middle" class="arena-home__donut-val">{{ weekCompletionProgress }}%</text>
+              <text x="70" y="88" text-anchor="middle" class="arena-home__donut-sub">完成度</text>
+            </svg>
+          </div>
+        </article>
+      </section>
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { CalendarDays, Sparkles, ListTodo, CheckCircle2, Clock, Flame } from 'lucide-vue-next'
+import { computed, onMounted, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { completeAgentTaskApi } from '@/api/agent'
+import { getPersonalTaskTrendApi } from '@/api/analytics'
 import { fetchCachedDashboardOverview, fetchCachedTodayAgentTasks } from '@/composables/useUserHomeDataCache'
 import { getV3DashboardOverviewApi } from '@/api/dashboard'
 import { getLatestJobReadinessApi } from '@/api/jobRequirement'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import HeroBand from '@/components/user-ui/HeroBand.vue'
+import StatCard from '@/components/user-ui/StatCard.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { useGameProfileStore, type XpEventKey } from '@/features/game-profile'
 import { buildAgentTaskActionPath, hasAgentTaskActionEntry } from '@/utils/agentTaskAction'
 import { getErrorMessage } from '@/utils/error'
@@ -237,6 +248,7 @@ import { formatDateInTimezone } from '@/utils/format'
 import { sanitizeLocalActionPath } from '@/utils/routeSecurity'
 import { useAuthStore } from '@/stores/auth'
 import type { AgentTaskVO } from '@/types/agent'
+import type { TrendPointVO } from '@/types/analytics'
 import type { UserDashboardOverviewVO, V3DashboardOverviewVO } from '@/types/dashboard'
 import type { JobReadinessSnapshotVO } from '@/types/jobRequirement'
 
@@ -252,24 +264,62 @@ interface Mission {
 }
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('today')
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 
 const loading = ref(true)
-const loadError = ref('')
+const taskError = ref('')
+const overviewError = ref('')
+const readinessError = ref('')
 const completingId = ref<number | null>(null)
 const tasks = ref<AgentTaskVO[]>([])
 const overview = ref<UserDashboardOverviewVO | null>(null)
 const v3Overview = ref<V3DashboardOverviewVO | null>(null)
 const readinessSnapshot = ref<JobReadinessSnapshotVO | null>(null)
-const chestNotice = ref('')
+
+// —— 近 7 日完成度（真实数据：/analytics/personal/task-trend，仅用于右侧统计卡）——
+interface WeekTrendPoint {
+  date: string
+  minutes: number
+  completed: number
+  generated: number
+}
+const weekTrend = ref<WeekTrendPoint[]>([])
+
+const loadWeekTrend = async () => {
+  try {
+    const points: TrendPointVO[] = await getPersonalTaskTrendApi({ days: 7 })
+    weekTrend.value = points.map((point) => ({
+      date: point.date,
+      minutes: Number(point.completedMinutes || 0),
+      completed: Number(point.completedCount || 0),
+      generated: Number(point.generatedCount || 0)
+    }))
+  } catch {
+    // 趋势是增益信息，加载失败时统计卡降级展示，不影响首页主流程
+    weekTrend.value = []
+  }
+}
+
+const weekMinutesTotal = computed(() => weekTrend.value.reduce((sum, point) => sum + point.minutes, 0))
+const weekCompletedCount = computed(() => weekTrend.value.reduce((sum, point) => sum + point.completed, 0))
+const weekTaskTotal = computed(() =>
+  Math.max(
+    weekTrend.value.reduce((sum, point) => sum + Math.max(point.generated, point.completed), 0),
+    weekTrend.value.length
+  )
+)
+const weekCompletionProgress = computed(() =>
+  weekTaskTotal.value ? Math.round((weekCompletedCount.value / weekTaskTotal.value) * 100) : 0
+)
 
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
 const greetingName = computed(() => authStore.userInfo?.nickname || authStore.userInfo?.username || '同学')
 
 const hasResume = computed(() => (overview.value?.resumeCount ?? 0) > 0)
-const interviewCount = computed(() => overview.value?.interviewCount ?? 0)
+const hasOverview = computed(() => overview.value !== null)
 const businessDate = computed(() => overview.value?.businessDate || formatDateInTimezone(new Date(), 'Asia/Shanghai'))
 const toUtcCalendarDate = (value: string) => {
   const [year, month, day] = value.split('-').map(Number)
@@ -280,6 +330,9 @@ const weekdayLabel = computed(() => WEEKDAY_LABELS[businessCalendarDate.value.ge
 const allAgentTasksDone = computed(() =>
   tasks.value.length > 0 && tasks.value.every((task) => String(task.status || '').toUpperCase() === 'DONE')
 )
+const completedTaskCount = computed(() =>
+  tasks.value.filter((task) => String(task.status || '').toUpperCase() === 'DONE').length
+)
 
 const readinessScore = computed(() => {
   const snapshot = readinessSnapshot.value
@@ -287,10 +340,13 @@ const readinessScore = computed(() => {
   const score = Number(snapshot.readinessScore ?? snapshot.overallScore)
   return Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : undefined
 })
-const readinessRingScore = computed(() => readinessScore.value ?? 0)
 const readinessDisplayScore = computed(() => readinessScore.value ?? '--')
+const readinessTone = computed(() => (readinessScore.value === undefined ? 'warning' : 'default'))
 const readinessSummary = computed(() => {
   const snapshot = readinessSnapshot.value
+  if (readinessError.value) {
+    return snapshot ? '当前展示上次成功加载的准备度' : readinessError.value
+  }
   if (readinessScore.value !== undefined) {
     const missing = Number(snapshot?.missingCount ?? 0)
     return missing > 0 ? `仍有 ${missing} 项岗位要求待补齐` : '当前快照未识别出待补齐的岗位要求'
@@ -324,34 +380,163 @@ const xpEventForTask = (task: AgentTaskVO): XpEventKey => {
   return hit ? hit[1] : 'jd_paste'
 }
 
+const asMission = (task: AgentTaskVO): Mission => {
+  const xpEvent = xpEventForTask(task)
+  return {
+    id: task.id,
+    title: task.title || '今日训练任务',
+    reason: task.reason || task.description || '按你的目标岗位与最近练习推荐',
+    minutes: task.estimatedMinutes ?? task.estimatedEffortMinutes ?? 10,
+    xp: XP_OF_EVENT[xpEvent],
+    xpEvent,
+    actionPath: hasAgentTaskActionEntry(task) ? sanitizeLocalActionPath(buildAgentTaskActionPath(task)) : null,
+    raw: task
+  }
+}
+
 const OPEN_STATUS = new Set(['TODO', 'DOING'])
+const isDoneTask = (task: AgentTaskVO) => String(task.status || 'TODO').toUpperCase() === 'DONE'
+
+// —— V-01 · 今日关键指标（忠于原型 .kpi 行 + today.overview 图表）——
+const KPI_ICONS: Record<string, Component> = { todo: ListTodo, done: CheckCircle2, time: Clock, streak: Flame }
+const openTaskCount = computed(() => tasks.value.filter((task) => !isDoneTask(task)).length)
+
+const sparkW = 120
+const sparkH = 36
+function sparkPaths(values: number[], w: number, h: number, pad = 3) {
+  const safe = values.length ? values : [0, 0, 0, 0, 0, 0, 0]
+  const max = Math.max(...safe)
+  const min = Math.min(...safe, 0)
+  const range = max - min || 1
+  const stepX = safe.length > 1 ? (w - pad * 2) / (safe.length - 1) : 0
+  const pts = safe.map((v, i) => {
+    const x = Number((pad + i * stepX).toFixed(1))
+    const y = Number((pad + (h - pad * 2) * (1 - (v - min) / range)).toFixed(1))
+    return [x, y] as [number, number]
+  })
+  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ')
+  const fill = `${line} L${pts[pts.length - 1][0]},${h} L${pts[0][0]},${h} Z`
+  return { line, fill }
+}
+
+const kpiCards = computed(() => {
+  const trend = (sel: (p: WeekTrendPoint) => number) =>
+    weekTrend.value.length ? weekTrend.value.map(sel) : [0, 0, 0, 0, 0, 0, 0]
+  const build = (
+    key: string,
+    label: string,
+    value: string,
+    color: string,
+    icon: Component,
+    delta: string,
+    tone: 'flat' | 'up',
+    vals: number[]
+  ) => {
+    const { line, fill } = sparkPaths(vals, sparkW, sparkH)
+    return { key, label, value, color, icon, delta, tone, sparkLine: line, sparkFill: fill }
+  }
+  return [
+    build('todo', '待办任务', String(openTaskCount.value), '#1f6f5c', KPI_ICONS.todo, openTaskCount.value ? `剩 ${openTaskCount.value} 项` : '已全部清空', openTaskCount.value ? 'flat' : 'up', trend((p) => p.generated)),
+    build('done', '本周完成', String(weekCompletedCount.value), '#2f6f8f', KPI_ICONS.done, weekCompletedCount.value ? `近 7 日 +${weekCompletedCount.value}` : '近 7 日', weekCompletedCount.value ? 'up' : 'flat', trend((p) => p.completed)),
+    build('time', '训练时长', `${weekMinutesTotal.value} 分钟`, '#b08534', KPI_ICONS.time, weekMinutesTotal.value ? '近 7 日' : '等待记录', weekMinutesTotal.value ? 'up' : 'flat', trend((p) => p.minutes)),
+    build('streak', '连续天数', String(gameProfile.streakDays), '#a8504e', KPI_ICONS.streak, gameProfile.streakDays ? '连续打卡' : '今日开启', gameProfile.streakDays ? 'up' : 'flat', trend((p) => p.completed))
+  ]
+})
+
+// 训练时长面积图（忠于原型 today.overview 的 area 生成器）
+const AREA_W = 520
+const AREA_H = 170
+const areaFillId = 'arena-kpi-area-fill'
+const areaLineColor = 'var(--user-primary, #1f6f5c)'
+const areaChart = computed(() => {
+  const vals = weekTrend.value.map((p) => p.minutes)
+  if (vals.length < 2) return null
+  const w = AREA_W
+  const h = AREA_H
+  const padX = 14
+  const top = 14
+  const bottom = 146
+  const max = Math.max(...vals, 1)
+  const range = max || 1
+  const stepX = (w - padX * 2) / (vals.length - 1)
+  const pts = vals.map((v, i) => {
+    const x = Number((padX + i * stepX).toFixed(1))
+    const y = Number((top + (bottom - top) * (1 - v / range)).toFixed(1))
+    return [x, y] as [number, number]
+  })
+  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ')
+  const fill = `${line} L${pts[pts.length - 1][0]},${bottom + 6} L${pts[0][0]},${bottom + 6} Z`
+  const dayLabels = weekTrend.value.map((p, i) => ({ x: pts[i][0], label: String(p.date).slice(5) }))
+  return { line, fill, points: pts.map((p) => ({ x: p[0], y: p[1] })), dayLabels }
+})
+const hasArea = computed(() => areaChart.value !== null)
+const areaFillPath = computed(() => areaChart.value?.fill ?? '')
+const areaLinePath = computed(() => areaChart.value?.line ?? '')
+const areaPoints = computed(() => areaChart.value?.points ?? [])
+const areaDayLabels = computed(() => areaChart.value?.dayLabels ?? [])
+
+// 目标完成环形图（忠于原型 today.overview 的 donut 生成器）
+const DONUT_R = 56
+const DONUT_C = 2 * Math.PI * DONUT_R
+const donutCirc = DONUT_C.toFixed(1)
+const donutOffset = computed(() => (DONUT_C * (1 - weekCompletionProgress.value / 100)).toFixed(1))
+
 
 const missions = computed<Mission[]>(() =>
-  tasks.value
-    .filter((task) => OPEN_STATUS.has(String(task.status || 'TODO').toUpperCase()))
-    .slice(0, 3)
-    .map((task) => {
-      const xpEvent = xpEventForTask(task)
-      return {
-        id: task.id,
-        title: task.title || '今日训练任务',
-        reason: task.reason || task.description || '按你的目标岗位与最近练习推荐',
-        minutes: task.estimatedMinutes ?? task.estimatedEffortMinutes ?? 10,
-        xp: XP_OF_EVENT[xpEvent],
-        xpEvent,
-        actionPath: hasAgentTaskActionEntry(task) ? sanitizeLocalActionPath(buildAgentTaskActionPath(task)) : null,
-        raw: task
-      }
-    })
+  tasks.value.filter((task) => OPEN_STATUS.has(String(task.status || 'TODO').toUpperCase())).slice(0, 3).map(asMission)
 )
 
-const sideMissions = computed(() => missions.value.slice(1))
+/** 任务清单行：未完成任务在前，已完成任务以勾选态留在清单内可回顾 */
+interface TaskRow extends Mission {
+  done: boolean
+}
+const taskRows = computed<TaskRow[]>(() => {
+  const open = tasks.value.filter((task) => !isDoneTask(task)).map((task) => ({ ...asMission(task), done: false }))
+  const done = tasks.value.filter(isDoneTask).map((task) => ({ ...asMission(task), done: true }))
+  return [...open, ...done]
+})
 
 const headTitle = computed(() => {
   if (allAgentTasksDone.value) return '今日计划已完成'
   if (missions.value.length === 0) return '安排第一项任务'
   if (missions.value.length === 1) return '完成今日重点任务'
-  return `今天安排 ${missions.value.length} 项任务`
+  return `先把今天的 ${missions.value.length} 项任务清掉`
+})
+
+const guideMinutes = computed(() => missions.value[0]?.minutes ?? 8)
+
+const guideTitle = computed(() => {
+  if (taskError.value && tasks.value.length === 0) return '今日任务尚未加载'
+  if (allAgentTasksDone.value) return '今天的训练已全部完成'
+  if (missions.value.length > 0) return `优先完成「${missions.value[0].title}」`
+  if (!hasOverview.value) return '资料概览尚未加载'
+  if (!hasResume.value) return '先完成一份可用简历'
+  return '先安排第一项任务，把今天的闭环跑通'
+})
+
+const guideCopy = computed(() => {
+  if (taskError.value && tasks.value.length === 0) return '请重新加载任务；恢复前不会展示“今天没有任务”的空状态。'
+  if (allAgentTasksDone.value) return '今日 Agent 任务均已记录为完成，可以查看完成记录或等待下一业务日。'
+  if (missions.value.length > 0) return missions.value[0].reason
+  if (!hasOverview.value) return '重新加载资料后，系统才能确认简历状态并给出下一步建议。'
+  if (!hasResume.value) return '先完成一份可用简历，再根据岗位要求进行匹配与训练。'
+  return '点击下方“生成今日计划”，AI 会根据你的目标岗位、近期进度和薄弱点，定制当日必做任务。'
+})
+
+const guideChips = computed(() => {
+  if (missions.value.length > 0) return missions.value.map((mission) => `${mission.minutes} 分钟 · ${mission.title}`)
+  return ['补 1 个岗位证据', '跑 1 轮推荐题组', '提交 1 份今日打卡']
+})
+
+const showPlanAction = computed(
+  () => missions.value.length === 0 || allAgentTasksDone.value || !hasOverview.value
+)
+
+const planActionLabel = computed(() => {
+  if (allAgentTasksDone.value) return '查看今日完成记录'
+  if (!hasOverview.value) return '重新加载资料'
+  if (missions.value.length > 0) return '生成今日计划'
+  return hasResume.value ? '生成今日计划' : '创建简历'
 })
 
 const evidenceNote = computed(() => {
@@ -366,31 +551,6 @@ const evidenceNote = computed(() => {
     return { title: '建议依据', body: '来自你的目标岗位与最近练习记录。样本不足时会降级为通用推荐，不影响开练。' }
   }
   return null
-})
-
-/** 本周连续完成记录推导：以 streakLastDate 为终点向前连续标记（mock 层展示推导） */
-const weekStreak = computed(() => {
-  const today = businessCalendarDate.value
-  const mondayOffset = (today.getUTCDay() + 6) % 7
-  const days: Array<{ label: string; state: 'done' | 'today' | 'todo' }> = []
-  const labels = ['一', '二', '三', '四', '五', '六', '日']
-  const lastDate = gameProfile.streakLastDate ? toUtcCalendarDate(gameProfile.streakLastDate) : null
-
-  for (let i = 0; i < 7; i += 1) {
-    const date = new Date(today.getTime())
-    date.setUTCDate(today.getUTCDate() - mondayOffset + i)
-    const isToday = i === mondayOffset
-    const isFuture = date.getTime() > today.getTime()
-    let state: 'done' | 'today' | 'todo' = 'todo'
-    if (lastDate && !isFuture) {
-      const diffDays = Math.round((lastDate.getTime() - date.getTime()) / 86400000)
-      if (diffDays >= 0 && diffDays < gameProfile.streakDays) state = 'done'
-    }
-    if (isToday && state === 'done') state = 'today'
-    else if (isToday) state = gameProfile.streakTodayDone ? 'today' : 'todo'
-    days.push({ label: isToday ? '今天' : labels[i], state })
-  }
-  return days.slice(0, 5).concat(days.slice(5))
 })
 
 const go = (path: string) => {
@@ -414,20 +574,30 @@ const completeMission = async (mission: Mission) => {
     if (grant) gameProfile.completeMission()
     tasks.value = tasks.value.map((task) => (task.id === mission.id ? { ...task, status: 'DONE' } : task))
   } catch (error) {
-    loadError.value = getErrorMessage(error, '任务完成失败，请稍后重试。')
+    taskError.value = getErrorMessage(error, '任务完成失败，请稍后重试。')
   } finally {
     completingId.value = null
   }
 }
 
-const claimChest = () => {
-  const grant = gameProfile.claimChest()
-  chestNotice.value = grant ? '今日完成记录已更新' : ''
+const handlePrimaryAction = () => {
+  if (allAgentTasksDone.value) {
+    go('/agent/today')
+    return
+  }
+  if (!hasOverview.value) {
+    void loadAll(true)
+    return
+  }
+  go(hasResume.value ? '/agent/today' : '/resumes')
+}
+
+const retryTasks = () => {
+  void loadAll(true)
 }
 
 const loadAll = async (force = false) => {
   loading.value = true
-  loadError.value = ''
   try {
     const [overviewRes, v3OverviewRes] = await Promise.allSettled([
       fetchCachedDashboardOverview(force),
@@ -435,6 +605,9 @@ const loadAll = async (force = false) => {
     ])
     if (overviewRes.status === 'fulfilled') {
       overview.value = overviewRes.value
+      overviewError.value = ''
+    } else {
+      overviewError.value = getErrorMessage(overviewRes.reason, '资料概览加载失败，请稍后重试。')
     }
     if (v3OverviewRes.status === 'fulfilled') {
       v3Overview.value = v3OverviewRes.value
@@ -443,159 +616,343 @@ const loadAll = async (force = false) => {
       )
       if (Number.isFinite(targetJobId) && targetJobId > 0) {
         try {
-          readinessSnapshot.value = await getLatestJobReadinessApi(targetJobId)
-        } catch {
-          readinessSnapshot.value = null
+          readinessSnapshot.value = await getLatestJobReadinessApi(targetJobId, {
+            silentError: true
+          })
+          readinessError.value = ''
+        } catch (error) {
+          readinessError.value = getErrorMessage(error, '准备度加载失败，请稍后重试。')
         }
       } else {
         readinessSnapshot.value = null
+        readinessError.value = ''
       }
+    } else {
+      readinessError.value = getErrorMessage(v3OverviewRes.reason, '准备度所需资料加载失败，请稍后重试。')
     }
     const [taskRes] = await Promise.allSettled([
       fetchCachedTodayAgentTasks(businessDate.value, force)
     ])
     if (taskRes.status === 'fulfilled') {
       tasks.value = Array.isArray(taskRes.value?.tasks) ? taskRes.value.tasks : []
+      taskError.value = ''
+      gameProfile.syncMissionTotal(tasks.value.length)
     } else {
-      tasks.value = []
+      taskError.value = getErrorMessage(taskRes.reason, '今日任务加载失败，请稍后重试。')
     }
-    if (taskRes.status === 'rejected' && overviewRes.status === 'rejected') {
-      loadError.value = getErrorMessage(taskRes.reason, '加载失败')
-    }
-    gameProfile.syncMissionTotal(tasks.value.length)
   } finally {
     loading.value = false
   }
 }
 
 onMounted(async () => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   await loadAll()
+  // 趋势统计非首屏关键路径，不阻塞主数据
+  void loadWeekTrend()
 })
 </script>
 
 <style scoped lang="scss">
 .arena-home {
-  min-height: calc(100vh - 64px);
   width: 100%;
   margin: 0;
 
   &__page {
-    max-width: 1060px;
+    width: min(100%, var(--user-content-max, 1440px));
     margin: 0 auto;
-    padding: 28px 34px 42px;
-    position: relative;
-    z-index: 1;
+    padding: 24px 24px 40px;
   }
 
-  &__head {
+  &__eyebrow {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: var(--user-radius-full, 999px);
+    background: var(--user-primary-soft);
+    color: var(--user-primary);
+    font-size: var(--user-text-overline, 11px);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+
+    &--ai {
+      background: var(--user-ai-soft);
+      color: var(--user-ai);
+    }
+  }
+
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--user-primary);
+  }
+
+  // ---- 两列工作区（原型 .grid-2-1）----
+  &__grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  &__col {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  &__col--rail {
+    gap: 12px;
+  }
+
+  // ---- 闭环引导卡 ----
+  &__guide {
+    padding: 20px;
+  }
+
+  &__guide-head {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+
+    h2 {
+      margin: 4px 0 0;
+      color: var(--user-text);
+      font-size: var(--user-text-h3, 17px);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.35;
+    }
+  }
+
+  &__guide-kicker {
+    margin: 0;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-caption, 12px);
+  }
+
+  &__guide-copy {
+    margin: 0 0 16px;
+    color: var(--user-text-secondary);
+    font-size: var(--user-text-body-sm, 13px);
+    line-height: 1.6;
+  }
+
+  &__chips {
+    display: flex;
     flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
   }
 
-  &__level {
-    font-size: 12.5px;
-    font-weight: 800;
-    color: var(--arena-grn-d);
+  &__chip {
+    padding: 4px 10px;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-full, 999px);
+    background: var(--user-surface-muted);
+    color: var(--user-text-secondary);
+    font-size: var(--user-text-caption, 12px);
+    font-weight: 500;
   }
 
-  &__title {
-    margin-top: 5px;
+  &__guide-cta {
+    height: 40px;
+    padding: 0 22px;
   }
 
-  &__power {
+  // ---- 今日任务清单 ----
+  &__list-head {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 12px 18px;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--user-border);
+
+    h3 {
+      margin: 0;
+      color: var(--user-text);
+      font-size: var(--user-text-h4, 15px);
+      font-weight: 600;
+    }
   }
 
-  &__grid {
-    margin-top: 22px;
-    display: grid;
-    grid-template-columns: 1.55fr 1fr;
-    gap: 20px;
+  &__list-head--plain {
+    padding: 16px 20px;
   }
 
-  &__boss {
-    padding: 24px 26px;
+  &__list-ratio {
+    color: var(--user-text-muted);
+    font-size: var(--user-text-body-sm, 13px);
+    font-variant-numeric: tabular-nums;
   }
 
-  &__side-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
+  &__list-body {
+    padding: 8px;
   }
 
-  &__side {
-    padding: 18px 20px;
-  }
+  &__task {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 8px 12px;
+    border-radius: var(--user-radius-md, 10px);
 
-  &__side-grid--empty {
-    .arena-home__side {
-      background: linear-gradient(135deg, #fff, #f7faf7);
-      border-style: dashed;
+    &:hover {
+      background: var(--user-surface-muted);
     }
 
-    .arena-home__placeholder-status {
-      display: inline-flex;
-      align-items: center;
-      min-height: 28px;
-      margin-top: 12px;
-      color: var(--arena-mut);
-      font-size: 12px;
-      font-weight: 700;
+    &.is-done .arena-home__task-txt {
+      color: var(--user-text-muted);
+      text-decoration: line-through;
     }
+  }
 
-    .is-placeholder {
-      color: var(--arena-mut);
-      cursor: default;
+  &__check {
+    display: inline-flex;
+    flex: 1 1 240px;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    cursor: pointer;
+
+    input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
       pointer-events: none;
     }
   }
 
-  &__chest {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 15px 20px;
-  }
-
-  &__panel {
-    padding: 20px 22px;
-  }
-
-  &__offer {
-    background: linear-gradient(150deg, #fff, #f0fbf4);
-  }
-
-  &__streak-note {
-    margin-top: 14px;
-    padding-top: 13px;
-    border-top: 1.5px dashed var(--arena-line);
+  &__box {
+    display: grid;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    border: 1.5px solid var(--user-border-strong);
+    border-radius: var(--user-radius-sm, 6px);
     font-size: 12px;
-    color: var(--arena-sub);
-    text-align: center;
+    font-weight: 600;
+    line-height: 1;
+    color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
 
-  &__ai-note {
-    padding: 16px 20px;
-    border-left: 3px solid var(--arena-vio);
+  &__check input:checked + &__box {
+    border-color: var(--user-primary);
+    background: var(--user-primary);
+    color: var(--user-primary-contrast, #fff);
+
+    &::after {
+      content: '✓';
+    }
+  }
+
+  &__check input:focus-visible + &__box {
+    outline: 2px solid var(--user-accent-ring, var(--user-primary));
+    outline-offset: 2px;
+  }
+
+  &__task-txt {
+    min-width: 0;
+    color: var(--user-text);
+    font-size: var(--user-text-body, 14px);
+    line-height: 1.45;
+  }
+
+  &__task-min {
+    flex: none;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-caption, 12px);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__task-actions {
+    display: flex;
+    flex: none;
+    gap: 8px;
+
+    .arena-btn {
+      padding: 4px 8px;
+      font-size: 12.5px;
+    }
+  }
+
+  &__list-empty {
+    margin: 0;
+    padding: 20px;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-body-sm, 13px);
+  }
+
+  &__muted {
+    color: var(--user-text-muted);
+  }
+
+  // ---- 建议依据 ----
+  &__evidence-body {
+    padding: 16px 20px 18px;
+
+    p {
+      margin: 0 0 8px;
+      color: var(--user-text-secondary);
+      font-size: var(--user-text-body-sm, 13px);
+      line-height: 1.7;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  // ---- 模块级错误提示 ----
+  &__notice {
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+    padding: 16px 18px;
+    border-color: color-mix(in srgb, var(--user-warning) 40%, var(--user-border));
+    background: var(--user-warning-soft);
+
+    b {
+      color: var(--user-text);
+      font-size: var(--user-text-body, 14px);
+      font-weight: 600;
+    }
+
+    p {
+      margin: 0;
+      color: var(--user-text-secondary);
+      font-size: var(--user-text-body-sm, 13px);
+      line-height: 1.6;
+    }
+
+    .arena-btn {
+      height: 32px;
+      padding: 0 14px;
+      font-size: 12.5px;
+    }
   }
 
   &__skeleton {
-    height: 120px;
-    background: linear-gradient(90deg, #fff, #f4f7f4, #fff);
+    height: 140px;
+
+    &--stat {
+      height: 108px;
+    }
+
+    background: linear-gradient(90deg, var(--user-surface), var(--user-surface-muted), var(--user-surface));
     background-size: 200% 100%;
     animation: arenaShimmer 1.4s infinite;
-  }
-
-  &__error {
-    margin-top: 22px;
-    padding: 26px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
   }
 }
 
@@ -608,15 +965,189 @@ onMounted(async () => {
   }
 }
 
+.arena-home {
+  // ---- V-01 · KPI 行（忠于原型 .kpi-row / .kpi）----
+  &__kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  &__kpi {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 4px 12px;
+    padding: 16px 18px;
+    overflow: hidden;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-lg, 14px);
+    background: var(--user-surface);
+
+    &::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--kpi-c, var(--user-primary)), transparent 72%);
+    }
+  }
+
+  &__kpi-icon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    color: var(--kpi-c, var(--user-primary));
+    background: color-mix(in srgb, var(--kpi-c, var(--user-primary)) 14%, var(--user-surface));
+  }
+
+  &__kpi-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__kpi-label {
+    margin: 0;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-caption, 12px);
+  }
+
+  &__kpi-val {
+    margin: 0;
+    color: var(--user-text);
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__kpi-delta {
+    grid-column: 2;
+    color: var(--user-text-muted);
+    font-size: var(--user-text-caption, 12px);
+    font-variant-numeric: tabular-nums;
+
+    &.is-up {
+      color: var(--user-primary);
+    }
+  }
+
+  &__kpi-spark {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 34px;
+    margin-top: 2px;
+  }
+
+  &__kpi-spark-line {
+    fill: none;
+    stroke: var(--kpi-c, var(--user-primary));
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    opacity: 0.9;
+  }
+
+  &__kpi-spark-fill {
+    fill: var(--kpi-c, var(--user-primary));
+    opacity: 0.1;
+  }
+
+  // ---- V-01 · 数据洞察（忠于原型 today.overview 面积图 + 环形图）----
+  &__insights {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+    align-items: start;
+  }
+
+  &__card {
+    padding: 16px 18px;
+  }
+
+  &__chart-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+
+    h3 {
+      margin: 0;
+      color: var(--user-text);
+      font-size: var(--user-text-h4, 15px);
+      font-weight: 600;
+    }
+  }
+
+  &__area {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  &__area-label {
+    fill: var(--user-text-muted);
+    font-size: 10px;
+    text-anchor: middle;
+  }
+
+  &__donut-wrap {
+    display: grid;
+    place-items: center;
+    padding: 8px 0;
+  }
+
+  &__donut-svg {
+    width: 160px;
+    height: 160px;
+  }
+
+  &__donut-val {
+    fill: var(--user-text);
+    font-size: 26px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__donut-sub {
+    fill: var(--user-text-muted);
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .arena-home__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .arena-home__kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .arena-home__insights {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
   .arena-home {
     &__page {
-      padding: 18px 14px 26px;
+      padding: 18px 14px 28px;
     }
 
-    &__grid,
-    &__side-grid {
-      grid-template-columns: 1fr;
+    &__guide {
+      padding: 18px;
     }
   }
 }

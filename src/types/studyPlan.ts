@@ -11,6 +11,7 @@ export interface StudyPlanGenerateDTO {
   industryDirection?: string
   expectedDurationDays: number
   dailyMinutes: number
+  startDate: string
   extraRequirements?: string
 }
 
@@ -89,6 +90,7 @@ export interface StudyPlanListVO {
   planStatus: StudyPlanStatus
   durationDays?: number
   dailyMinutes?: number
+  startDate?: string
   totalTaskCount?: number
   doneTaskCount?: number
   progressPercent?: number

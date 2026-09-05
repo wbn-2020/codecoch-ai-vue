@@ -58,6 +58,7 @@ export interface JobDescriptionAnalysisVO {
   skillWeights?: unknown
   summary?: string
   aiCallLogId?: number
+  executionId?: string | null
   asyncMessageId?: string | null
   asyncTraceId?: string | null
   asyncBizType?: string | null

@@ -24,9 +24,13 @@ export const refreshJobRequirementMatrixApi = (targetJobId: number) =>
     `/job-targets/${targetJobId}/requirement-matrix/refresh`
   )
 
-export const getLatestJobReadinessApi = (targetJobId: number) =>
+export const getLatestJobReadinessApi = (
+  targetJobId: number,
+  options: { silentError?: boolean } = {}
+) =>
   request.get<JobReadinessSnapshotVO | null, JobReadinessSnapshotVO | null>(
-    `/job-targets/${targetJobId}/readiness-snapshots/latest`
+    `/job-targets/${targetJobId}/readiness-snapshots/latest`,
+    { silentError: options.silentError }
   )
 
 export const recalculateJobReadinessApi = (targetJobId: number) =>
@@ -59,11 +63,13 @@ const assertFinitePositiveInteger = (value: number, parameterName: string) => {
 
 export const getJobReadinessSnapshotApi = async (
   targetJobId: number,
-  snapshotId: number
+  snapshotId: number,
+  options: { silentError?: boolean } = {}
 ): Promise<JobReadinessSnapshotDetailVO> => {
   assertFinitePositiveInteger(targetJobId, 'targetJobId')
   assertFinitePositiveInteger(snapshotId, 'snapshotId')
   return request.get<JobReadinessSnapshotDetailVO, JobReadinessSnapshotDetailVO>(
-    `/job-targets/${targetJobId}/readiness-snapshots/${snapshotId}`
+    `/job-targets/${targetJobId}/readiness-snapshots/${snapshotId}`,
+    { silentError: options.silentError }
   )
 }

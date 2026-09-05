@@ -635,7 +635,7 @@ const toggleWarning = (warning: string, checked: boolean) => {
 .plan-change-preview__values > div > span {
   color: var(--el-text-color-secondary);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .plan-change-preview__values dl {
@@ -668,7 +668,7 @@ const toggleWarning = (warning: string, checked: boolean) => {
 
 .plan-change-preview__values dd.is-changed {
   color: var(--el-color-primary);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .plan-change-preview__arrow {
@@ -690,7 +690,7 @@ const toggleWarning = (warning: string, checked: boolean) => {
 .plan-change-preview__item-warnings span {
   color: var(--el-color-warning-dark-2);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .plan-change-preview__source dl {

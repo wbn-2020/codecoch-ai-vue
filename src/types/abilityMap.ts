@@ -14,6 +14,11 @@ export interface AbilitySkillNodeVO {
   lastEvaluatedAt?: string
   confidence: AbilityConfidence
   summary?: string
+  evidenceSources?: string[]
+  sourceLabels?: string[]
+  syncStatus?: string
+  syncMessage?: string
+  updatedAt?: string
 }
 
 export interface AbilityDomainVO {
@@ -32,5 +37,8 @@ export interface AbilityMapVO {
   weakSkillCount: number
   strongSkillCount: number
   hasTrainingData: boolean
+  syncStatus?: string
+  syncMessage?: string
+  updatedAt?: string
   domains: AbilityDomainVO[]
 }

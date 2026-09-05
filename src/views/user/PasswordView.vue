@@ -167,25 +167,50 @@ const handleSubmit = async () => {
   justify-content: space-between;
   gap: 20px;
   padding: 22px 24px;
-  border: 1.5px solid var(--user-primary-border);
-  border-radius: 20px;
-  background: var(--user-surface-tint);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-xl);
+  background: var(--user-surface);
+  box-shadow: var(--user-shadow-xs);
 }
 
 .hero-copy {
   min-width: 0;
+
+  .page-title {
+    margin: 10px 0 0;
+    color: var(--user-text);
+    font-size: var(--user-text-h1, 30px);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+  }
 }
 
-.hero-kicker,
+.hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: var(--user-radius-full);
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .section-kicker {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  color: var(--user-text-muted);
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .hero-actions {
@@ -204,9 +229,9 @@ const handleSubmit = async () => {
 .security-tips,
 .security-form-card {
   border: 1px solid var(--user-border);
-  border-radius: 20px;
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  box-shadow: var(--user-shadow-xs);
 }
 
 .section-head {
@@ -216,8 +241,8 @@ const handleSubmit = async () => {
 .section-head h2 {
   margin: 5px 0 0;
   color: var(--user-text);
-  font-size: 19px;
-  font-weight: 900;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.3;
 }
 
@@ -278,7 +303,7 @@ const handleSubmit = async () => {
 
   .security-tips,
   .security-form-card {
-    border-radius: 16px;
+    border-radius: var(--user-radius-lg);
   }
 }
 </style>

@@ -1,5 +1,7 @@
 <template>
   <div class="evidence-assets page-shell" v-loading="pageLoading">
+    <ModuleTabs :items="moduleTabs" />
+
     <el-alert
       v-if="accessUnavailable"
       type="warning"
@@ -620,7 +622,9 @@ import {
   getEvidenceLearningCandidatesApi
 } from '@/api/evidenceLearning'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import { confidenceLabel } from '@/features/confidence'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { defaultUserKnownPaths, resolveAppRoutePath } from '@/features/route-safety'
 import type {
   CareerEvidenceUsageResultVO,
@@ -649,6 +653,7 @@ type SectionKey = 'readiness' | 'usages' | 'results' | 'candidates' | 'trace'
 
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('resources')
 // Guards against slow in-flight loads overwriting newer ones when the deep-link query changes
 // (onMounted / query watch / retry can all fire load()). Mirrors ApplicationWorkspaceView's token.
 let loadToken = 0
@@ -1609,7 +1614,7 @@ onMounted(async () => {
   margin: 0;
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0;
 }
 

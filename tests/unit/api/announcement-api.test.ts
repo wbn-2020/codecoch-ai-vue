@@ -18,6 +18,7 @@ vi.mock('@/utils/request', () => ({
 
 import {
   deleteAdminAnnouncementApi,
+  getPublishedAnnouncementsApi,
   offlineAdminAnnouncementApi,
   publishAdminAnnouncementApi,
   updateAdminAnnouncementApi
@@ -53,5 +54,11 @@ describe('announcement api', () => {
     expect(post).toHaveBeenNthCalledWith(2, `/admin/announcements/${announcementId}/offline`, confirmation)
     expect(put).toHaveBeenCalledWith(`/admin/announcements/${announcementId}`, expect.any(Object))
     expect(remove).toHaveBeenCalledWith(`/admin/announcements/${announcementId}`, { data: confirmation })
+  })
+
+  it('loads the current users visible announcements from the user endpoint', () => {
+    getPublishedAnnouncementsApi()
+
+    expect(get).toHaveBeenCalledWith('/announcements')
   })
 })

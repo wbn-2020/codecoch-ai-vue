@@ -1,39 +1,35 @@
 <template>
   <div class="question-page page-shell">
-    <section class="hero-band">
-      <div class="hero-copy">
-        <p class="hero-kicker">
-          <BookOpenCheck :size="16" />
-          题库训练
-        </p>
-        <h1>题库训练中心</h1>
-        <p>先选一题开始表达，再用 AI 点评、参考思路和复盘记录把它沉淀成面试可用的回答。</p>
-        <div class="hero-actions">
-          <el-button type="primary" size="large" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
-            <Dumbbell :size="17" />
-            开始训练
-          </el-button>
-          <el-button size="large" @click="router.push('/questions/recommendations')">
-            <Sparkles :size="17" />
-            看今日推荐
-          </el-button>
-        </div>
-      </div>
+    <PageHeader
+      class="question-page__head"
+      title="题库训练中心"
+      description="先选一题开始表达，再用 AI 点评、参考思路和复盘记录把它沉淀成面试可用的回答。"
+    >
+      <template #eyebrow>
+        <BookOpenCheck :size="13" aria-hidden="true" />
+        题库训练
+      </template>
+      <span class="question-page__step">选题</span>
+      <span class="question-page__step">先答</span>
+      <span class="question-page__step">点评</span>
+      <span class="question-page__step">复盘</span>
+      <template #actions>
+        <el-button type="primary" size="large" @click="router.push('/questions/practice?mode=random&sourceType=FALLBACK&fallback=true&count=5')">
+          <Dumbbell :size="17" />
+          开始训练
+        </el-button>
+        <el-button size="large" @click="router.push('/questions/recommendations')">
+          <Sparkles :size="17" />
+          看今日推荐
+        </el-button>
+      </template>
+    </PageHeader>
 
-      <aside class="hero-panel">
-        <p class="hero-panel__label">当前训练池</p>
-        <div class="hero-panel__focus">
-          <strong>{{ total }}</strong>
-          <span>道可训练题</span>
-        </div>
-        <p>{{ trainingFocusText }}</p>
-        <div class="hero-panel__steps">
-          <span>选题</span>
-          <span>先答</span>
-          <span>点评</span>
-          <span>复盘</span>
-        </div>
-      </aside>
+    <ModuleTabs :items="moduleTabs" />
+
+    <section class="training-pool">
+      <StatCard label="当前训练池" :value="total" detail="道可训练题" />
+      <p class="training-pool__focus">{{ trainingFocusText }}</p>
     </section>
 
     <details class="training-summary">
@@ -188,10 +184,15 @@ import AppState from '@/components/common/AppState.vue'
 import QuestionFilters from '@/components/question/QuestionFilters.vue'
 import QuestionMeta from '@/components/question/QuestionMeta.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import StatCard from '@/components/user-ui/StatCard.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { QuestionCategoryVO, QuestionQueryDTO, QuestionTagVO, QuestionVO } from '@/types/question'
 import { toFriendlyMessage } from '@/utils/error'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const loading = ref(false)
 const favoriteChangingId = ref<number | null>(null)
 const loadError = ref('')
@@ -389,120 +390,65 @@ onMounted(() => {
   gap: 16px;
 }
 
-.hero-band {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface);
-  box-shadow: none;
+// PageHeader 自带 margin-bottom，交给 grid gap 统一控制节奏
+.question-page__head {
+  margin-bottom: 0;
 }
 
-.hero-kicker,
-.hero-actions,
+.question-page__step {
+  padding: 4px 10px;
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-full, 999px);
+  background: var(--user-surface-muted);
+  color: var(--user-text-secondary);
+  font-size: var(--user-text-caption, 12px);
+  font-weight: 500;
+}
+
+.training-pool {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.training-pool__focus {
+  margin: 0;
+  padding: 16px 0;
+  color: var(--user-text-muted);
+  font-size: var(--user-text-body-sm, 13px);
+  line-height: 1.7;
+}
+
 .question-card__top,
 .side-actions,
-.workbench-actions,
-.filter-drawer summary span,
-.hero-panel__steps {
+.workbench-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.hero-kicker,
 .section-kicker {
   margin: 0;
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.hero-copy h1,
 .question-card h3,
 .workbench-head h2 {
   margin: 0;
   color: var(--user-text);
 }
 
-.hero-copy h1 {
-  font-size: 24px;
-  line-height: 1.3;
-}
-
-.hero-copy p,
-.hero-panel p,
 .training-note p,
 .question-card__insights p,
 .question-card__footer p,
 .section-desc {
   color: var(--user-text-muted);
-}
-
-.hero-copy p {
-  max-width: 720px;
-  margin: 8px 0 0;
-  line-height: 1.6;
-}
-
-.hero-actions {
-  flex-wrap: wrap;
-  margin-top: 14px;
-}
-
-.hero-panel {
-  display: grid;
-  gap: 14px;
-  align-content: start;
-  padding: 18px;
-  border: 1px solid var(--user-border);
-  border-radius: 8px;
-  background: var(--user-surface-muted);
-}
-
-.hero-panel__label {
-  margin: 0;
-  color: var(--user-text-muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.hero-panel__focus {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.hero-panel__focus strong {
-  color: var(--user-text);
-  font-size: 34px;
-  line-height: 1;
-}
-
-.hero-panel__focus span {
-  color: var(--user-text-muted);
-  font-size: 13px;
-}
-
-.hero-panel p {
-  margin: 0;
-  line-height: 1.7;
-}
-
-.hero-panel__steps {
-  flex-wrap: wrap;
-}
-
-.hero-panel__steps span {
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: var(--user-cyan-soft);
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .training-strip {
@@ -516,7 +462,7 @@ onMounted(() => {
 .training-summary {
   overflow: hidden;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 }
 
@@ -529,8 +475,8 @@ onMounted(() => {
   padding: 0 14px;
   color: var(--user-text);
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: var(--user-text-body-sm, 13px);
+  font-weight: 600;
   list-style: none;
 }
 
@@ -540,8 +486,8 @@ onMounted(() => {
 
 .training-summary summary small {
   color: var(--user-text-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--user-text-caption, 12px);
+  font-weight: 500;
 }
 
 .training-summary summary:focus-visible {
@@ -558,7 +504,7 @@ onMounted(() => {
   flex: 1 1 240px;
   padding: 12px 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
 }
 
@@ -571,19 +517,24 @@ onMounted(() => {
 .question-card__insights span,
 .pagination-wrap span {
   color: var(--user-text-muted);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .training-note strong {
   display: block;
   margin-top: 6px;
   color: var(--user-text);
-  font-size: 20px;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .training-note p {
   margin: 8px 0 0;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.65;
 }
 
@@ -600,19 +551,22 @@ onMounted(() => {
 }
 
 .workbench-head h2 {
-  font-size: 20px;
+  font-size: var(--user-text-h2, 22px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1.35;
 }
 
 .section-desc {
   margin: 6px 0 0;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.6;
 }
 
 .filter-drawer {
   margin: 0 20px 18px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 }
 
@@ -631,12 +585,17 @@ onMounted(() => {
 }
 
 .filter-drawer summary span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--user-text);
-  font-weight: 800;
+  font-size: var(--user-text-body, 14px);
+  font-weight: 600;
 }
 
 .filter-drawer summary small {
   color: var(--user-text-muted);
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.5;
 }
 
@@ -656,7 +615,7 @@ onMounted(() => {
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface);
   box-shadow: none;
   transition:
@@ -674,7 +633,8 @@ onMounted(() => {
 }
 
 .question-card h3 {
-  font-size: 17px;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -688,12 +648,13 @@ onMounted(() => {
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md, 10px);
   background: var(--user-surface-muted);
 }
 
 .question-card__insights p {
   margin: 6px 0 0;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.65;
 }
 
@@ -707,6 +668,7 @@ onMounted(() => {
 
 .question-card__footer p {
   margin: 0;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.7;
 }
 
@@ -730,25 +692,29 @@ onMounted(() => {
 }
 
 @media (max-width: 1080px) {
-  .hero-band,
+  .training-pool,
   .question-card__insights,
   .question-card__footer {
     grid-template-columns: 1fr;
   }
+
+  .training-pool__focus {
+    padding: 0;
+  }
 }
 
 @media (max-width: 720px) {
-  .hero-band {
-    padding: 16px;
+  .question-page__head :deep(.cc-hero-band) {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .hero-copy h1 {
-    font-size: 22px;
+  .question-page__head :deep(.cc-hero-band__actions) {
+    width: 100%;
   }
 
   .workbench-head,
   .workbench-actions,
-  .hero-actions,
   .side-actions,
   .filter-drawer summary,
   .pagination-wrap {
@@ -756,9 +722,9 @@ onMounted(() => {
     align-items: stretch;
   }
 
+  .question-page__head :deep(.cc-hero-band__actions .el-button),
   .workbench-head :deep(.el-button),
   .workbench-actions :deep(.el-button),
-  .hero-actions :deep(.el-button),
   .side-actions :deep(.el-button) {
     width: 100%;
     margin-left: 0;

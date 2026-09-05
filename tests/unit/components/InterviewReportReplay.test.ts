@@ -482,11 +482,12 @@ describe('InterviewReportView same-config replay', () => {
     generation.resolve({ planId: 700, planStatus: 'GENERATED' })
     await flushPromises()
 
-    expect(generateStudyPlanApi).toHaveBeenCalledWith({
+    expect(generateStudyPlanApi).toHaveBeenCalledWith(expect.objectContaining({
       reportId: 100,
       expectedDurationDays: 14,
-      dailyMinutes: 60
-    })
+      dailyMinutes: 60,
+      startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+    }))
     expect(routerPush).not.toHaveBeenCalled()
     expect(messageMocks.success).not.toHaveBeenCalled()
   })

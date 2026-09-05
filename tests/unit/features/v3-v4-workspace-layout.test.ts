@@ -60,7 +60,7 @@ describe('V3/V4 compact dark workspace', () => {
 
     expect(dashboard).toMatch(/\.metric-grid\s*\{[\s\S]*?display:\s*grid/)
     expect(dashboard).toMatch(/\.metric-card\s*\{[\s\S]*?box-shadow:\s*none/)
-    expect(targets).toMatch(/\.metric-grid\s*\{[\s\S]*?border(?:-top)?:\s*1px/)
+    expect(targets).toMatch(/\.cc-metric-grid\s*\{[\s\S]*?display:\s*grid/)
     expect(matchDetail).toMatch(/\.score-grid\s*\{[\s\S]*?border(?:-top)?:\s*1px/)
     expect(matchDetail).toContain('arena-match-settlement')
     expect(matchDetail).toContain('gapDetailCount')

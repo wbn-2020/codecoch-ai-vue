@@ -326,6 +326,7 @@ describe('AgentTodayView agent task evidence', () => {
   it('shows completed plan status when every Agent task is DONE', async () => {
     vi.mocked(fetchCachedLatestDailyPlan).mockResolvedValue({
       runId: 777,
+      executionId: 'daily-plan-777',
       date: '2026-07-05',
       planDate: '2026-07-05',
       status: 'SUCCESS',
@@ -354,6 +355,55 @@ describe('AgentTodayView agent task evidence', () => {
 
     expect(wrapper.text()).toContain('今天的任务已完成')
     expect(wrapper.text()).not.toContain('今天还没有计划')
+  })
+
+  it('does not regress a completed plan to processing when refresh returns an older snapshot', async () => {
+    vi.mocked(fetchCachedLatestDailyPlan)
+      .mockResolvedValueOnce({
+        runId: 777,
+        executionId: 'daily-plan-777',
+        date: '2026-07-05',
+        planDate: '2026-07-05',
+        status: 'SUCCESS',
+        consumable: true,
+        summary: '今日训练'
+      })
+      .mockResolvedValueOnce({
+        runId: 777,
+        executionId: 'daily-plan-777',
+        date: '2026-07-05',
+        planDate: '2026-07-05',
+        status: 'RUNNING',
+        summary: '旧进度快照'
+      })
+    vi.mocked(fetchCachedTodayAgentTasks).mockResolvedValue({
+      date: '2026-07-05',
+      total: 1,
+      doneCount: 1,
+      todoCount: 0,
+      tasks: [{ id: 1, title: '任务一', status: 'DONE' }]
+    })
+
+    const wrapper = mount(AgentTodayView, {
+      global: {
+        directives: { loading: {} },
+        stubs
+      }
+    })
+    await flushPromises()
+    await flushPromises()
+    expect(wrapper.text()).toContain('今天的任务已完成')
+
+    const refreshItem = wrapper.findAll('.el-dropdown-item-stub')
+      .find((item) => item.text().includes('刷新计划'))
+    expect(refreshItem).toBeDefined()
+    await refreshItem!.trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('今天的任务已完成')
+    expect(wrapper.text()).not.toContain('计划正在生成')
+    expect(wrapper.text()).not.toContain('正在获取进度')
   })
 
   it('keeps the full-page error when both core sources and DAILY reviews fail', async () => {

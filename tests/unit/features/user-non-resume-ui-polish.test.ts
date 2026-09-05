@@ -14,7 +14,6 @@ const recordsTools = readSource('src/views/tools/RecordsToolsView.vue')
 const growthTasks = readSource('src/views/v4/GrowthProfileView.vue')
 const projectExperience = readSource('src/views/user/ProjectExperienceView.vue')
 const taskList = readSource('src/views/agent/AgentTaskListView.vue')
-const arenaTopNav = readSource('src/components/layout/ArenaTopNav.vue')
 const arenaTheme = readSource('src/styles/arena.scss')
 const userComponents = readSource('src/styles/user-components.scss')
 
@@ -85,22 +84,20 @@ describe('non-resume user UI polish', () => {
   })
 
   it('keeps auxiliary user pages on Direction D semantic colors', () => {
-    expect(growthTasks).toContain('border: 1px solid var(--user-primary-border, var(--app-border));')
-    expect(growthTasks).toContain('background: var(--user-primary-faint, var(--arena-grn-soft));')
+    // v21 · Quiet Luxury：「下一步」提示卡收敛为白卡 + eyebrow 徽章（弃用薄荷水洗底）
+    expect(growthTasks).toContain('border: 1px solid var(--app-border);')
+    expect(growthTasks).toContain('background: var(--user-surface, var(--app-surface));')
 
     expect(projectExperience).toContain('border-color: var(--user-primary-border);')
     expect(projectExperience).not.toContain('border-color: rgba(37, 99, 235, 0.35);')
 
-    for (const source of [taskList, arenaTopNav]) {
-      expect(source).not.toContain('#2563eb')
-    }
+    expect(taskList).not.toContain('#2563eb')
     expect(taskList).toContain('border-left-color: var(--user-ai);')
     expect(taskList).toContain('border-left-color: var(--user-success);')
     expect(taskList).toContain('border-left-color: var(--user-danger);')
-    expect(arenaTopNav).toContain('color: var(--user-warning-text);')
-    expect(arenaTopNav).toContain('color: var(--arena-action);')
-    expect(arenaTheme).toContain('--user-success-text: #0e7a45;')
-    expect(arenaTheme).toContain('--user-danger-text: #b4233a;')
+    // v21 · Quiet Luxury：语义色去饱和后由 token 变量接管（success #2E7D5B / danger #B03A3A）
+    expect(arenaTheme).toContain('--user-success-text: var(--arena-success);')
+    expect(arenaTheme).toContain('--user-danger-text: var(--arena-red);')
     expect(userComponents).toContain('--el-button-text-color: var(--user-success-text);')
     expect(userComponents).toContain('--el-button-text-color: var(--user-danger-text);')
   })

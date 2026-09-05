@@ -96,7 +96,7 @@ const normalizedPercent = computed(() => {
 .readiness-progress-panel__kicker {
   color: var(--app-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .readiness-progress-panel h2 {
@@ -165,7 +165,7 @@ const normalizedPercent = computed(() => {
   background: var(--user-control-bg-muted);
   color: var(--app-text);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .readiness-step.is-done .readiness-step__marker {

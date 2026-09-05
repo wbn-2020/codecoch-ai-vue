@@ -412,7 +412,7 @@ onMounted(fetchDetail)
   margin-bottom: 10px;
   color: var(--user-primary);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .run-hero h1 {
@@ -455,7 +455,7 @@ onMounted(fetchDetail)
 
 .run-title-block span,
 .section-head p {
-  color: var(--app-text-muted, #64748b);
+  color: var(--app-text-muted, #6e6963);
   font-size: 13px;
   font-weight: 600;
 }
@@ -463,7 +463,7 @@ onMounted(fetchDetail)
 .run-title-block h2,
 .section-head h3 {
   margin: 6px 0 0;
-  color: var(--app-text, #111827);
+  color: var(--app-text, #1a1917);
   letter-spacing: 0;
 }
 
@@ -474,7 +474,7 @@ onMounted(fetchDetail)
 
 .run-title-block p {
   margin: 10px 0 0;
-  color: #475569;
+  color: #57534e;
   line-height: 1.7;
 }
 
@@ -566,7 +566,7 @@ onMounted(fetchDetail)
   justify-content: space-between;
   gap: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e3e0da;
 }
 
 .info-card dl div:last-child {
@@ -575,14 +575,14 @@ onMounted(fetchDetail)
 }
 
 .info-card dt {
-  color: var(--app-text-muted, #64748b);
+  color: var(--app-text-muted, #6e6963);
 }
 
 .info-card dd {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: var(--app-text, #111827);
+  color: var(--app-text, #1a1917);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -590,7 +590,7 @@ onMounted(fetchDetail)
 
 .summary-text {
   margin: 14px 0 0;
-  color: #475569;
+  color: #57534e;
   line-height: 1.75;
 }
 
@@ -612,7 +612,7 @@ onMounted(fetchDetail)
   align-items: center;
   padding: 16px;
   border: 1px solid var(--user-border);
-  border-left: 4px solid #94a3b8;
+  border-left: 4px solid #a8a29a;
   border-radius: 8px;
   background: var(--user-surface);
 }
@@ -622,7 +622,7 @@ onMounted(fetchDetail)
 }
 
 .task-card.is-todo {
-  border-left-color: #2563eb;
+  border-left-color: var(--user-cyan);
 }
 
 .task-card.is-doing {
@@ -634,7 +634,7 @@ onMounted(fetchDetail)
 }
 
 .task-card.is-skipped {
-  border-left-color: #f59e0b;
+  border-left-color: var(--user-warning);
 }
 
 .task-head {
@@ -647,14 +647,14 @@ onMounted(fetchDetail)
 .task-head span {
   display: block;
   margin-bottom: 6px;
-  color: var(--app-text-muted, #64748b);
+  color: var(--app-text-muted, #6e6963);
   font-size: 12px;
   font-weight: 600;
 }
 
 .task-head h4 {
   margin: 0;
-  color: var(--app-text, #111827);
+  color: var(--app-text, #1a1917);
   font-size: 17px;
   line-height: 1.35;
   letter-spacing: 0;
@@ -662,7 +662,7 @@ onMounted(fetchDetail)
 
 .task-main p {
   margin: 10px 0 0;
-  color: #475569;
+  color: #57534e;
   line-height: 1.65;
 }
 
@@ -694,7 +694,7 @@ onMounted(fetchDetail)
 .task-review-summary span {
   display: block;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .task-review-summary p,

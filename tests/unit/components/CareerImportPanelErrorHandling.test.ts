@@ -29,6 +29,7 @@ vi.mock('element-plus', () => ({
 }))
 
 import CareerImportPanel from '@/views/v4/career-calendar/components/CareerImportPanel.vue'
+import { hashCareerImportFile } from '@/features/career-import-content'
 
 const ElButtonStub = defineComponent({
   name: 'ElButton',
@@ -103,6 +104,7 @@ const chooseFile = async (wrapper: ReturnType<typeof mount>) => {
     value: [file]
   })
   await input.trigger('change')
+  await flushPromises()
   return file
 }
 
@@ -157,7 +159,9 @@ describe('CareerImportPanel local operation errors', () => {
       expect.objectContaining({
         company_name: '公司',
         job_title: '岗位'
-      })
+      }),
+      expect.stringMatching(/^[0-9a-f]{64}$/),
+      expect.stringMatching(/^[0-9a-f]{64}$/)
     )
     expect(wrapper.text()).toContain('总计 1')
     expect(wrapper.emitted('imported')).toBeUndefined()
@@ -188,5 +192,66 @@ describe('CareerImportPanel local operation errors', () => {
     expect(wrapper.text()).toContain('成功 1')
     expect(wrapper.text()).toContain('错误 1')
     expect(elMessage.error).toHaveBeenCalledWith('错误行下载失败，请稍后重试。')
+  })
+
+  it('uses fresh bytes when a same-name CSV is corrected and uploaded again', async () => {
+    const firstFile = new File(['公司,岗位\n旧公司,旧岗位'], 'applications.csv', { type: 'text/csv' })
+    const secondFile = new File(['公司,岗位\n新公司,新岗位'], 'applications.csv', { type: 'text/csv' })
+    const firstHash = await hashCareerImportFile(firstFile)
+    const secondHash = await hashCareerImportFile(secondFile)
+    api.previewCsv
+      .mockResolvedValueOnce({
+        ...preview,
+        contentHash: firstHash,
+        rows: [{ rowNumber: 2, raw: { 公司: '旧公司', 岗位: '旧岗位' }, duplicateCandidates: [] }]
+      })
+      .mockResolvedValueOnce({
+        ...preview,
+        contentHash: secondHash,
+        rows: [{ rowNumber: 2, raw: { 公司: '新公司', 岗位: '新岗位' }, duplicateCandidates: [] }]
+      })
+    api.importCsv.mockResolvedValue({
+      ...resultWithErrors,
+      contentHash: secondHash,
+      errorCount: 0,
+      successCount: 1
+    })
+    const wrapper = mount(CareerImportPanel, {
+      props: { timezone: 'Asia/Shanghai' },
+      global: globalOptions
+    })
+    const input = () => wrapper.get('input[type="file"]')
+
+    Object.defineProperty(input().element, 'files', { configurable: true, value: [firstFile] })
+    await input().trigger('change')
+    await flushPromises()
+    await wrapper.get('[data-testid="preview-career-import"]').trigger('click')
+    await flushPromises()
+    expect(api.previewCsv).toHaveBeenNthCalledWith(1, firstFile, 'Asia/Shanghai', {}, firstHash)
+
+    Object.defineProperty(input().element, 'files', { configurable: true, value: [secondFile] })
+    await input().trigger('change')
+    await flushPromises()
+    await wrapper.get('[data-testid="preview-career-import"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="commit-career-import"]').trigger('click')
+    await flushPromises()
+
+    expect(api.previewCsv).toHaveBeenNthCalledWith(
+      2,
+      secondFile,
+      'Asia/Shanghai',
+      {},
+      secondHash
+    )
+    expect(api.importCsv).toHaveBeenCalledWith(
+      secondFile,
+      'Asia/Shanghai',
+      'SKIP',
+      expect.any(Object),
+      secondHash,
+      secondHash
+    )
+    expect(firstHash).not.toBe(secondHash)
   })
 })

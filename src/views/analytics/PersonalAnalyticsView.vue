@@ -1,19 +1,18 @@
 ﻿<template>
-  <div class="page-shell analytics-page">
-    <section class="analytics-hero">
-      <div>
-        <div class="analytics-eyebrow">
-          <LineChart :size="16" />
-          <span>训练分析</span>
-        </div>
-        <h1>个人训练分析</h1>
-        <p>汇总每日任务、完成率、已完成任务预计分钟和重点技能分布，帮助你看清最近一段时间的准备节奏。</p>
-      </div>
-      <div class="analytics-actions">
+  <main class="page-shell analytics-page cc-module-page">
+    <PageHeader
+      eyebrow="成长分析"
+      :icon="LineChart"
+      title="个人训练分析"
+      description="汇总每日任务、完成率、已完成任务预计分钟和重点技能分布，帮助你看清最近一段时间的准备节奏。"
+    >
+      <template #actions>
         <el-segmented v-model="rangeDays" :options="rangeOptions" @change="loadPage" />
         <el-button :icon="RefreshCw" :loading="loading" @click="loadPage">刷新</el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <AppState v-if="errorMessage" type="error" title="分析数据加载失败" :description="errorMessage">
       <el-button type="primary" @click="loadPage">重试</el-button>
@@ -158,7 +157,7 @@
       </section>
       </template>
     </template>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -172,6 +171,9 @@ import {
   getPersonalTaskTrendApi
 } from '@/api/analytics'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { MetricPointVO, PersonalAgentOverviewVO, TrendPointVO } from '@/types/analytics'
 import type { ECharts } from '@/utils/echarts'
 import { toFriendlyMessage } from '@/utils/error'
@@ -179,6 +181,7 @@ import { toFriendlyMessage } from '@/utils/error'
 const loading = ref(false)
 const hasLoadedPage = ref(false)
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('growth')
 const errorMessage = ref('')
 const partialErrors = ref<string[]>([])
 const rangeDays = ref(7)
@@ -209,6 +212,7 @@ const formatWaitSeconds = (durationMs?: number) => {
 const analyticsLoadErrorText = '分析数据暂时加载失败，请稍后重试。'
 
 const hasRecentTaskSample = computed(() => (overview.value?.last7DaysTaskCount || 0) > 0)
+const selectedRangeLabel = computed(() => `近 ${rangeDays.value} 天`)
 const hasAgentPlanSample = computed(() =>
   (overview.value?.totalAgentPlanCount || 0) > 0 || (overview.value?.agentGeneratedTaskCount || 0) > 0
 )
@@ -219,7 +223,14 @@ const metrics = computed(() => {
     return [
       { key: 'today', label: '今日任务', value: '暂不可用', hint: overviewError.value || '训练总览暂时不可用', icon: Target, tone: 'tone-blue' },
       { key: 'minutes', label: '今日预计耗时', value: '暂不可用', hint: overviewError.value || '训练总览暂时不可用', icon: Timer, tone: 'tone-cyan' },
-      { key: 'week', label: '近 7 天完成率', value: '待生成', hint: overviewError.value || '尚未取得可用训练样本', icon: CheckCircle2, tone: 'tone-green' },
+      {
+        key: 'period',
+        label: `${selectedRangeLabel.value}已结算完成率`,
+        value: '待生成',
+        hint: trendError.value || `${selectedRangeLabel.value}尚未取得可用训练样本`,
+        icon: CheckCircle2,
+        tone: 'tone-green'
+      },
       { key: 'agent', label: '计划执行情况', value: '待生成', hint: overviewError.value || '尚未取得可用计划样本', icon: Sparkles, tone: 'tone-violet' }
     ]
   }
@@ -245,12 +256,10 @@ const metrics = computed(() => {
       tone: 'tone-cyan'
     },
     {
-      key: 'week',
-      label: '近 7 天完成率',
-      value: hasRecentTaskSample.value ? `${overview.value.last7DaysCompletionRate || 0}%` : '待生成',
-      hint: hasRecentTaskSample.value
-        ? `${overview.value.last7DaysDoneCount || 0}/${overview.value.last7DaysTaskCount || 0} 个任务`
-        : '近 7 天尚无可分析的训练样本',
+      key: 'period',
+      label: `${selectedRangeLabel.value}已结算完成率`,
+      value: selectedPeriodCompletion.value.rate,
+      hint: selectedPeriodCompletion.value.hint,
       icon: CheckCircle2,
       tone: 'tone-green'
     },
@@ -296,6 +305,26 @@ const trendTotals = computed(() => trend.value.reduce((total, item) => ({
   skipped: total.skipped + Math.max(0, item.skippedCount || 0),
   completedMinutes: total.completedMinutes + Math.max(0, item.completedMinutes || 0)
 }), { generated: 0, completed: 0, skipped: 0, completedMinutes: 0 }))
+
+const selectedPeriodCompletion = computed(() => {
+  if (trendError.value) {
+    return {
+      rate: '暂不可用',
+      hint: trendError.value
+    }
+  }
+  const settled = trendTotals.value.completed + trendTotals.value.skipped
+  if (settled === 0) {
+    return {
+      rate: '待生成',
+      hint: `${selectedRangeLabel.value}尚无已完成或已跳过任务`
+    }
+  }
+  return {
+    rate: `${Math.round((trendTotals.value.completed / settled) * 100)}%`,
+    hint: `${trendTotals.value.completed}/${settled} 个已结算任务`
+  }
+})
 
 const trendInsights = computed(() => {
   const totals = trendTotals.value

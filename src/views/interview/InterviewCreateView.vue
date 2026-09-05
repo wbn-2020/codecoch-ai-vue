@@ -1,13 +1,12 @@
 <template>
-  <div class="interview-create page-shell">
-    <section class="create-hero">
-      <div>
-        <div class="eyebrow">
-          <Sparkles :size="16" />
-          推荐开练
-        </div>
-        <h1>先做一场最值得练的面试</h1>
-        <p>系统会基于当前简历、目标岗位和已核验资料给出推荐；缺少资料时会明确提示，并退回轻量技术面。</p>
+  <main class="interview-create page-shell cc-module-page">
+    <PageHeader
+      eyebrow="模拟面试"
+      :icon="Sparkles"
+      title="开始一场模拟面试"
+      description="系统会基于当前简历、目标岗位和已核验资料给出推荐；缺少资料时会明确提示，并退回轻量技术面。"
+    >
+      <template #meta>
         <div class="hero-tags">
           <el-tag effect="plain">创建后直接开始</el-tag>
           <el-tag effect="plain" type="info">支持简历上下文</el-tag>
@@ -16,8 +15,8 @@
             {{ voicePreflightReady ? '语音设备已预检' : '语音可选' }}
           </el-tag>
         </div>
-      </div>
-      <div class="hero-actions">
+      </template>
+      <template #actions>
         <el-button @click="router.push('/dashboard')">
           <LayoutDashboard :size="16" />
           返回今日计划
@@ -30,8 +29,10 @@
           <History :size="16" />
           面试历史
         </el-button>
-      </div>
-    </section>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
 
     <section class="quick-start-panel">
       <div class="quick-start-panel__copy">
@@ -458,7 +459,7 @@
       @ready="handleVoicePreflightReady"
       @fallback="handleVoiceTextFallback"
     />
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -478,6 +479,9 @@ import {
 import { getCurrentJobTargetApi, getJobTargetDetailApi } from '@/api/jobTarget'
 import { getLatestResumeJobMatchReportApi, getResumeJobMatchReportDetailApi } from '@/api/resumeJobMatch'
 import { getResumesApi } from '@/api/resume'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import {
   difficultyOptions,
   experienceLevelOptions,
@@ -507,6 +511,7 @@ import type { SelectOption } from '@/types/common'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('interview')
 const route = useRoute()
 const formRef = ref<FormInstance>()
 const configPanelRef = ref<HTMLElement>()
@@ -1725,7 +1730,7 @@ onMounted(async () => {
 .eyebrow {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .hero-tags {
@@ -1787,7 +1792,7 @@ onMounted(async () => {
 .quick-label {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .recommended-plan-grid {
@@ -1916,7 +1921,7 @@ onMounted(async () => {
   summary {
     color: var(--user-primary);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 600;
     cursor: pointer;
   }
 
@@ -1959,7 +1964,7 @@ onMounted(async () => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2054,7 +2059,7 @@ onMounted(async () => {
   > span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   :deep(.el-tag) {
@@ -2117,7 +2122,7 @@ onMounted(async () => {
 
 .quick-primary-cta {
   min-height: 44px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .create-grid {
@@ -2204,7 +2209,7 @@ onMounted(async () => {
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -2308,14 +2313,13 @@ onMounted(async () => {
     color: var(--user-primary);
     font-size: 12px;
     font-style: normal;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   &:hover:not(.disabled),
   &.active {
     border-color: var(--user-primary-border);
     background: var(--user-primary-soft);
-    transform: translateY(-2px);
   }
 
   &.disabled {
@@ -2346,7 +2350,7 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
-  font-weight: 700;
+  font-weight: 600;
 
   span {
     display: inline-flex;
@@ -2534,7 +2538,7 @@ onMounted(async () => {
     background: var(--user-primary-border);
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong,

@@ -112,6 +112,10 @@ describe('SkillProfileView trusted source semantics', () => {
     await flushPromises()
 
     expect(wrapper.text()).toMatch(/已量化短板\s*0/)
+    expect(wrapper.text()).not.toContain('88')
+    expect(wrapper.text()).toContain('节点尚未形成可量化')
+    const actionButtons = wrapper.findAll('.action-panel button')
+    expect(actionButtons.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
     wrapper.unmount()
   })
 })

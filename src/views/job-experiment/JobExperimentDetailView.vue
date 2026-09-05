@@ -139,7 +139,25 @@
           </div>
           <el-button link :icon="X" aria-label="收起详细材料" @click="closeSecondary">收起</el-button>
         </div>
-        <el-tabs v-model="activeSecondary" @tab-change="handleSecondaryTabChange">
+        <el-skeleton
+          v-if="materialsLoading"
+          class="materials-skeleton"
+          data-testid="experiment-materials-loading"
+          :rows="6"
+          animated
+        />
+        <AppState
+          v-else-if="materialsError"
+          class="materials-error"
+          type="error"
+          title="实验材料加载失败"
+          :description="materialsError"
+        >
+          <el-button type="primary" :loading="materialsLoading" @click="retryMaterials">
+            重试加载材料
+          </el-button>
+        </AppState>
+        <el-tabs v-else v-model="activeSecondary" @tab-change="handleSecondaryTabChange">
           <el-tab-pane label="数据与策略" name="metrics">
             <div class="secondary-content">
               <div class="metric-strip">
@@ -391,6 +409,11 @@ type DetailSection = 'metrics' | 'evidence' | 'history' | 'settings'
 const detailSections: DetailSection[] = ['metrics', 'evidence', 'history', 'settings']
 const activeSecondary = ref<DetailSection>('metrics')
 const secondaryOpen = ref(false)
+const materialsLoading = ref(false)
+const materialsLoaded = ref(false)
+const materialsError = ref('')
+let materialsRequest: Promise<void> | null = null
+let materialsRequestGeneration = 0
 const primaryAction = computed(() => {
   if (weakConclusion.value) {
     return {
@@ -416,6 +439,7 @@ const resolveDetailSection = (value: unknown): DetailSection | undefined => {
 const openSecondary = (section: DetailSection) => {
   activeSecondary.value = section
   secondaryOpen.value = true
+  void loadMaterials()
   void router.replace({ path: route.path, query: { ...route.query, tab: section } })
 }
 
@@ -460,6 +484,43 @@ const formatDateRange = (start?: string, end?: string) => {
 
 const formatDateTime = (value?: string) => value || '-'
 
+const loadMaterials = (force = false): Promise<void> => {
+  const id = experimentId.value
+  if (!id || !detail.value) return Promise.resolve()
+  if (materialsLoaded.value && !force) return Promise.resolve()
+  if (materialsRequest) return materialsRequest
+
+  const requestGeneration = materialsRequestGeneration
+  materialsLoading.value = true
+  materialsError.value = ''
+
+  const request = getJobExperimentDetailApi(id)
+    .then((nextDetail) => {
+      if (requestGeneration !== materialsRequestGeneration || id !== experimentId.value) return
+      detail.value = nextDetail
+      materialsLoaded.value = true
+    })
+    .catch((error) => {
+      if (requestGeneration !== materialsRequestGeneration || id !== experimentId.value) return
+      materialsError.value = error instanceof Error ? error.message : '实验材料加载失败，请稍后重试。'
+    })
+    .finally(() => {
+      if (requestGeneration === materialsRequestGeneration) {
+        materialsLoading.value = false
+      }
+      if (materialsRequest === request) {
+        materialsRequest = null
+      }
+    })
+
+  materialsRequest = request
+  return request
+}
+
+const retryMaterials = () => {
+  void loadMaterials(true)
+}
+
 const loadExperiment = async (id: number, requestGeneration: number) => {
   loading.value = true
   errorMessage.value = ''
@@ -467,6 +528,9 @@ const loadExperiment = async (id: number, requestGeneration: number) => {
     const nextDetail = await getJobExperimentDetailApi(id)
     if (requestGeneration === detailRequestGeneration) {
       detail.value = nextDetail
+      if (secondaryOpen.value) {
+        void loadMaterials()
+      }
     }
   } catch (error) {
     if (requestGeneration === detailRequestGeneration) {
@@ -550,6 +614,11 @@ watch(
   experimentId,
   () => {
     detailRequestGeneration += 1
+    materialsRequestGeneration += 1
+    materialsRequest = null
+    materialsLoading.value = false
+    materialsLoaded.value = false
+    materialsError.value = ''
     detail.value = undefined
     errorMessage.value = ''
     loading.value = false
@@ -566,6 +635,8 @@ watch(
 
 onBeforeUnmount(() => {
   detailRequestGeneration += 1
+  materialsRequestGeneration += 1
+  materialsRequest = null
 })
 </script>
 
@@ -599,7 +670,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--app-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -894,7 +965,7 @@ h2 {
   margin: 0 0 6px;
   color: var(--arena-grn-d);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 h1,
@@ -1022,8 +1093,8 @@ h3 {
 .next-step-panel {
   align-items: flex-end;
   padding: 18px 20px;
-  background: #f0fbf4;
-  border-color: #b9e7cd;
+  background: var(--user-primary-soft);
+  border-color: var(--user-primary-border);
 }
 
 .next-step-copy {
@@ -1047,6 +1118,11 @@ h3 {
 .secondary-content {
   min-width: 0;
   padding-top: 8px;
+}
+
+.materials-skeleton,
+.materials-error {
+  margin-top: 14px;
 }
 
 .secondary-subsection {
@@ -1078,8 +1154,8 @@ h3 {
 }
 
 .coverage-item.is-covered {
-  border-color: #b9e7cd;
-  background: #f0fbf4;
+  border-color: var(--user-primary-border);
+  background: var(--user-primary-soft);
 }
 
 .coverage-item-head,

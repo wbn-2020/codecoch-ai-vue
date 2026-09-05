@@ -1,5 +1,7 @@
 <template>
   <div class="page-shell v4-memory-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="v4-page-header">
       <div>
         <div class="v4-eyebrow">长期记忆</div>
@@ -8,8 +10,16 @@
       </div>
       <div class="v4-actions">
         <el-button :icon="Plus" type="primary" @click="openCreate()">新增记忆</el-button>
-        <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+        <el-button :icon="Refresh" :loading="loading" @click="retrySync">刷新</el-button>
       </div>
+    </section>
+
+    <section v-if="syncWarning" class="v4-sync-warning" role="alert">
+      <div>
+        <strong>列表同步待确认</strong>
+        <p>{{ syncWarning }}</p>
+      </div>
+      <el-button :icon="Refresh" :loading="loading" @click="retrySync">重试同步</el-button>
     </section>
 
     <section class="v4-memory-summary" aria-label="长期记忆状态概览">
@@ -189,7 +199,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" :disabled="!form.content.trim()" @click="create">保存</el-button>
+        <el-button type="primary" :loading="saving" :disabled="saving || !form.content.trim()" @click="create">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -210,13 +220,21 @@ import {
   getAgentMemoryImpactPreviewApi
 } from '@/api/agent'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import type { AgentContextImpactPreviewVO, AgentMemoryLifecycle, AgentMemoryVO } from '@/types/agent'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { isAuthOrForbiddenError } from '@/utils/apiError'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage } from '@/utils/error'
 
+const moduleTabs = useUserModuleTabs('growth')
+
 type MemoryFilter = 'ALL' | 'TRUSTED' | 'CANDIDATE' | 'GOVERNANCE' | 'DISABLED'
 type MemoryLifecycle = AgentMemoryLifecycle | 'trusted'
+interface MemorySyncVerification {
+  expected?: AgentMemoryVO
+  removedId?: number
+}
 
 interface MemoryViewState {
   item: AgentMemoryVO
@@ -239,6 +257,8 @@ const dialogVisible = ref(false)
 const activeFilter = ref<MemoryFilter>('ALL')
 const memories = ref<AgentMemoryVO[]>([])
 const errorMessage = ref('')
+const syncWarning = ref('')
+const pendingSyncVerification = ref<MemorySyncVerification | null>(null)
 const form = reactive({ memoryType: 'USER_NOTE', content: '' })
 
 const memoryTypeOptions = [
@@ -509,17 +529,104 @@ const memoryImpactPreviewText = (preview: AgentContextImpactPreviewVO) => {
   return `${source}：历史引用总计 ${preview.referenceCount ?? 0} 条，近期 ${preview.recentReferenceCount ?? 0} 条；影响模块：${modules}；未来上下文影响：${preview.futureContextImpact ? '有' : '无'}；仅历史影响：${preview.historicalOnly ? '是' : '否'}；可安全停用：${preview.safeToDisable ? '是' : '否'}${consumers ? `；近期消费者：${consumers}` : ''}${warnings ? `；提醒：${warnings}` : ''}。`
 }
 
-const load = async () => {
+interface MemoryRefreshOptions {
+  preserveOnError?: boolean
+  failureMessage?: string
+  successMessage?: string
+  validateRecords?: (records: AgentMemoryVO[]) => boolean
+}
+
+const refreshMemories = async (options: MemoryRefreshOptions = {}) => {
   loading.value = true
   try {
     const page = await getAgentMemoriesApi({ pageNo: 1, pageSize: 50 })
-    memories.value = page.records || []
+    const records = page.records || []
+    if (options.validateRecords && !options.validateRecords(records)) {
+      syncWarning.value = options.failureMessage || '列表返回内容尚未包含本次写入结果，请稍后重试。'
+      return false
+    }
+    memories.value = records
     errorMessage.value = ''
+    syncWarning.value = ''
+    if (options.successMessage) ElMessage.success(options.successMessage)
+    return true
   } catch (error) {
-    memories.value = []
-    errorMessage.value = getErrorMessage(error, '长期记忆暂时加载失败，请稍后重试。')
+    const message = getErrorMessage(error, options.failureMessage || '长期记忆暂时加载失败，请稍后重试。')
+    if (options.preserveOnError) {
+      syncWarning.value = message
+    } else {
+      memories.value = []
+      errorMessage.value = message
+    }
+    return false
   } finally {
     loading.value = false
+  }
+}
+
+const load = () => refreshMemories()
+
+const upsertAuthoritativeMemory = (memory?: AgentMemoryVO | null) => {
+  if (!memory?.id) return
+  const index = memories.value.findIndex((item) => item.id === memory.id)
+  if (index < 0) {
+    memories.value = [memory, ...memories.value]
+    return
+  }
+  memories.value = memories.value.map((item, itemIndex) =>
+    itemIndex === index ? memory : item
+  )
+}
+
+const sameAuthoritativeState = (left: AgentMemoryVO, right: AgentMemoryVO) =>
+  left.id === right.id
+  && left.content === right.content
+  && left.memoryType === right.memoryType
+  && left.enabled === right.enabled
+  && normalizeStatus(left.memoryStatus) === normalizeStatus(right.memoryStatus)
+  && (left.confirmedAt || '') === (right.confirmedAt || '')
+  && (left.deletedAt || '') === (right.deletedAt || '')
+
+const recordsReflectVerification = (
+  records: AgentMemoryVO[],
+  verification?: MemorySyncVerification | null
+) => {
+  if (!verification) return true
+  if (verification.removedId) {
+    return records.every((item) => item.id !== verification.removedId)
+  }
+  if (!verification.expected) return true
+  const refreshed = records.find((item) => item.id === verification.expected?.id)
+  return Boolean(refreshed && sameAuthoritativeState(refreshed, verification.expected))
+}
+
+const retrySync = async () => {
+  const verification = pendingSyncVerification.value
+  const synced = await refreshMemories({
+    preserveOnError: memories.value.length > 0,
+    failureMessage: '列表同步仍未完成，当前保留最近一次服务端写入结果，请稍后重试。',
+    successMessage: syncWarning.value ? '长期记忆列表已与服务端同步' : undefined,
+    validateRecords: verification
+      ? (records) => recordsReflectVerification(records, verification)
+      : undefined
+  })
+  if (synced) pendingSyncVerification.value = null
+}
+
+const verifyMutationSync = async (
+  successMessage: string,
+  verification: MemorySyncVerification
+) => {
+  pendingSyncVerification.value = verification
+  const synced = await refreshMemories({
+    preserveOnError: true,
+    failureMessage: '本次写入已由服务端确认，但列表校验刷新失败。当前保留服务端返回结果，可重试同步。',
+    successMessage,
+    validateRecords: (records) => recordsReflectVerification(records, verification)
+  })
+  if (synced) pendingSyncVerification.value = null
+  if (!synced) {
+    ElMessage.warning('写入已由服务端确认，但列表同步待重试；当前页面已保留服务端返回结果。')
   }
 }
 
@@ -530,29 +637,30 @@ const openCreate = (memoryType = 'USER_NOTE') => {
 }
 
 const create = async () => {
+  if (saving.value) return
   const content = form.content.trim()
   if (!content) {
     ElMessage.warning('请先填写记忆内容')
     return
   }
-  const confirmed = await confirmDangerActionPreview({
-    title: '新增长期记忆',
-    action: '保存一条手动确认的长期记忆',
-    target: `${memoryTypeLabel(form.memoryType)}：${content}`,
-    impact: '保存后，智能教练后续生成今日计划、复盘、题目训练和面试建议时，可能把这条记忆作为偏好、弱项或项目背景依据。',
-    rollback: '如内容不准确，可以在列表中停用或删除；删除后需要重新手动记录或等待后续运行再次沉淀。',
-    audit: '新增记忆会按当前账号、记忆类型和创建时间记录。',
-    tips: ['确认内容是稳定偏好、长期弱项或复盘结论。', '避免写入临时情绪、敏感原文或不希望长期影响推荐的信息。'],
-    confirmButtonText: '确认保存'
-  })
-  if (!confirmed) return
   saving.value = true
   try {
-    await createAgentMemoryApi({ memoryType: form.memoryType, content, sourceType: 'MANUAL' })
+    const confirmed = await confirmDangerActionPreview({
+      title: '新增长期记忆',
+      action: '保存一条手动确认的长期记忆',
+      target: `${memoryTypeLabel(form.memoryType)}：${content}`,
+      impact: '保存后，智能教练后续生成今日计划、复盘、题目训练和面试建议时，可能把这条记忆作为偏好、弱项或项目背景依据。',
+      rollback: '如内容不准确，可以在列表中停用或删除；删除后需要重新手动记录或等待后续运行再次沉淀。',
+      audit: '新增记忆会按当前账号、记忆类型和创建时间记录。',
+      tips: ['确认内容是稳定偏好、长期弱项或复盘结论。', '避免写入临时情绪、敏感原文或不希望长期影响推荐的信息。'],
+      confirmButtonText: '确认保存'
+    })
+    if (!confirmed) return
+    const created = await createAgentMemoryApi({ memoryType: form.memoryType, content, sourceType: 'MANUAL' })
+    upsertAuthoritativeMemory(created)
     dialogVisible.value = false
     form.content = ''
-    ElMessage.success('记忆已保存')
-    await load()
+    await verifyMutationSync('记忆已保存并已同步', { expected: created })
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '记忆保存失败，请稍后重试。'))
   } finally {
@@ -583,18 +691,21 @@ const toggle = async (view: MemoryViewState) => {
   })
   if (!confirmed) return
   try {
+    let updated: AgentMemoryVO
     if (view.isCandidate) {
-      await confirmAgentMemoryApi(view.item.id)
+      updated = await confirmAgentMemoryApi(view.item.id)
     } else if (enabled) {
-      await disableAgentMemoryApi(view.item.id, {
+      updated = await disableAgentMemoryApi(view.item.id, {
         confirmed: true,
         reason: `confirmed impact-preview before disabling memory ${view.item.id}`
       })
     } else {
-      await enableAgentMemoryApi(view.item.id)
+      updated = await enableAgentMemoryApi(view.item.id)
     }
-    ElMessage.success(actionLabel === '确认' ? '候选记忆确认请求已提交' : (enabled ? '记忆已停用' : '启用请求已提交'))
-    await load()
+    upsertAuthoritativeMemory(updated)
+    await verifyMutationSync(actionLabel === '确认'
+      ? '候选记忆已确认并已同步'
+      : enabled ? '记忆已停用并已同步' : '记忆已启用并已同步', { expected: updated })
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '记忆状态更新失败，请稍后重试。'))
   }
@@ -625,8 +736,8 @@ const remove = async (view: MemoryViewState) => {
       confirmed: true,
       reason: `confirmed impact-preview before deleting memory ${view.item.id}`
     })
-    ElMessage.success('记忆已删除')
-    await load()
+    memories.value = memories.value.filter((item) => item.id !== view.item.id)
+    await verifyMutationSync('记忆已删除并已同步', { removedId: view.item.id })
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '记忆删除失败，请稍后重试。'))
   }
@@ -669,9 +780,9 @@ onMounted(load)
 }
 
 .v4-eyebrow {
-  color: #5eead4;
+  color: var(--user-success-text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .v4-actions,
@@ -681,6 +792,27 @@ onMounted(load)
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.v4-sync-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--user-warning, var(--app-border));
+  border-radius: 8px;
+  background: var(--user-warning-soft, var(--user-surface-muted, var(--app-surface-raised)));
+}
+
+.v4-sync-warning strong {
+  color: var(--app-text);
+}
+
+.v4-sync-warning p {
+  margin: 4px 0 0;
+  color: var(--app-text-muted);
+  line-height: 1.6;
 }
 
 .v4-memory-summary {
@@ -710,7 +842,7 @@ onMounted(load)
 
 .v4-summary-item__value {
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.1;
 }
 
@@ -847,7 +979,7 @@ onMounted(load)
 
 .v4-memory-meta__label {
   color: var(--app-text);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .v4-memory-reasons {
@@ -894,7 +1026,7 @@ onMounted(load)
 .v4-governance-item > span {
   min-width: 28px;
   color: var(--user-warning-text, var(--user-warning));
-  font-weight: 800;
+  font-weight: 600;
   text-align: right;
 }
 
@@ -905,6 +1037,7 @@ onMounted(load)
 
 @media (max-width: 900px) {
   .v4-page-header,
+  .v4-sync-warning,
   .v4-row-head,
   .v4-memory-controls,
   .v4-governance-panel,

@@ -204,7 +204,7 @@ onMounted(loadScenarios)
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   strong {
@@ -348,7 +348,7 @@ onMounted(loadScenarios)
     background: var(--user-primary-border);
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   p,
@@ -368,7 +368,7 @@ onMounted(loadScenarios)
   span {
     color: var(--user-primary);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   p {

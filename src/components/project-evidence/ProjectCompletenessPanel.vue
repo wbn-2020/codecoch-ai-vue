@@ -59,7 +59,7 @@ const remainingGaps = computed(() => labels.value.slice(1))
   margin: 0 0 4px;
   color: var(--app-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -78,7 +78,7 @@ h3 {
   > span {
     color: var(--app-text-muted);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -94,7 +94,7 @@ h3 {
   span {
     color: var(--el-color-warning-dark-2);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 
   strong {

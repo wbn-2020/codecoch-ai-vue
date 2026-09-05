@@ -1,5 +1,7 @@
 <template>
   <div class="weakness-page page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="weakness-hero">
       <div class="hero-copy">
         <p class="hero-kicker">
@@ -80,7 +82,7 @@
                   type="circle"
                   :width="72"
                   :percentage="Number(item.wrongRate || 0)"
-                  color="#f97316"
+                  color="var(--user-warning)"
                 />
               </div>
               <p>{{ categoryDisplayName(item) }}累计 {{ item.totalCount }} 题，答错 {{ item.wrongCount }} 题。</p>
@@ -128,9 +130,12 @@ import { Dumbbell, RefreshCw, Target } from 'lucide-vue-next'
 
 import { getWeaknessAnalysisApi, type WeaknessAnalysisVO } from '@/api/questionStudy'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const loading = ref(false)
 const error = ref('')
 const analysis = ref<WeaknessAnalysisVO>()
@@ -188,18 +193,42 @@ onMounted(loadData)
 
 .hero-copy {
   min-width: 0;
+
+  .page-title {
+    margin: 10px 0 0;
+    color: var(--user-text);
+    font-size: var(--user-text-h1, 30px);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+  }
 }
 
-.hero-kicker,
+.hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: var(--user-radius-full);
+  background: var(--user-primary-soft);
+  color: var(--user-primary);
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .section-kicker {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
+  color: var(--user-text-muted);
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .hero-actions {
@@ -220,14 +249,13 @@ onMounted(loadData)
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-md);
   background: var(--user-surface);
   box-shadow: none;
 }
 
 .metric-card {
   flex: 1 1 180px;
-  background: var(--user-surface-muted);
 }
 
 .metric-card span,
@@ -239,7 +267,10 @@ onMounted(loadData)
 .metric-card strong {
   display: block;
   margin-top: 6px;
-  font-size: 26px;
+  font-size: var(--user-text-h2, 22px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .metric-card p,
@@ -260,7 +291,8 @@ onMounted(loadData)
 .section-head h2 {
   margin: 5px 0 0;
   color: var(--user-text);
-  font-size: 18px;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.3;
 }
 
@@ -279,7 +311,8 @@ onMounted(loadData)
 
 .category-card h3 {
   margin: 4px 0 0;
-  font-size: 20px;
+  font-size: var(--user-text-h2, 22px);
+  font-weight: 600;
 }
 
 .card-actions {

@@ -101,7 +101,7 @@ const deadlines = computed(() => ({
 .summary-kicker {
   color: var(--app-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .cockpit-summary h2 {

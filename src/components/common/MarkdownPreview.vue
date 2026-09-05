@@ -210,8 +210,8 @@ watch(
     overflow-x: auto;
     padding: 12px;
     border-radius: 8px;
-    background: #0f172a;
-    color: #e5e7eb;
+    background: #1a1917;
+    color: #e3e0da;
   }
 
   :deep(code) {

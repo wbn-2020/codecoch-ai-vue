@@ -491,7 +491,7 @@ defineExpose({ currentMonth })
   width: 100%;
   min-width: 0;
   padding: 4px 6px;
-  border: 1px solid #b9e7cd;
+  border: 1px solid #d5e8e0;
   border-radius: 8px;
   background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
   color: inherit;
@@ -524,7 +524,7 @@ defineExpose({ currentMonth })
 }
 
 .event-chip.type-interview {
-  border-color: #b9e7cd;
+  border-color: #d5e8e0;
   background: var(--arena-grn-soft, rgba(23, 178, 106, 0.13));
 }
 

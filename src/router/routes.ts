@@ -45,6 +45,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'job-targets/:id/analysis', name: 'JobTargetAnalysis', component: () => import('@/views/v3/JobTargetAnalysisView.vue'), meta: { title: '岗位分析' } },
       { path: 'resumes', name: 'ResumeJobHub', component: () => import('@/views/resume/ArenaPrepareView.vue'), meta: { title: '准备', arenaTheme: true } },
       { path: 'resumes/legacy', name: 'ResumeJobHubLegacy', component: () => import('@/views/resume/ResumeJobHubSafeView.vue'), meta: { title: '简历实验（旧版）', hidden: true, commandHidden: true } },
+      { path: 'resumes/workbench', name: 'ResumeWorkbench', component: () => import('@/views/resume/ResumeWorkbenchEntryView.vue'), meta: { title: '简历工作台', arenaTheme: true, layoutMode: 'resume-workbench' } },
       { path: 'resumes/manage', name: 'ResumeList', component: () => import('@/views/resume/ResumeListView.vue'), meta: { title: '简历列表' } },
       { path: 'resumes/create', name: 'ResumeCreate', component: () => import('@/views/resume/ResumeEditView.vue'), meta: { title: '简历编辑工作台', arenaTheme: true, layoutMode: 'resume-workbench' } },
       { path: 'resumes/:id/edit', name: 'ResumeEdit', component: () => import('@/views/resume/ResumeEditView.vue'), meta: { title: '简历编辑工作台', arenaTheme: true, layoutMode: 'resume-workbench' } },
@@ -92,7 +93,7 @@ export const routes: RouteRecordRaw[] = [
         beforeEnter: () => appConfig.enableV6WeeklyReport ? true : { name: 'FeatureUnavailable' },
         meta: { title: 'AI 求职周报', hidden: true, commandHidden: true }
       },
-      { path: 'growth/profile', name: 'GrowthProfile', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '成长画像', previewOnly: true, featureFlag: 'v4Growth' } },
+      { path: 'growth/profile', name: 'GrowthProfile', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '成长档案', previewOnly: true, featureFlag: 'v4Growth' } },
       { path: 'growth/skills', name: 'GrowthSkillsTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '技能趋势', previewOnly: true, featureFlag: 'v4Growth' } },
       { path: 'growth/readiness', name: 'GrowthReadinessTrend', component: () => import('@/views/v4/GrowthProfileView.vue'), meta: { title: '就绪度趋势', previewOnly: true, featureFlag: 'v4Growth' } },
       { path: 'agent/memory', name: 'AgentMemory', component: () => import('@/views/v4/AgentMemoryView.vue'), meta: { title: '长期记忆', previewOnly: true, featureFlag: 'v4Growth' } },

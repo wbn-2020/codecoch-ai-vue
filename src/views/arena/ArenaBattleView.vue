@@ -1,5 +1,7 @@
 <template>
   <div class="arena arena-bt">
+    <ModuleTabs :items="moduleTabs" />
+
     <div class="arena-bt__page">
       <!-- 页头 -->
       <div class="arena-between arena-bt__head">
@@ -23,7 +25,7 @@
           </div>
           <div style="flex: 1; min-width: 0">
             <div class="arena-row" style="gap: 8px; flex-wrap: wrap">
-              <b style="font-size: 17px; font-weight: 900" :style="{ color: tier.color }">{{ tier.label }}</b>
+              <b style="font-size: 17px; font-weight: 600" :style="{ color: tier.color }">{{ tier.label }}</b>
               <span class="arena-tiny">{{ profile.rankPoints }} 积分</span>
               <span class="arena-tiny">战绩 {{ profile.wins }} 胜 {{ profile.losses }} 负 {{ profile.draws }} 平</span>
             </div>
@@ -179,6 +181,8 @@ import {
 } from '@/features/arena-social'
 import { useGameProfileStore } from '@/features/game-profile'
 import { useAuthStore } from '@/stores/auth'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 
 type Phase = 'lobby' | 'matching' | 'fighting' | 'settled'
 
@@ -186,6 +190,7 @@ const QUESTION_SECONDS = 20
 const QUESTION_COUNT = 5
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const authStore = useAuthStore()
 const gameProfile = useGameProfileStore()
 
@@ -426,7 +431,6 @@ const optionClass = (idx: number) => {
 }
 
 onMounted(() => {
-  gameProfile.hydrate(authStore.userInfo?.id)
   refreshProfile()
 })
 
@@ -453,7 +457,7 @@ onBeforeUnmount(clearTimers)
 
   &__kicker {
     font-size: 12.5px;
-    font-weight: 800;
+    font-weight: 600;
     color: var(--arena-grn-d);
   }
 
@@ -570,7 +574,7 @@ onBeforeUnmount(clearTimers)
 
   &__vs-score {
     font-size: 19px;
-    font-weight: 900;
+    font-weight: 600;
     color: var(--arena-grn-d);
   }
 
@@ -583,7 +587,7 @@ onBeforeUnmount(clearTimers)
 
   &__timer {
     font-size: 21px;
-    font-weight: 900;
+    font-weight: 600;
 
     &.is-low {
       color: var(--arena-red);
@@ -605,7 +609,7 @@ onBeforeUnmount(clearTimers)
   }
 
   &__progress-opp > i {
-    background: linear-gradient(90deg, var(--arena-vio), #b3a1ff);
+    background: linear-gradient(90deg, var(--arena-vio), color-mix(in srgb, var(--arena-vio) 45%, #ffffff));
   }
 
   &__question {
@@ -658,8 +662,8 @@ onBeforeUnmount(clearTimers)
     align-items: center;
     justify-content: center;
     font-size: 12px;
-    font-weight: 900;
-    background: #f2f4f2;
+    font-weight: 600;
+    background: var(--user-surface-muted);
     color: var(--arena-sub);
   }
 
@@ -690,13 +694,13 @@ onBeforeUnmount(clearTimers)
     gap: 9px;
 
     &.is-win {
-      border-color: #b9e7cd;
-      background: linear-gradient(160deg, #f0fbf4, #ffffff 75%);
+      border-color: var(--user-primary-border);
+      background: linear-gradient(160deg, var(--user-primary-soft), var(--user-surface) 75%);
     }
 
     &.is-lose {
-      border-color: #f3d1d1;
-      background: linear-gradient(160deg, #fdf3f3, #ffffff 75%);
+      border-color: color-mix(in srgb, var(--user-danger) 30%, transparent);
+      background: linear-gradient(160deg, var(--user-danger-soft), var(--user-surface) 75%);
     }
   }
 
@@ -706,12 +710,12 @@ onBeforeUnmount(clearTimers)
 
   &__settled-title {
     font-size: 22px;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   &__settled-score {
     font-size: 30px;
-    font-weight: 900;
+    font-weight: 600;
     letter-spacing: 1px;
     color: var(--arena-grn-d);
   }

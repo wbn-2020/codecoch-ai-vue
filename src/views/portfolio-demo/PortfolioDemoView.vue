@@ -1,5 +1,7 @@
 <template>
   <div class="portfolio-demo page-shell">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="rehearsal-hero content-card">
       <div class="hero-copy">
         <p class="eyebrow">演示线 · 收口前排练</p>
@@ -285,6 +287,8 @@ import {
 import { portfolioRehearsalAcceptanceMatrix } from '@/features/portfolio-rehearsal-acceptance'
 import { buildPortfolioRehearsalHealthReport } from '@/features/portfolio-rehearsal-health'
 import { portfolioRehearsalPromptCards } from '@/features/portfolio-rehearsal-prompts'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { PortfolioRehearsalHealthStatus } from '@/types/portfolioRehearsal'
 
 type RouteKey = 'quick' | 'deep' | 'technical'
@@ -572,6 +576,7 @@ const guardrails = [
 ]
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('resources')
 const activeRouteKey = ref<RouteKey>('quick')
 const activeNodeIndex = ref(0)
 const completedNodeIds = ref(new Set<string>())
@@ -1078,7 +1083,7 @@ li + li {
   --pd-line: #dce6df;
   --pd-line-strong: #c5d5ca;
   --pd-green: #17b26a;
-  --pd-green-deep: #0e9f5d;
+  --pd-green-deep: #1f6f5c;
   --pd-green-soft: #e3f7ed;
   --pd-lime: #a3e635;
   --pd-amber: #f79009;
@@ -1171,7 +1176,7 @@ li + li {
   align-items: stretch;
   gap: 20px;
   padding: 22px;
-  border-color: #b9e7cd;
+  border-color: #d5e8e0;
   background: var(--pd-surface-soft);
 }
 

@@ -1,9 +1,11 @@
 <template>
   <div class="page-shell v4-growth-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="v4-page-header">
       <div>
-        <div class="v4-eyebrow">成长画像</div>
-        <h1>成长画像</h1>
+        <div class="v4-eyebrow">成长分析</div>
+        <h1>成长档案</h1>
         <p>仅汇总最近 Agent 任务状态，展示任务完成率、技能标签趋势和样本可信度。</p>
       </div>
       <div class="v4-actions">
@@ -27,12 +29,9 @@
         title="部分成长数据暂时不可用"
         :description="partialLoadWarning"
       />
-      <section v-if="overview && !loading" class="growth-explain-strip">
-        <el-tag effect="plain">时间窗：{{ overview.timeWindow || `最近 ${rangeDays} 天` }}</el-tag>
-        <el-tag effect="plain" :type="confidenceTagType">可信度：{{ confidenceLabel }}</el-tag>
-        <el-tag effect="plain">证据数量：{{ overview.evidenceCount ?? 0 }}</el-tag>
-        <el-tag v-for="label in dataSourceLabels" :key="label" effect="plain" type="info">{{ label }}</el-tag>
-      </section>
+      <p v-if="overview && !loading" class="growth-explain-strip">
+        统计口径：{{ overview.timeWindow || `最近 ${rangeDays} 天` }} · 可信度{{ confidenceLabel }} · 证据 {{ overview.evidenceCount ?? 0 }} 条<template v-if="dataSourceLabels.length"> · {{ dataSourceLabels.join('；') }}</template>
+      </p>
 
       <section
         v-if="isColdStart && !loading"
@@ -158,11 +157,14 @@ import {
   type SkillGrowthSnapshotVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import { appConfig } from '@/config'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { toFriendlyMessage } from '@/utils/error'
 
 const loading = ref(false)
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('growth')
 const errorMessage = ref('')
 const partialLoadWarning = ref('')
 const rangeDays = ref(30)
@@ -203,12 +205,6 @@ const confidenceLabel = computed(() => {
   if (level === 'MEDIUM') return '中'
   return '低'
 })
-const confidenceTagType = computed(() => {
-  const level = String(overview.value?.confidenceLevel || 'LOW').toUpperCase()
-  if (level === 'HIGH') return 'success'
-  if (level === 'MEDIUM') return 'warning'
-  return 'info'
-})
 const formatPercent = (value?: number) => `${Math.max(0, Math.min(100, Number(value || 0))).toFixed(0)}%`
 const confidenceText = (level?: string) => {
   const normalized = String(level || 'LOW').toUpperCase()
@@ -226,9 +222,9 @@ const goWeeklyReport = () => router.push('/agent/weekly-reports')
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
-    return toFriendlyMessage((error as { message?: unknown }).message, '成长画像暂时加载失败，请稍后重试。')
+    return toFriendlyMessage((error as { message?: unknown }).message, '成长档案暂时加载失败，请稍后重试。')
   }
-  return '成长画像暂时加载失败，请稍后重试。'
+  return '成长档案暂时加载失败，请稍后重试。'
 }
 
 const load = async () => {
@@ -266,7 +262,7 @@ const load = async () => {
     }
 
     if (overviewResult.status === 'rejected' && skillsResult.status === 'rejected' && readinessResult.status === 'rejected') {
-      errorMessage.value = warnings[0] || '成长画像暂时加载失败，请稍后重试。'
+      errorMessage.value = warnings[0] || '成长档案暂时加载失败，请稍后重试。'
       return
     }
     partialLoadWarning.value = [...new Set(warnings)].join('；')
@@ -309,32 +305,40 @@ onMounted(load)
 .trend-row span {
   color: var(--app-text-muted);
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .v4-eyebrow,
 .section-kicker {
   color: var(--arena-grn-d, var(--app-primary-hover));
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
 .v4-actions,
-.skill-strip,
-.growth-explain-strip {
+.skill-strip {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
 }
 
+// 数据口径说明：一行静音文字（不再用一排描边 tag 显得像调试信息）
+.growth-explain-strip {
+  margin: -4px 0 0;
+  color: var(--app-text-muted);
+  font-size: 12.5px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
 .v4-grid {
   display: grid;
+  min-width: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: var(--arena-radius-card, 16px);
-  background: var(--user-surface-muted, var(--app-surface-raised));
+  gap: 12px;
 }
 
 .partial-alert {
@@ -348,18 +352,22 @@ onMounted(load)
 
 .growth-next-action {
   display: grid;
+  min-width: 0;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px 18px;
   align-items: center;
-  padding: 16px;
-  border: 1px solid var(--user-primary-border, var(--app-border));
+  padding: 16px 20px;
+  border: 1px solid var(--app-border);
   border-radius: var(--arena-radius-card, 16px);
-  background: var(--user-primary-faint, var(--arena-grn-soft));
+  background: var(--user-surface, var(--app-surface));
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.04);
 }
 
 .growth-next-action h2,
 .growth-next-action p {
+  min-width: 0;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .growth-next-action h2 {
@@ -374,9 +382,15 @@ onMounted(load)
 }
 
 .growth-next-action__label {
-  color: var(--arena-grn-d, var(--app-primary-hover));
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--user-primary-soft, #eaf2ef);
+  color: var(--user-primary, #1f6f5c);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.6;
 }
 
 .growth-next-action__actions {
@@ -393,20 +407,18 @@ onMounted(load)
 
 .v4-card,
 .trend-row {
+  min-width: 0;
   border: 1px solid var(--app-border);
   border-radius: var(--arena-radius-card, 16px);
   background: var(--user-surface, var(--app-surface));
 }
 
 .v4-card {
-  padding: 12px 14px;
-  border-width: 0 1px 0 0;
-  border-radius: 0;
-  background: transparent;
-
-  &:last-child {
-    border-right: 0;
-  }
+  padding: 16px 18px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--arena-radius-card, 16px);
+  background: var(--user-surface, var(--app-surface));
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.04);
 }
 
 .v4-card span {
@@ -416,9 +428,12 @@ onMounted(load)
 
 .v4-card strong {
   display: block;
-  margin-top: 8px;
-  font-size: 22px;
+  margin-top: 6px;
+  font-size: 24px;
   line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .v4-card small {
@@ -491,9 +506,8 @@ onMounted(load)
 .trend-row strong,
 .trend-row span {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .trend-row small {
@@ -528,18 +542,40 @@ onMounted(load)
     flex-direction: column;
   }
 
-  .v4-grid,
+  .v4-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .trend-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 420px) {
+  .v4-growth-page,
+  .v4-page-header,
+  .v4-actions,
+  .growth-explain-strip,
+  .growth-next-action,
+  .content-card,
+  .content-card__body,
+  .trend-list,
+  .trend-row {
+    min-width: 0;
+    max-width: 100%;
   }
 
-  .v4-card {
-    border-right: 0;
-    border-bottom: 1px solid var(--app-border);
+  .v4-actions :deep(.el-button),
+  .growth-next-action__actions :deep(.el-button),
+  .compact-empty :deep(.el-button) {
+    max-width: 100%;
+    white-space: normal;
   }
 
-  .v4-card:last-child {
-    border-bottom: 0;
+  .skill-strip :deep(.el-tag) {
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
   }
 }
 </style>

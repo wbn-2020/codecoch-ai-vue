@@ -1,264 +1,292 @@
 <template>
-  <el-menu
-    ref="menuRef"
-    class="layout-menu user-sidebar-menu"
-    :default-active="activePath"
-    :collapse="collapsed"
-    :unique-opened="true"
-    router
-    @select="handleSelect"
-  >
-    <template v-for="section in menuSections" :key="section.key">
-      <el-menu-item v-if="section.children.length === 1 && !section.forceGroup" :index="section.children[0].path">
-        <el-icon>
-          <component :is="section.icon" />
-        </el-icon>
-        <template #title>{{ section.children[0].label }}</template>
-      </el-menu-item>
-      <el-sub-menu v-else :index="section.key">
-        <template #title>
-          <el-icon>
-            <component :is="section.icon" />
-          </el-icon>
-          <span>{{ section.label }}</span>
-        </template>
-        <el-menu-item v-for="item in section.children" :key="item.path" :index="item.path">
-          <el-icon>
-            <component :is="item.icon" />
-          </el-icon>
-          <template #title>{{ item.label }}</template>
-        </el-menu-item>
-      </el-sub-menu>
+  <nav class="user-sidebar-nav" :class="{ 'is-collapsed': sidebarProps.collapsed }" aria-label="用户端主导航">
+    <template v-for="row in visibleRows" :key="row.key">
+      <p v-if="row.section && !sidebarProps.collapsed" class="user-sidebar-nav__section">{{ row.section }}</p>
+      <section
+        class="user-sidebar-nav__group"
+        :class="{ 'is-first-in-section': Boolean(row.section), 'is-open': !sidebarProps.collapsed && isOpen(row.group.key) }"
+      >
+        <RouterLink
+          class="user-sidebar-nav__group-link"
+          :class="{ 'is-active': activeGroup?.key === row.group.key }"
+          :to="row.group.path"
+          :title="sidebarProps.collapsed ? row.group.label : undefined"
+          :aria-current="activeGroup?.key === row.group.key ? 'page' : undefined"
+          :aria-expanded="!sidebarProps.collapsed && row.group.items.length ? isOpen(row.group.key) : undefined"
+        >
+          <component :is="row.group.icon" :size="18" aria-hidden="true" />
+          <span>{{ row.group.label }}</span>
+          <small v-if="badgeOf(row.group) && !sidebarProps.collapsed" class="user-sidebar-nav__badge">{{ badgeOf(row.group) }}</small>
+          <ChevronDown
+            v-if="!sidebarProps.collapsed && row.group.items.length"
+            class="user-sidebar-nav__chevron"
+            :size="15"
+            aria-hidden="true"
+          />
+        </RouterLink>
+        <div v-if="!sidebarProps.collapsed && isOpen(row.group.key)" class="user-sidebar-nav__items">
+          <RouterLink
+            v-for="item in row.group.items"
+            :key="item.key"
+            class="user-sidebar-nav__item"
+            :class="{ 'is-active': activeItem?.item.key === item.key }"
+            :to="item.path"
+            :aria-current="activeItem?.item.key === item.key ? 'page' : undefined"
+          >
+            <component :is="item.icon" :size="15" aria-hidden="true" />
+            <span>{{ item.label }}</span>
+          </RouterLink>
+        </div>
+      </section>
     </template>
-  </el-menu>
+  </nav>
 </template>
 
 <script setup lang="ts">
-import {
-  Bell,
-  Calendar,
-  Collection,
-  Compass,
-  DataBoard,
-  DocumentChecked,
-  Files,
-  Key,
-  MagicStick,
-  Medal,
-  Reading,
-  Star,
-  TrendCharts,
-  User
-} from '@element-plus/icons-vue'
-import { computed, nextTick, ref, watch } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { appConfig } from '@/config'
-import { isV4PreviewAccessEnabled } from '@/features/route-safety'
 
-const props = defineProps<{
+import {
+  getVisibleUserNavigationGroups,
+  resolveUserNavigationGroup,
+  resolveUserNavigationItem,
+  type UserNavigationGroup
+} from '@/config/userNavigation'
+
+const sidebarProps = withDefaults(defineProps<{
   collapsed?: boolean
-}>()
+  /** 组 key → 徽标数（仅展示真实业务数据，无数据的组不显示） */
+  badges?: Record<string, string | number>
+}>(), { collapsed: false, badges: () => ({}) })
 
 const route = useRoute()
-const menuRef = ref<{ close: (index: string) => void }>()
-
-interface UserMenuItem {
-  label: string
-  path: string
-  icon: unknown
-  featureFlag?: 'v4Preview' | 'v4Growth' | 'v4Knowledge' | 'v6WeeklyReport' | 'v9EvidenceLearning'
-  previewOnly?: boolean
-}
-
-interface UserMenuSection {
-  key: string
-  label: string
-  icon: unknown
-  forceGroup?: boolean
-  children: UserMenuItem[]
-}
-
-const isMenuItemVisible = (item: UserMenuItem) => {
-  if (item.previewOnly) return isV4PreviewAccessEnabled()
-  const featureFlag = item.featureFlag
-  if (!featureFlag) return true
-  if (featureFlag === 'v4Preview') return isV4PreviewAccessEnabled()
-  if (featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
-  if (featureFlag === 'v4Knowledge') return appConfig.enableV4KnowledgePreview
-  if (featureFlag === 'v6WeeklyReport') return appConfig.enableV6WeeklyReport
-  if (featureFlag === 'v9EvidenceLearning') return appConfig.enableV9EvidenceLearning
-  return true
-}
-
-const baseMenuSections: UserMenuSection[] = [
-  {
-    key: 'workspace',
-    label: '工作台',
-    icon: DataBoard,
-    forceGroup: true,
-    children: [
-      { label: '今日计划', path: '/dashboard', icon: DataBoard },
-      { label: '新手引导', path: '/onboarding', icon: Compass }
-    ]
-  },
-  {
-    key: 'agent-growth',
-    label: '今日训练',
-    icon: MagicStick,
-    forceGroup: true,
-    children: [
-      { label: '今日任务', path: '/agent/today', icon: MagicStick },
-      { label: '任务中心', path: '/agent/tasks', icon: Calendar },
-      { label: '训练分析', path: '/analytics/personal', icon: TrendCharts },
-      { label: '求职周报', path: '/agent/weekly-reports', icon: TrendCharts, featureFlag: 'v6WeeklyReport' },
-      { label: '求职实验台', path: '/job-experiments', icon: TrendCharts },
-      { label: '作品集演示', path: '/portfolio-demo', icon: DocumentChecked },
-      { label: '复盘中心', path: '/agent/reviews', icon: DocumentChecked, featureFlag: 'v4Growth' },
-      { label: '成长档案', path: '/growth/profile', icon: Medal, featureFlag: 'v4Growth' },
-      { label: '长期记忆', path: '/agent/memory', icon: MagicStick, featureFlag: 'v4Growth' }
-    ]
-  },
-  {
-    key: 'resume-job',
-    label: '简历求职',
-    icon: Files,
-    forceGroup: true,
-    children: [
-      { label: '简历版本', path: '/resume-versions', icon: Files, previewOnly: true },
-      { label: '简历', path: '/resumes', icon: Files },
-      { label: '项目经历', path: '/projects', icon: Files },
-      { label: '项目素材', path: '/project-evidence', icon: Files },
-      { label: '证据使用', path: '/evidence-assets', icon: DocumentChecked, featureFlag: 'v9EvidenceLearning' },
-      { label: '求职进度', path: '/applications', icon: Compass },
-      { label: '求职日历', path: '/career-calendar', icon: Calendar },
-      { label: '投递包', path: '/application-packages', icon: DocumentChecked },
-      { label: '岗位目标', path: '/job-targets', icon: Compass },
-      { label: '简历匹配', path: '/resume-match', icon: Files },
-      { label: '能力画像', path: '/skill-profile', icon: Medal },
-      { label: '能力地图', path: '/ability-map', icon: Medal }
-    ]
-  },
-  {
-    key: 'question-practice',
-    label: '题库练习',
-    icon: Collection,
-    forceGroup: true,
-    children: [
-      { label: '推荐题目', path: '/questions/recommendations', icon: Collection },
-      { label: '刷题练习', path: '/questions/practice', icon: Reading },
-      { label: '题库', path: '/questions', icon: Collection },
-      { label: '错题本', path: '/questions/wrong-records', icon: DocumentChecked },
-      { label: '收藏题目', path: '/questions/favorites', icon: Star }
-    ]
-  },
-  {
-    key: 'interview-training',
-    label: '面试训练',
-    icon: Compass,
-    forceGroup: true,
-    children: [
-      { label: '创建面试', path: '/interviews/create', icon: Compass },
-      { label: '面试历史', path: '/interviews/history', icon: Medal }
-    ]
-  },
-  {
-    key: 'study-plan',
-    label: '学习成长',
-    icon: Reading,
-    forceGroup: true,
-    children: [
-      { label: '差距学习计划', path: '/study-plans/from-gap', icon: Reading },
-      { label: '计划总览', path: '/study-plans', icon: Reading },
-      { label: '每日任务', path: '/daily-tasks', icon: Calendar },
-      { label: '薄弱点分析', path: '/weakness-analysis', icon: TrendCharts }
-    ]
-  },
-  {
-    key: 'personal-center',
-    label: '个人中心',
-    icon: User,
-    forceGroup: true,
-    children: [
-      { label: '通知中心', path: '/notifications', icon: Bell },
-      { label: '个人知识库', path: '/knowledge', icon: Reading, featureFlag: 'v4Knowledge' },
-      { label: '修改密码', path: '/password', icon: Key },
-      { label: '个人资料', path: '/profile', icon: User }
-    ]
-  }
-]
-
-const menuSections = computed(() =>
-  baseMenuSections
-    .map((section) => ({
-      ...section,
-      children: section.children.filter(isMenuItemVisible)
-    }))
-    .filter((section) => section.children.length > 0)
-)
-
-const closeAllMenus = () => {
-  if (!props.collapsed) return
-  nextTick(() => {
-    menuSections.value.forEach((section) => menuRef.value?.close(section.key))
-  })
-}
-
-const handleSelect = () => {
-  closeAllMenus()
-}
-
-const activePath = computed(() => {
-  if (route.path.startsWith('/onboarding')) return '/onboarding'
-  if (route.path.startsWith('/agent/today') || route.path.startsWith('/agent/runs')) return '/agent/today'
-  if (route.path.startsWith('/agent/tasks')) return '/agent/tasks'
-  if (route.path.startsWith('/agent/weekly-reports')) return '/agent/weekly-reports'
-  if (route.path.startsWith('/analytics/personal')) return '/analytics/personal'
-  if (route.path.startsWith('/job-experiments')) return '/job-experiments'
-  if (route.path.startsWith('/portfolio-demo')) return '/portfolio-demo'
-  if (route.path.startsWith('/agent/reviews')) return '/agent/reviews'
-  if (route.path.startsWith('/growth/profile') || route.path.startsWith('/growth/skills') || route.path.startsWith('/growth/readiness')) return '/growth/profile'
-  if (route.path.startsWith('/agent/memory')) return '/agent/memory'
-  if (route.path.startsWith('/knowledge')) return '/knowledge'
-  if (route.path.startsWith('/resume-versions')) return '/resume-versions'
-  if (route.path.startsWith('/applications')) return '/applications'
-  if (route.path.startsWith('/job-targets')) return '/job-targets'
-  if (route.path.startsWith('/resume-match')) return '/resume-match'
-  if (route.path.startsWith('/skill-profile')) return '/skill-profile'
-  if (route.path.startsWith('/ability-map')) return '/ability-map'
-  if (route.path.startsWith('/study-plans/from-gap')) return '/study-plans/from-gap'
-  if (route.path.startsWith('/questions/recommendations')) return '/questions/recommendations'
-  if (route.path.startsWith('/questions/practice')) return '/questions/practice'
-  if (route.path.startsWith('/questions/wrong-records')) return '/questions/wrong-records'
-  if (route.path.startsWith('/questions/favorites')) return '/questions/favorites'
-  if (route.path.startsWith('/questions')) return '/questions'
-  if (route.path.startsWith('/project-evidence')) return '/project-evidence'
-  if (route.path.startsWith('/evidence-assets')) return '/evidence-assets'
-  if (route.path.startsWith('/resumes')) return '/resumes'
-  if (route.path.startsWith('/projects')) return '/projects'
-  if (route.path.startsWith('/study-plans')) return '/study-plans'
-  if (route.path.startsWith('/daily-tasks')) return '/daily-tasks'
-  if (route.path.startsWith('/weakness-analysis')) return '/weakness-analysis'
-  if (route.path.startsWith('/notifications')) return '/notifications'
-  if (route.path.startsWith('/password')) return '/password'
-  if (route.path.startsWith('/interviews/history')) return '/interviews/history'
-  if (route.path.startsWith('/interviews')) return '/interviews/create'
-  return route.path
+const visibleGroups = computed(() => getVisibleUserNavigationGroups())
+const routeContext = computed(() => ({
+  name: route.name,
+  path: String(route.path || route.fullPath || '/').split(/[?#]/, 1)[0] || '/'
+}))
+const activeItem = computed(() => resolveUserNavigationItem(routeContext.value, visibleGroups.value))
+// 先按子项匹配；组落地页（如 /resumes 本身）不属于任何子项，按组路径前缀兜底，
+// 保证 accordion 的展开组始终跟随当前路由。
+const activeGroup = computed(() => {
+  const fromItem = resolveUserNavigationGroup(routeContext.value, visibleGroups.value)
+  if (fromItem) return fromItem
+  const routePath = routeContext.value.path
+  return (
+    visibleGroups.value.find((group) => {
+      const basePath = String(group.path || '').split(/[?#]/, 1)[0]
+      return Boolean(basePath) && (routePath === basePath || routePath.startsWith(`${basePath}/`))
+    }) ?? null
+  )
 })
 
-watch(() => route.fullPath, closeAllMenus)
+// v21 原型侧边栏是 accordion：只有当前所在模块展开子菜单。
+// 点击分组行即导航，展开状态完全跟随路由，不需要单独的折叠小按钮。
+const isOpen = (key: string) => activeGroup.value?.key === key
+
+// v21 原型侧边栏的两级分组标题（文档相关/原型/dashboard-redesign.html）
+const SECTION_BY_GROUP: Partial<Record<UserNavigationGroup['key'], string>> = {
+  today: '主流程',
+  prepare: '求职准备'
+}
+
+interface SidebarRow {
+  key: string
+  group: UserNavigationGroup
+  section?: string
+}
+
+const visibleRows = computed<SidebarRow[]>(() => {
+  const rows: SidebarRow[] = []
+  let lastSection: string | undefined
+  for (const group of visibleGroups.value) {
+    const section = SECTION_BY_GROUP[group.key]
+    rows.push({ key: group.key, group, section: section && section !== lastSection ? section : undefined })
+    lastSection = section ?? lastSection
+  }
+  return rows
+})
+
+const badgeOf = (group: UserNavigationGroup) => {
+  const value = sidebarProps.badges?.[group.key]
+  return value === undefined || value === '' || value === 0 ? undefined : value
+}
 </script>
 
 <style scoped lang="scss">
-.user-sidebar-menu {
-  :deep(.el-sub-menu__title),
-  :deep(.el-menu-item) {
-    gap: 4px;
-  }
+.user-sidebar-nav {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  padding: 14px 10px;
+  scrollbar-width: thin;
+}
 
-  :deep(.el-sub-menu .el-menu-item) {
-    min-width: 0;
-    padding-left: 48px !important;
-    font-size: 14px;
+.user-sidebar-nav__section {
+  margin: 6px 0 0;
+  padding: 0 10px;
+  color: var(--user-text-subtle, #a8a29a);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.user-sidebar-nav__group {
+  min-width: 0;
+}
+
+.user-sidebar-nav__group.is-first-in-section {
+  margin-top: 4px;
+}
+
+.user-sidebar-nav__group-link,
+.user-sidebar-nav__item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--user-text-secondary, #57534e);
+  text-decoration: none;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.user-sidebar-nav__group-link {
+  position: relative;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--user-radius-md, 10px);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.user-sidebar-nav__group-link:hover,
+.user-sidebar-nav__group-link:focus-visible,
+.user-sidebar-nav__item:hover,
+.user-sidebar-nav__item:focus-visible {
+  background: var(--user-surface-muted, #f0efeb);
+  color: var(--user-text, #1a1917);
+}
+
+.user-sidebar-nav__group-link:focus-visible,
+.user-sidebar-nav__item:focus-visible {
+  outline: 0;
+}
+
+// v21 侧栏 active 态：tint 底 + 主色文字 + 1px 内描边 + 左侧色条（忠于原型 .sb-item.active::before）
+.user-sidebar-nav__group-link.is-active {
+  background: var(--user-primary-soft, #eaf2ef);
+  border-color: var(--user-primary-border, rgba(31, 111, 92, 0.28));
+  color: var(--user-primary, #1f6f5c);
+}
+
+// 左侧色条：对照原型 .sb-item.active::before（3px 主色条，top/bottom 内缩 8px 避让圆角）。
+.user-sidebar-nav__group-link.is-active::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: var(--user-primary, #1f6f5c);
+  border-radius: 2px;
+}
+
+.user-sidebar-nav__group-link span,
+.user-sidebar-nav__item span {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-sidebar-nav__badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--user-danger-soft, #fbeeee);
+  color: var(--user-danger, #b03a3a);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.user-sidebar-nav__chevron {
+  flex: none;
+  color: var(--user-text-subtle, #a8a29a);
+  transform: rotate(-90deg);
+  transition: transform 180ms ease, color 150ms ease;
+}
+
+.user-sidebar-nav__group.is-open .user-sidebar-nav__chevron {
+  transform: rotate(0deg);
+}
+
+.user-sidebar-nav__group-link.is-active .user-sidebar-nav__chevron {
+  color: var(--user-primary, #1f6f5c);
+}
+
+.user-sidebar-nav__items {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 6px 28px;
+}
+
+.user-sidebar-nav__item {
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--user-radius-sm, 6px);
+  color: var(--user-text-muted, #6e6963);
+  font-size: 12px;
+}
+
+.user-sidebar-nav__item.is-active {
+  background: var(--user-primary-soft, #eaf2ef);
+  color: var(--user-primary, #1f6f5c);
+  font-weight: 600;
+}
+
+// ---- Collapsed (icon rail) state ----
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__section {
+  display: none;
+}
+
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__group-link {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__group-link span,
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__badge,
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__chevron,
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__items {
+  display: none;
+}
+
+// 折叠态仅保留 tint 底区分 active，隐藏左侧色条（图标居中时色条会脱离视觉锚点）。
+.user-sidebar-nav.is-collapsed .user-sidebar-nav__group-link.is-active::before {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .user-sidebar-nav {
+    padding-inline: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-sidebar-nav__group-link,
+  .user-sidebar-nav__item,
+  .user-sidebar-nav__chevron {
+    transition: none;
   }
 }
 </style>

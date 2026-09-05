@@ -1,5 +1,7 @@
 <template>
   <div class="page-shell knowledge-page">
+    <ModuleTabs :items="moduleTabs" />
+
     <section class="knowledge-hero">
       <div>
         <p class="eyebrow">个人资料空间</p>
@@ -1422,6 +1424,8 @@ import {
   type KnowledgeSearchTraceVO
 } from '@/api/v4'
 import AppState from '@/components/common/AppState.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import type { StreamSseHandle } from '@/utils/sse'
 import type { AgentContextImpactPreviewVO } from '@/types/agent'
 
@@ -1431,6 +1435,7 @@ type GovernancePanelKey = 'overview' | 'duplicates' | 'quality'
 const loading = ref(false)
 const route = useRoute()
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('resources')
 const knowledgeViewFromQuery = (): KnowledgeViewKey => {
   const rawValue = Array.isArray(route.query.view) ? route.query.view[0] : route.query.view
   return rawValue === 'search' || rawValue === 'governance' ? rawValue : 'materials'
@@ -4072,7 +4077,7 @@ watch(
   margin: 0;
   color: var(--arena-grn);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .knowledge-tabs {
@@ -4099,7 +4104,7 @@ watch(
     span {
       color: var(--arena-ink);
       font-size: 14px;
-      font-weight: 700;
+      font-weight: 600;
     }
 
     small {
@@ -4141,7 +4146,7 @@ watch(
     span {
       color: var(--arena-ink);
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 600;
     }
 
     small {
@@ -4173,7 +4178,7 @@ watch(
     padding: 0 14px;
     color: var(--arena-ink);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 600;
     cursor: pointer;
     list-style: none;
 
@@ -4185,7 +4190,7 @@ watch(
       content: '展开';
       color: var(--arena-sub);
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 600;
     }
 
     &:focus-visible {
@@ -4343,7 +4348,7 @@ watch(
 
 .version-row__title {
   margin-top: 10px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .version-row p {
@@ -5232,7 +5237,7 @@ watch(
 
 .result-meta span {
   color: var(--app-text);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pagination-wrap {

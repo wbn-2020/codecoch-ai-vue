@@ -920,7 +920,7 @@ onMounted(() => { void loadWorkspace() })
   display: block;
   color: var(--user-primary-hover);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .workspace-header h1,
@@ -1112,7 +1112,7 @@ dd {
   border: 1px solid rgba(247, 144, 9, 0.34);
   border-radius: 10px;
   background: var(--user-warning-soft);
-  color: #9a5e00;
+  color: var(--user-warning-text);
   font-size: 12px;
   line-height: 1.55;
 }

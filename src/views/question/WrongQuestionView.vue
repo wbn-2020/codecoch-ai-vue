@@ -1,29 +1,32 @@
 ﻿<template>
   <div class="wrong-question-page page-shell">
-    <section class="hero-band">
-      <div class="hero-copy">
-        <p class="hero-kicker">
-          <RotateCcw :size="16" />
-          错题复盘
-        </p>
-        <h1>把答错的题练成下一轮的得分点</h1>
-        <p>优先处理重复出错和高难度题，再回到训练页重组答案。</p>
-        <div class="hero-actions">
-          <el-button type="primary" @click="startWrongPractice">
-            <PenLine :size="16" />
-            进入复盘训练
-          </el-button>
-          <el-button @click="router.push('/questions/recommendations')">
-            <Sparkles :size="16" />
-            今日训练题组
-          </el-button>
-        </div>
-      </div>
-      <aside class="hero-panel">
-        <div class="hero-panel__stat"><span>待优先复盘</span><strong>{{ todayReviewCount }}</strong></div>
-        <div class="hero-panel__stat"><span>重复出错</span><strong>{{ repeatedWrongCount }}</strong></div>
-        <p>本次已加载 {{ total || records.length }} 道错题。</p>
-      </aside>
+    <PageHeader
+      class="wrong-question-page__head"
+      title="把答错的题练成下一轮的得分点"
+      description="优先处理重复出错和高难度题，再回到训练页重组答案。"
+    >
+      <template #eyebrow>
+        <RotateCcw :size="13" aria-hidden="true" />
+        错题复盘
+      </template>
+      <template #actions>
+        <el-button type="primary" @click="startWrongPractice">
+          <PenLine :size="16" />
+          进入复盘训练
+        </el-button>
+        <el-button @click="router.push('/questions/recommendations')">
+          <Sparkles :size="16" />
+          今日训练题组
+        </el-button>
+      </template>
+    </PageHeader>
+
+    <ModuleTabs :items="moduleTabs" />
+
+    <section class="wrong-metrics">
+      <StatCard label="待优先复盘" :value="todayReviewCount" />
+      <StatCard label="重复出错" :value="repeatedWrongCount" />
+      <p class="wrong-metrics__note">本次已加载 {{ total || records.length }} 道错题。</p>
     </section>
 
     <section class="source-panel">
@@ -146,12 +149,17 @@ import { ChevronRight, PenLine, RefreshCw, RotateCcw, Search, Sparkles } from 'l
 import { getWrongQuestionsApi, updateQuestionMasteryApi } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
+import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
+import PageHeader from '@/components/user-ui/PageHeader.vue'
+import StatCard from '@/components/user-ui/StatCard.vue'
+import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { difficultyOptions, MASTERY_STATUS } from '@/constants/enums'
 import type { WrongQuestionQueryDTO, WrongQuestionVO } from '@/types/question'
 import { getErrorMessage } from '@/utils/error'
 import { getOptionLabel } from '@/utils/format'
 
 const router = useRouter()
+const moduleTabs = useUserModuleTabs('train')
 const loading = ref(false)
 const masteryChangingId = ref<number | null>(null)
 const records = ref<WrongQuestionVO[]>([])
@@ -265,107 +273,66 @@ onMounted(fetchRecords)
 .wrong-question-page {
   display: grid;
   min-width: 0;
-  gap: 22px;
+  gap: 18px;
 }
 
-.hero-band {
+// PageHeader 自带 margin-bottom，交给 grid gap 统一控制节奏
+.wrong-question-page__head {
+  margin-bottom: 0;
+}
+
+.wrong-metrics {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(204px, 236px);
-  gap: 22px;
-  padding: 22px 24px;
-  border: 1.5px solid var(--user-primary-border);
-  border-radius: 20px;
-  background: var(--user-surface-tint);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
 }
 
-.hero-kicker,
-.hero-actions,
+.wrong-metrics__note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--user-text-muted);
+  font-size: var(--user-text-body-sm, 13px);
+  line-height: 1.6;
+}
+
 .panel-actions,
 .question-head,
 .card-actions,
-.side-summary,
-.hero-panel__stat {
+.side-summary {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.hero-kicker,
 .section-kicker {
   margin: 0;
   color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.hero-copy h1,
 .panel-head h2,
 .question-card h3 {
   margin: 0;
   color: var(--user-text);
 }
 
-.hero-copy h1 {
-  margin-top: 8px;
-  font-size: 26px;
-  font-weight: 900;
-  line-height: 1.3;
-}
-
-.hero-copy p,
-.hero-panel p,
 .panel-head p,
-.insight-card p,
 .review-block p,
 .side-summary span,
 .side-summary small {
   color: var(--user-text-secondary);
 }
 
-.hero-copy p {
-  max-width: 640px;
-  margin: 8px 0 0;
-  font-size: 13.5px;
-  line-height: 1.6;
-}
-
-.hero-actions {
-  flex-wrap: wrap;
-  margin-top: 14px;
-}
-
-.hero-panel {
-  display: grid;
-  gap: 11px;
-  align-content: center;
-  padding-left: 24px;
-  border-left: 1.5px solid var(--user-primary-border);
-}
-
-.hero-panel__stat {
-  align-items: baseline;
-  justify-content: flex-start;
-  gap: 10px;
-}
-
-.hero-panel__stat span {
-  color: var(--user-text-muted);
-  font-size: 12px;
-}
-
-.hero-panel__stat strong {
-  color: var(--user-text);
-  font-size: 24px;
-  font-weight: 900;
-  line-height: 1;
-}
-
 .question-card {
   border: 1px solid var(--user-border);
-  border-radius: 16px;
+  border-radius: var(--user-radius-lg, 14px);
   background: var(--user-surface);
-  box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
+  box-shadow: var(--user-shadow-xs);
 }
 
 .source-panel {
@@ -383,17 +350,17 @@ onMounted(fetchRecords)
 }
 
 .panel-head h2 {
-  margin: 0;
   margin-top: 5px;
-  font-size: 19px;
-  font-weight: 900;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 
 .panel-head p {
   margin: 6px 0 0;
   max-width: 620px;
-  font-size: 13.5px;
+  font-size: var(--user-text-body-sm, 13px);
   line-height: 1.6;
 }
 
@@ -430,13 +397,13 @@ onMounted(fetchRecords)
   display: block;
   margin-bottom: 6px;
   color: var(--user-text-subtle);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--user-text-caption, 12px);
+  font-weight: 500;
 }
 
 .question-card h3 {
-  font-size: 17px;
-  font-weight: 900;
+  font-size: var(--user-text-h3, 17px);
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -449,10 +416,10 @@ onMounted(fetchRecords)
 
 .tag-row span {
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--user-radius-full, 999px);
   background: var(--user-control-bg-muted);
   color: var(--user-text-secondary);
-  font-size: 12px;
+  font-size: var(--user-text-caption, 12px);
 }
 
 .review-block {
@@ -465,6 +432,7 @@ onMounted(fetchRecords)
   display: block;
   margin-bottom: 6px;
   color: var(--user-text);
+  font-weight: 600;
 }
 
 .review-block p,
@@ -487,8 +455,8 @@ onMounted(fetchRecords)
   display: block;
   margin: 6px 0 8px;
   color: var(--user-text);
-  font-size: 15px;
-  font-weight: 800;
+  font-size: var(--user-text-h4, 15px);
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -497,8 +465,7 @@ onMounted(fetchRecords)
 }
 
 .card-actions :deep(.el-button),
-.panel-actions :deep(.el-button),
-.hero-actions :deep(.el-button) {
+.panel-actions :deep(.el-button) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -512,7 +479,6 @@ onMounted(fetchRecords)
 }
 
 @media (max-width: 980px) {
-  .hero-band,
   .question-card {
     grid-template-columns: 1fr;
   }
@@ -527,21 +493,6 @@ onMounted(fetchRecords)
 }
 
 @media (max-width: 720px) {
-  .hero-band {
-    gap: 18px;
-    padding: 20px 18px;
-  }
-
-  .hero-panel {
-    padding: 16px 0 0;
-    border-top: 1.5px solid var(--user-primary-border);
-    border-left: 0;
-  }
-
-  .hero-copy h1 {
-    font-size: 23px;
-  }
-
   .card-actions {
     flex-direction: column;
   }
@@ -553,8 +504,7 @@ onMounted(fetchRecords)
   }
 
   .card-actions :deep(.el-button),
-  .panel-actions :deep(.el-button),
-  .hero-actions :deep(.el-button) {
+  .panel-actions :deep(.el-button) {
     width: 100%;
     margin-left: 0;
   }

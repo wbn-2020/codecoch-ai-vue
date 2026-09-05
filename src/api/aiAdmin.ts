@@ -132,6 +132,7 @@ const toBackendPromptDTO = (data: PromptTemplateDTO, includeContent = true) => (
   name: data.name,
   description: data.description,
   ...(includeContent ? { content: data.content } : {}),
+  ...(includeContent ? { variables: data.variables } : {}),
   status: data.status,
   confirm: data.confirm,
   dryRun: data.dryRun,

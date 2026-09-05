@@ -192,7 +192,7 @@ const handleDelete = async (item: ProjectSkillEvidenceVO) => {
   margin: 0 0 4px;
   color: var(--app-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 

@@ -1872,8 +1872,10 @@ onBeforeUnmount(() => {
   h1 {
     margin: 7px 0 0;
     color: var(--user-text);
-    font-size: 24px;
-    line-height: 1.25;
+    font-size: var(--user-text-h1, 30px);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
     text-wrap: balance;
   }
 }
@@ -1885,9 +1887,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   margin: 0;
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 700;
+  color: var(--user-text-muted);
+  font-size: var(--user-text-overline, 11px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .dashboard-context {
@@ -1905,7 +1909,7 @@ onBeforeUnmount(() => {
     min-height: 28px;
     padding: 0 9px;
     border: 1px solid var(--user-border);
-    border-radius: 6px;
+    border-radius: var(--user-radius-sm);
     background: var(--user-surface-muted);
     color: var(--user-text-secondary);
     font-size: 12px;
@@ -1934,7 +1938,7 @@ onBeforeUnmount(() => {
 .insight-card {
   min-width: 0;
   border: 1px solid var(--user-border);
-  border-radius: 8px;
+  border-radius: var(--user-radius-lg);
   background: var(--user-surface);
 }
 
@@ -1958,7 +1962,8 @@ onBeforeUnmount(() => {
   h2 {
     max-width: 34ch;
     color: var(--user-text);
-    font-size: 25px;
+    font-size: var(--user-text-h2, 22px);
+    font-weight: 600;
     line-height: 1.24;
     overflow-wrap: anywhere;
     text-wrap: balance;
@@ -2002,12 +2007,12 @@ onBeforeUnmount(() => {
   gap: 7px;
   padding: 0 14px;
   border: 1px solid var(--user-primary);
-  border-radius: 7px;
+  border-radius: var(--user-radius-sm);
   background: var(--user-primary);
   color: var(--user-primary-contrast);
   font: inherit;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 600;
   cursor: pointer;
   transition: background 0.16s ease, border-color 0.16s ease;
 
@@ -2034,7 +2039,7 @@ onBeforeUnmount(() => {
   summary {
     min-height: 28px;
     padding: 5px 8px;
-    border-radius: 6px;
+    border-radius: var(--user-radius-sm);
     cursor: pointer;
     list-style-position: inside;
   }
@@ -2046,7 +2051,7 @@ onBeforeUnmount(() => {
     margin-top: 5px;
     padding: 6px;
     border: 1px solid var(--user-border);
-    border-radius: 7px;
+    border-radius: var(--user-radius-sm);
     background: var(--user-surface-raised);
   }
 
@@ -2054,7 +2059,7 @@ onBeforeUnmount(() => {
     min-height: 28px;
     padding: 0 8px;
     border: 1px solid var(--user-border);
-    border-radius: 6px;
+    border-radius: var(--user-radius-sm);
     background: var(--user-surface-muted);
     color: var(--user-text-secondary);
     font: inherit;
@@ -2181,7 +2186,7 @@ onBeforeUnmount(() => {
   margin: 0 0 9px;
   padding: 8px 10px;
   border: 1px solid var(--user-danger-border);
-  border-radius: 6px;
+  border-radius: var(--user-radius-sm);
   background: var(--user-danger-soft);
   color: var(--user-danger);
   font-size: 12px;
@@ -2215,11 +2220,11 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 999px;
+  border-radius: var(--user-radius-full);
   background: var(--user-primary-soft);
   color: var(--user-primary);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .task-row__type {
@@ -2289,7 +2294,7 @@ onBeforeUnmount(() => {
   background: var(--user-surface-raised);
   color: var(--user-text-muted);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pill--success {
@@ -2599,7 +2604,7 @@ onBeforeUnmount(() => {
 .review-kicker {
   color: var(--user-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .review-note {
@@ -2710,7 +2715,7 @@ onBeforeUnmount(() => {
       color: var(--user-primary);
       font: inherit;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 600;
       overflow-wrap: anywhere;
     }
   }
