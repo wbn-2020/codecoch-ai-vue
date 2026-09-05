@@ -1,4 +1,4 @@
-import type { ResumeAccent, ResumeTemplateCode } from '@/features/resume-document'
+import type { ResumeTemplateCode } from '@/features/resume-document'
 
 export type ResumePresentationSection =
   | 'summary'
@@ -58,7 +58,7 @@ export interface ResumePresentationConfig {
   basicFieldIcons: Partial<Record<'realName' | 'targetPosition' | 'email' | 'phone', string>>
   iconMode: 'ICON' | 'TEXT' | 'HIDDEN'
   autoOnePage: boolean
-  accentColor: ResumeAccent
+  accentColor: string
   fontFamily: ResumePresentationFont
   fontScale: number
   lineHeight: number

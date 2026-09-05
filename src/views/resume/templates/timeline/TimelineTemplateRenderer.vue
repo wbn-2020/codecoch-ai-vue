@@ -24,7 +24,7 @@
         :data-section="section.builtinKey || section.id"
         class="timeline-renderer__section"
       >
-        <TemplateSectionTitle :title="section.title" />
+        <TemplateSectionTitle :title="section.title" tone="timeline" />
 
         <div v-if="section.builtinKey === 'summary'" class="timeline-renderer__summary">
           <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>
@@ -189,6 +189,13 @@ const entriesFor = (section: ResumePresentationSection): ResumeDocumentEntry[] =
   break-inside: avoid;
 }
 
+/* 圆点标记是 absolute，不参与网格占位；正文必须显式放进第二列，
+   否则会掉进 12px 的标记列被挤成一字一行。 */
+.timeline-renderer__entry-content {
+  grid-column: 2;
+  min-width: 0;
+}
+
 .timeline-renderer__marker {
   position: absolute;
   top: 5px;
@@ -226,6 +233,8 @@ const entriesFor = (section: ResumePresentationSection): ResumeDocumentEntry[] =
   color: var(--template-accent-strong);
   font-size: calc(10px * var(--template-font-scale, 1));
   font-weight: 800;
+  white-space: nowrap;
+  min-width: max-content;
 }
 
 .timeline-renderer__meta {

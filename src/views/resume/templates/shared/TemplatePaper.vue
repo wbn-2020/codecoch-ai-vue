@@ -15,28 +15,28 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { alphaAccent, resolveAccentHex, shadeAccent } from '@/features/resume-document'
 import type { ResumeRenderModel } from '@/features/resume-template/schema'
 
 const props = withDefaults(defineProps<{
   model: ResumeRenderModel
   variant?: 'classic' | 'modern' | 'left-right'
+  /**
+   * 自动一页模式的实测压缩系数（1 = 不压缩）。
+   * 只在预览画布传入；打印/导出路径保持默认，避免影响正式排版。
+   */
+  fitScale?: number
 }>(), {
-  variant: 'modern'
+  variant: 'modern',
+  fitScale: 1
 })
 
-const accentColors = {
-  default: { accent: '#1b1b18', strong: '#11110f', soft: '#f1f0ee' },
-  blue: { accent: '#3E6AAE', strong: '#2A4E86', soft: '#eef2fb' },
-  green: { accent: '#1f6f5c', strong: '#17493d', soft: '#eaf2ef' },
-  purple: { accent: '#7E6CB0', strong: '#5A4D8A', soft: '#f4f1fb' },
-  orange: { accent: '#f97316', strong: '#c2410c', soft: '#fff7ed' },
-  red: { accent: '#ef4444', strong: '#b91c1c', soft: '#fef2f2' },
-  slate: { accent: '#57534e', strong: '#3a3630', soft: '#f0efeb' },
-  black: { accent: '#000000', strong: '#000000', soft: '#f5f5f5' }
-} as const
+/** 主题色为自由 hex（resolveAccentHex 迁移旧枚举）；strong/soft 由 hex 派生。 */
 
 const pointsToPixels = (points: number) =>
   Math.round(points * (4 / 3) * 100) / 100
+
+const accentHex = computed(() => resolveAccentHex(props.model.presentation.accentColor))
 
 const paperStyle = computed(() => ({
   '--template-font-family': props.model.presentation.fontFamily,
@@ -44,24 +44,26 @@ const paperStyle = computed(() => ({
     props.model.presentation.fontScale
       * (props.model.density === 'compact' ? 0.92 : 1)
       * (props.model.presentation.autoOnePage ? 0.9 : 1)
+      * props.fitScale
   ),
   '--template-line-height': String(props.model.presentation.lineHeight),
   '--template-section-gap': `${18
     * props.model.presentation.sectionSpacing
     * (props.model.density === 'compact' ? 0.86 : 1)
-    * (props.model.presentation.autoOnePage ? 0.82 : 1)}px`,
+    * (props.model.presentation.autoOnePage ? 0.82 : 1)
+    * props.fitScale}px`,
   '--template-page-margin': `${pointsToPixels(props.model.presentation.pageMarginPt)}px`,
-  '--template-accent': accentColors[props.model.presentation.accentColor].accent,
-  '--template-accent-strong': accentColors[props.model.presentation.accentColor].strong,
-  '--template-accent-soft': accentColors[props.model.presentation.accentColor].soft
+  '--template-accent': accentHex.value,
+  '--template-accent-strong': shadeAccent(accentHex.value, 0.22),
+  '--template-accent-soft': alphaAccent(accentHex.value, 0.1)
 }))
 </script>
 
 <style scoped>
 .template-paper {
-  --template-accent: #176b87;
-  --template-accent-strong: #124f66;
-  --template-accent-soft: #e8f2f4;
+  --template-accent: #0047AB;
+  --template-accent-strong: #003a8c;
+  --template-accent-soft: rgba(0, 71, 171, 0.1);
   --template-ink: #1a1917;
   --template-body: #3a3630;
   --template-muted: #6e6963;
@@ -69,27 +71,21 @@ const paperStyle = computed(() => ({
   box-sizing: border-box;
   width: 794px;
   max-width: none;
+  /* 纸张随内容生长（magic-resume 式连续纸）：内容不足一页时由 min-height 撑出 A4 版面，
+     超过一页时由预览画布叠加分页参考线，而不是把内容挤出纸外。 */
   min-height: 1123px;
-  aspect-ratio: 210 / 297;
   padding: var(--template-page-margin);
-  border: 1px solid #d8d4cc;
+  border: 0;
+  border-radius: 2px;
   background: #ffffff;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.25);
   color: var(--template-ink);
   font-family: var(--template-font-family), Arial, "Microsoft YaHei", sans-serif;
   line-height: var(--template-line-height);
   overflow-wrap: anywhere;
 }
 
-.template-paper--classic {
-  --template-accent: #166b75;
-  --template-accent-strong: #0e4d55;
-  --template-accent-soft: #e9f4f3;
-}
-
 .template-paper--left-right {
-  --template-accent: #304b63;
-  --template-accent-strong: #20394e;
-  --template-accent-soft: #edf2f5;
   display: grid;
   grid-template-columns: minmax(150px, 28%) minmax(0, 1fr);
   padding: 0;

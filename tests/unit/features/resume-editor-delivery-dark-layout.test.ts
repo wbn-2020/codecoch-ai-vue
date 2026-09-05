@@ -60,11 +60,12 @@ describe('resume editor and delivery workspace layout', () => {
 
     expect(shellSource).toContain('--workbench-rail-width: 220px')
     expect(shellSource).toContain('--workbench-editor-width: 420px')
+    // v22 列序：editor 居中（col 2），preview 居右（col 3），由 Shell :slotted 托管
     expect(shellSource).toMatch(
-      /\.resume-workbench-layout > :deep\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :deep\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;/
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;/
     )
     expect(shellSource).toMatch(
-      /\.resume-workbench-layout > :deep\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;[\s\S]*?overflow:\s*hidden;/
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;[\s\S]*?overflow:\s*hidden;/
     )
     expect(source).toMatch(
       /\.resume-paper-wrap\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*100%;[\s\S]*?overscroll-behavior:\s*contain;/
@@ -76,7 +77,7 @@ describe('resume editor and delivery workspace layout', () => {
       /@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout\s*\{[\s\S]*?display:\s*block;/
     )
     expect(shellSource).toMatch(
-      /@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout > :deep\(\.resume-workbench-pane--editor\),[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*194px\)\);[\s\S]*?overflow:\s*auto;/
+      /@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*194px\)\);[\s\S]*?overflow:\s*auto;/
     )
     expect(source).toContain('ResumeDocumentPreview')
     expect(source).toContain('ResumeTemplateBrowser')

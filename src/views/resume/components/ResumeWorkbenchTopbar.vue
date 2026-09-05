@@ -15,42 +15,18 @@
       </div>
     </div>
 
-    <nav class="resume-workbench-topbar__steps" aria-label="简历工作流程">
+    <!-- v22 原型：中央区域改为模板切换 tab -->
+    <nav class="resume-workbench-topbar__templates" aria-label="简历模板切换">
       <button
+        v-for="template in templates"
+        :key="template.id"
         type="button"
-        :class="{ 'is-active': activeStep === 'fill' }"
-        :aria-current="activeStep === 'fill' ? 'step' : undefined"
-        @click="emit('mode-change', 'edit')"
+        :class="{ 'is-active': activeTemplateId === template.id }"
+        :aria-current="activeTemplateId === template.id ? 'true' : undefined"
+        :title="`切换到「${template.label}」`"
+        @click="emit('template-change', template.id)"
       >
-        <span>1</span>
-        填写
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': activeStep === 'review' }"
-        :aria-current="activeStep === 'review' ? 'step' : undefined"
-        @click="emit('mode-change', 'review')"
-      >
-        <span>2</span>
-        检查
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': activeStep === 'preview' }"
-        :aria-current="activeStep === 'preview' ? 'step' : undefined"
-        @click="emit('open-preview')"
-      >
-        <span>3</span>
-        预览
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': activeStep === 'export' }"
-        :aria-current="activeStep === 'export' ? 'step' : undefined"
-        @click="emit('open-export')"
-      >
-        <span>4</span>
-        导出
+        {{ template.label }}
       </button>
     </nav>
 
@@ -83,6 +59,7 @@
           <Redo2 :size="16" aria-hidden="true" />
         </button>
       </div>
+      <!-- v22 原型：右侧三动作（AI 优化 / 重置 / 导出 PDF） -->
       <button
         class="resume-workbench-topbar__action resume-workbench-topbar__action--utility"
         type="button"
@@ -96,12 +73,22 @@
       <button
         class="resume-workbench-topbar__action resume-workbench-topbar__action--utility"
         type="button"
-        :aria-label="`调整模板，当前为 ${templateLabel}`"
-        :title="`调整模板，当前为 ${templateLabel}`"
-        @click="emit('open-templates')"
+        aria-label="重置当前简历"
+        title="重置当前简历"
+        @click="emit('reset-resume')"
       >
-        <LayoutTemplate :size="16" aria-hidden="true" />
-        <span>模板</span>
+        <RotateCcw :size="16" aria-hidden="true" />
+        <span>重置</span>
+      </button>
+      <button
+        class="resume-workbench-topbar__action resume-workbench-topbar__action--utility"
+        type="button"
+        aria-label="导出 PDF"
+        title="导出 PDF"
+        @click="emit('export-pdf')"
+      >
+        <FileDown :size="16" aria-hidden="true" />
+        <span>导出 PDF</span>
       </button>
       <button
         class="resume-workbench-topbar__action"
@@ -127,13 +114,19 @@
 <script setup lang="ts">
 import {
   ArrowLeft,
+  FileDown,
   FileText,
-  LayoutTemplate,
   Redo2,
+  RotateCcw,
   Save,
   Sparkles,
   Undo2
 } from 'lucide-vue-next'
+
+export interface TemplateOption {
+  id: string
+  label: string
+}
 
 defineProps<{
   title: string
@@ -147,6 +140,8 @@ defineProps<{
   templateLabel: string
   inspectorMode: 'edit' | 'review' | 'ai'
   activeStep: 'fill' | 'review' | 'preview' | 'export'
+  templates: TemplateOption[]
+  activeTemplateId: string
 }>()
 
 const emit = defineEmits<{
@@ -156,6 +151,9 @@ const emit = defineEmits<{
   'open-templates': []
   'open-export': []
   'open-preview': []
+  'template-change': [id: string]
+  'reset-resume': []
+  'export-pdf': []
   undo: []
   redo: []
   'mode-change': [mode: 'edit' | 'review' | 'ai']
@@ -177,7 +175,7 @@ const emit = defineEmits<{
 
 .resume-workbench-topbar__document,
 .resume-workbench-topbar__title,
-.resume-workbench-topbar__steps,
+.resume-workbench-topbar__templates,
 .resume-workbench-topbar__actions {
   display: flex;
   align-items: center;
@@ -186,6 +184,44 @@ const emit = defineEmits<{
 .resume-workbench-topbar__document {
   min-width: 0;
   gap: 10px;
+}
+
+/* v22 原型：模板切换 tab —— 5 个模板，当前激活用主色绿底白字 */
+.resume-workbench-topbar__templates {
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--resume-workbench-line);
+    border-radius: 8px;
+    background: var(--resume-workbench-surface-soft);
+    color: var(--resume-workbench-text-soft);
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+    transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--resume-workbench-accent);
+      color: var(--resume-workbench-accent);
+      outline: 0;
+    }
+
+    &.is-active {
+      background: var(--resume-workbench-accent);
+      border-color: var(--resume-workbench-accent);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: none;
+    }
+  }
 }
 
 .resume-workbench-topbar__icon-button,
@@ -349,14 +385,14 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 36px;
-  padding: 0 13px;
+  min-height: 32px;
+  padding: 0 12px;
   border: 1px solid var(--resume-workbench-line-strong);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--resume-workbench-surface);
   color: var(--resume-workbench-text-soft);
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
   transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease,
     box-shadow 0.16s ease, transform 0.08s ease;
 

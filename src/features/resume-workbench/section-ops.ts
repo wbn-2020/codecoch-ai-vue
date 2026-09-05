@@ -3,6 +3,7 @@ import {
   type ProjectSection,
   type ResumeBlock,
   type ResumeBuiltInSectionKey,
+  type ResumeCertificateItem,
   type ResumeDocumentV2,
   type ResumeEntryItem,
   type ResumeProjectItem,
@@ -71,31 +72,47 @@ export const renameSection = (document: ResumeDocumentV2, sectionId: string, tit
 
 export const addCustomSection = (
   document: ResumeDocumentV2,
-  options: { variant: 'text' | 'entry'; title?: string; at?: number }
+  options: { variant: 'text' | 'entry' | 'certificates'; title?: string; at?: number }
 ): ResumeDocumentV2 => {
   const customCount = document.sections.filter((section) => !section.builtinKey).length
   if (customCount >= MAX_CUSTOM_SECTIONS) return document
   const next = clone(document)
+  const base = {
+    id: nextDocumentId('sec-custom'),
+    title: options.title || '自定义分区',
+    visible: true,
+    kind: 'custom' as const
+  }
   const section: ResumeSection =
     options.variant === 'entry'
-      ? {
-          id: nextDocumentId('sec-custom'),
-          title: options.title || '自定义分区',
-          visible: true,
-          kind: 'custom',
-          variant: 'entry',
-          content: { items: [] }
-        }
-      : {
-          id: nextDocumentId('sec-custom'),
-          title: options.title || '自定义分区',
-          visible: true,
-          kind: 'custom',
-          variant: 'text',
-          content: { blocks: [] }
-        }
+      ? { ...base, variant: 'entry', content: { items: [] } }
+      : options.variant === 'certificates'
+        ? { ...base, variant: 'certificates', content: { certificates: [] } }
+        : { ...base, variant: 'text', content: { blocks: [] } }
   const at = Math.max(0, Math.min(next.sections.length, options.at ?? next.sections.length))
   next.sections.splice(at, 0, section)
+  return next
+}
+
+export const createCertificateItem = (): ResumeCertificateItem => ({
+  id: nextDocumentId('cert'),
+  name: '',
+  issuer: '',
+  date: ''
+})
+
+/** 整段替换证书条目。 */
+export const updateSectionCertificates = (
+  document: ResumeDocumentV2,
+  sectionId: string,
+  items: ResumeCertificateItem[]
+): ResumeDocumentV2 => {
+  const index = findSectionIndex(document, sectionId)
+  const section = index < 0 ? undefined : document.sections[index]
+  if (!section || section.kind !== 'custom' || section.variant !== 'certificates') return document
+  const next = clone(document)
+  const target = next.sections[index]
+  if (target.kind === 'custom') target.content = { ...target.content, certificates: clone(items) }
   return next
 }
 

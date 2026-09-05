@@ -1,6 +1,6 @@
 import { h, nextTick, render } from 'vue'
 
-import type { ResumeDocumentDraft, ResumePreviewDensity, ResumeAccent, ResumeTemplateCode } from '@/features/resume-document'
+import type { ResumeDocumentDraft, ResumePreviewDensity, ResumeTemplateCode } from '@/features/resume-document'
 import type { ResumeDocumentV2 } from '@/features/resume-workbench/document'
 import type { ResumePresentationConfig } from '@/types/resumePresentation'
 import { A4_PAGE_WIDTH_PX } from '@/features/resume-template/pagination'
@@ -11,7 +11,7 @@ import { PRINT_SHEET_CSS, stabilizePrintBreaks } from './print-pagination'
 export interface ResumePrintSheetProps {
   draft: ResumeDocumentDraft
   templateCode: ResumeTemplateCode | string
-  accent: ResumeAccent
+  accent: string
   density: ResumePreviewDensity
   presentationConfig?: ResumePresentationConfig
   document?: ResumeDocumentV2 | null

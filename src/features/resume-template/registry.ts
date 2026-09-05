@@ -134,7 +134,7 @@ const categoryByClassName: Record<string, ResumeTemplateCategory> = {
 }
 
 const rendererKeyByClassName: Record<string, string> = {
-  professional: 'codecoachai/modern',
+  professional: 'codecoachai/magic-lr',
   compact: 'codecoachai/classic',
   project: 'codecoachai/project',
   streak: 'codecoachai/streak',

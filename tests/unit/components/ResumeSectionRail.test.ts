@@ -19,8 +19,8 @@ describe('ResumeSectionRail', () => {
       }
     })
 
-    const invalidButton = wrapper.findAll('.resume-section-rail__sections button')[1]
-    expect(invalidButton.classes()).toContain('is-invalid')
+    const invalidButton = wrapper.findAll('.wb-sec-list .wb-sec-item')[1]
+    expect(invalidButton.classes()).toContain('wb-sec-item--invalid')
     expect(invalidButton.attributes('aria-invalid')).toBe('true')
     expect(invalidButton.text()).toContain('技能栈')
     expect(invalidButton.find('svg[aria-label="需修正"]').exists()).toBe(true)

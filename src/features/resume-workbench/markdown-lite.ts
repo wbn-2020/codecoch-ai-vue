@@ -45,6 +45,10 @@ const renderEmphasis = (escaped: string): string =>
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[\s(（【])\*([^*\n]+)\*(?=[\s)）】.,，。;；!！?？:]|$)/g, '$1<em>$2</em>')
     .replace(/(^|[\s(（【])_([^_\n]+)_(?=[\s)）】.,，。;；!！?？:]|$)/g, '$1<em>$2</em>')
+    .replace(/\+\+([^+\n]+)\+\+/g, '<u>$1</u>')
+    .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+    .replace(/\{\{!#([0-9a-fA-F]{3,8})\|([^{}]+)\}\}/g, '<span style="background-color:#$1">$2</span>')
+    .replace(/\{\{#([0-9a-fA-F]{3,8})\|([^{}]+)\}\}/g, '<span style="color:#$1">$2</span>')
 
 /** 去掉 markdown-lite 标记得到 ATS 纯文本。链接保留文字；includeLinkTarget 时追加 “文字 (url)”。 */
 export const stripMarkdownInline = (text: string, includeLinkTarget = false): string => {
@@ -58,6 +62,9 @@ export const stripMarkdownInline = (text: string, includeLinkTarget = false): st
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/(^|[\s(（【])\*([^*\n]+)\*(?=[\s)）】.,，。;；!！?？:]|$)/g, '$2')
     .replace(/(^|[\s(（【])_([^_\n]+)_(?=[\s)）】.,，。;；!！?？:]|$)/g, '$2')
+    .replace(/\+\+([^+\n]+)\+\+/g, '$1')
+    .replace(/~~([^~\n]+)~~/g, '$1')
+    .replace(/\{\{!?(?:#[0-9a-fA-F]{3,8})\|([^{}]+)\}\}/g, '$1')
 }
 
 export interface PlainLine {

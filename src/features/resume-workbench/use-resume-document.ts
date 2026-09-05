@@ -122,7 +122,7 @@ export const useResumeDocument = (context: ResumeDocumentBridgeContext = {}) => 
     moveSection: (sectionId: string, toIndex: number) => commit(moveSection(current.value, sectionId, toIndex)),
     toggleSectionVisible: (sectionId: string) => commit(toggleSectionVisible(current.value, sectionId)),
     renameSection: (sectionId: string, title: string) => commit(renameSection(current.value, sectionId, title)),
-    addCustomSection: (options: { variant: 'text' | 'entry'; title?: string; at?: number }) =>
+    addCustomSection: (options: { variant: 'text' | 'entry' | 'certificates'; title?: string; at?: number }) =>
       commit(addCustomSection(current.value, options)),
     removeSection: (sectionId: string) => commit(removeSection(current.value, sectionId)),
     addBlock: (sectionId: string, block?: Omit<ResumeBlock, 'id'>) =>

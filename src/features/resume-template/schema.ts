@@ -84,11 +84,19 @@ export interface ResumeRenderSection {
   kind: 'text' | 'skills' | 'entry' | 'project' | 'custom'
   blocks?: ResumeBlock[]
   entries?: ResumeDocumentEntry[]
+  /** 证书分区（custom certificates variant）的结构化条目 */
+  certificates?: Array<{ name: string; issuer: string; date: string }>
 }
 export interface ResumeRenderModel {
   identity: {
     name: string
     targetPosition: string
+  }
+  avatar: {
+    url: string
+    visible: boolean
+    shape: 'SQUARE' | 'ROUNDED' | 'CIRCLE'
+    position: 'LEFT' | 'CENTER' | 'RIGHT'
   }
   basicLayout: 'LEFT' | 'CENTER' | 'RIGHT'
   basicFieldOrder: Array<'realName' | 'targetPosition' | 'email' | 'phone'>

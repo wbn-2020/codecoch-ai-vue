@@ -681,11 +681,12 @@ describe('ResumeEditView', () => {
     expect(editSource).toContain('id="resume-tab-ai"')
     expect(editSource).toContain('id="resume-panel-inspector"')
     expect(shellSource).toContain('minmax(0, var(--workbench-editor-width))')
+    // v22 列序：preview 居右（col 3），editor 居中（col 2），由 Shell :slotted 托管
     expect(shellSource).toMatch(
-      /\.resume-workbench-layout > :deep\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*2;/
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*3;/
     )
     expect(shellSource).toMatch(
-      /\.resume-workbench-layout > :deep\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :deep\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*3;/
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*2;/
     )
   })
 
@@ -703,11 +704,11 @@ describe('ResumeEditView', () => {
     expect(workbenchStyles).toMatch(/\.resume-paper-wrap\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?overflow:\s*auto;[\s\S]*?scrollbar-gutter:\s*stable both-edges;/)
     expect(workbenchStyles).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.workspace-tabs\s*\{[\s\S]*?display:\s*flex;/)
     expect(shellSource).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout\s*\{[\s\S]*?display:\s*block;/)
-    expect(shellSource).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout > :deep\(\.mobile-pane-editor\),\s*[\s\S]*?\.resume-workbench-layout > :deep\(\.mobile-pane-inspector\),\s*[\s\S]*?\.resume-workbench-layout > :deep\(\.mobile-pane-preview\)\s*\{[\s\S]*?display:\s*none;/)
-    expect(shellSource).toMatch(/\.resume-workbench-layout\.is-mobile-edit > :deep\(\.mobile-pane-editor\)\s*\{[\s\S]*?display:\s*flex;/)
-    expect(shellSource).toContain('.resume-workbench-layout.is-mobile-review > :deep(.mobile-pane-inspector)')
-    expect(shellSource).toContain('.resume-workbench-layout.is-mobile-ai > :deep(.mobile-pane-inspector)')
-    expect(shellSource).toMatch(/\.resume-workbench-layout\.is-mobile-preview > :deep\(\.mobile-pane-preview\)\s*\{[\s\S]*?display:\s*flex;/)
+    expect(shellSource).toMatch(/@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout > :slotted\(\.mobile-pane-editor\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.mobile-pane-inspector\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.mobile-pane-preview\)\s*\{[\s\S]*?display:\s*none;/)
+    expect(shellSource).toMatch(/\.resume-workbench-layout\.is-mobile-edit > :slotted\(\.mobile-pane-editor\)\s*\{[\s\S]*?display:\s*flex;/)
+    expect(shellSource).toContain('.resume-workbench-layout.is-mobile-review > :slotted(.mobile-pane-inspector)')
+    expect(shellSource).toContain('.resume-workbench-layout.is-mobile-ai > :slotted(.mobile-pane-inspector)')
+    expect(shellSource).toMatch(/\.resume-workbench-layout\.is-mobile-preview > :slotted\(\.mobile-pane-preview\)\s*\{[\s\S]*?display:\s*flex;/)
     expect(shellSource).toContain('visibility: visible;')
   })
 

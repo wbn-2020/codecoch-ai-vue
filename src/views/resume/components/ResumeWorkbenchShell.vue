@@ -81,7 +81,8 @@ const resize = (event: PointerEvent) => {
     railWidth.value = clamp(resizeStartWidth + delta, 176, 300)
     return
   }
-  editorWidth.value = clamp(resizeStartWidth - delta, 340, 560)
+  // v22 列序后，editor 在 col2；向右拖拽编辑器右沿的拉分位 = 加宽编辑器
+  editorWidth.value = clamp(resizeStartWidth + delta, 340, 560)
 }
 
 const startResize = (target: 'rail' | 'editor', event: PointerEvent) => {
@@ -113,16 +114,17 @@ onBeforeUnmount(stopResize)
   display: grid;
   position: relative;
   flex: 1 1 auto;
+  /* v22 三栏版式：rail | editor（中央，按板块编辑） | preview（右侧，实时预览） */
   grid-template-columns:
     var(--workbench-rail-width)
-    minmax(0, 1fr)
-    minmax(0, var(--workbench-editor-width));
+    minmax(0, var(--workbench-editor-width))
+    minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--resume-workbench-bg, var(--user-bg-panel));
+  background: #F6F6F4;
 }
 
 .resume-workbench-layout__resizer {
@@ -164,12 +166,13 @@ onBeforeUnmount(stopResize)
 }
 
 .resume-workbench-layout__resizer--editor {
-  right: calc(var(--workbench-editor-width) - 4px);
+  /* v22 列序后，editor 在 col2；编辑器与预览的拉分位需计入 rail 宽度 */
+  left: calc(var(--workbench-rail-width) + var(--workbench-editor-width) - 4px);
 }
 
-.resume-workbench-layout > :deep(.resume-workbench-pane--preview),
-.resume-workbench-layout > :deep(.resume-workbench-pane--editor),
-.resume-workbench-layout > :deep(.resume-workbench-pane--inspector) {
+.resume-workbench-layout > :slotted(.resume-workbench-pane--preview),
+.resume-workbench-layout > :slotted(.resume-workbench-pane--editor),
+.resume-workbench-layout > :slotted(.resume-workbench-pane--inspector) {
   position: static;
   align-self: stretch;
   min-width: 0;
@@ -181,40 +184,45 @@ onBeforeUnmount(stopResize)
   box-shadow: none;
 }
 
-.resume-workbench-layout > :deep(.resume-section-rail) {
+.resume-workbench-layout > :slotted(.resume-section-rail) {
   grid-column: 1;
   grid-row: 1;
 }
 
-.resume-workbench-layout > :deep(.resume-workbench-pane--preview) {
-  grid-column: 2;
+.resume-workbench-layout > :slotted(.resume-workbench-pane--preview) {
+  grid-column: 3;
   grid-row: 1;
   display: flex;
   flex-direction: column;
   max-height: 100%;
   overflow: hidden;
-  background: var(--resume-workbench-bg, var(--user-bg-panel));
+  /* v22 原型：右栏暖灰点阵画布，衬托 A4 简历纸 */
+  background-color: #F6F6F4;
+  background-image: radial-gradient(rgba(26, 25, 23, 0.08) 1px, transparent 1px);
+  background-size: 18px 18px;
+  background-position: -9px -9px;
 }
 
-.resume-workbench-layout > :deep(.resume-workbench-pane--editor),
-.resume-workbench-layout > :deep(.resume-workbench-pane--inspector) {
-  grid-column: 3;
+.resume-workbench-layout > :slotted(.resume-workbench-pane--editor),
+.resume-workbench-layout > :slotted(.resume-workbench-pane--inspector) {
+  grid-column: 2;
   grid-row: 1;
   align-content: start;
   max-height: 100%;
   padding: 0;
   overflow: auto;
-  border-left: 1px solid var(--resume-workbench-line, var(--user-border));
-  background: var(--resume-workbench-surface, var(--user-surface));
+  border-left: 1px solid var(--resume-workbench-line, #e5e7eb);
+  border-right: 1px solid var(--resume-workbench-line, #e5e7eb);
+  background: #f7f8fa;
   scrollbar-gutter: stable;
 }
 
-.resume-workbench-layout > :deep(.resume-workbench-pane--editor) {
+.resume-workbench-layout > :slotted(.resume-workbench-pane--editor) {
   display: flex;
   flex-direction: column;
 }
 
-.resume-workbench-layout > :deep(.resume-workbench-pane--inspector) {
+.resume-workbench-layout > :slotted(.resume-workbench-pane--inspector) {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -234,17 +242,17 @@ onBeforeUnmount(stopResize)
   --workbench-editor-width: 58px;
 }
 
-.resume-workbench-layout.is-editor-collapsed > :deep(.resume-workbench-pane--editor),
-.resume-workbench-layout.is-editor-collapsed > :deep(.resume-workbench-pane--inspector),
-.resume-workbench-layout.is-preview-focus > :deep(.resume-workbench-pane--editor),
-.resume-workbench-layout.is-preview-focus > :deep(.resume-workbench-pane--inspector) {
+.resume-workbench-layout.is-editor-collapsed > :slotted(.resume-workbench-pane--editor),
+.resume-workbench-layout.is-editor-collapsed > :slotted(.resume-workbench-pane--inspector),
+.resume-workbench-layout.is-preview-focus > :slotted(.resume-workbench-pane--editor),
+.resume-workbench-layout.is-preview-focus > :slotted(.resume-workbench-pane--inspector) {
   overflow: hidden;
 }
 
-.resume-workbench-layout.is-editor-collapsed > :deep(.resume-workbench-pane--editor > *),
-.resume-workbench-layout.is-editor-collapsed > :deep(.resume-workbench-pane--inspector > *),
-.resume-workbench-layout.is-preview-focus > :deep(.resume-workbench-pane--editor > *),
-.resume-workbench-layout.is-preview-focus > :deep(.resume-workbench-pane--inspector > *) {
+.resume-workbench-layout.is-editor-collapsed > :slotted(.resume-workbench-pane--editor) > *,
+.resume-workbench-layout.is-editor-collapsed > :slotted(.resume-workbench-pane--inspector) > *,
+.resume-workbench-layout.is-preview-focus > :slotted(.resume-workbench-pane--editor) > *,
+.resume-workbench-layout.is-preview-focus > :slotted(.resume-workbench-pane--inspector) > * {
   visibility: hidden;
 }
 
@@ -263,7 +271,7 @@ onBeforeUnmount(stopResize)
     overflow-x: hidden;
   }
 
-  .resume-workbench-layout > :deep(.resume-section-rail) {
+  .resume-workbench-layout > :slotted(.resume-section-rail) {
     display: none;
   }
 
@@ -271,28 +279,28 @@ onBeforeUnmount(stopResize)
     display: none;
   }
 
-  .resume-workbench-layout > :deep(.mobile-pane-editor),
-  .resume-workbench-layout > :deep(.mobile-pane-inspector),
-  .resume-workbench-layout > :deep(.mobile-pane-preview) {
+  .resume-workbench-layout > :slotted(.mobile-pane-editor),
+  .resume-workbench-layout > :slotted(.mobile-pane-inspector),
+  .resume-workbench-layout > :slotted(.mobile-pane-preview) {
     display: none;
   }
 
-  .resume-workbench-layout.is-mobile-edit > :deep(.mobile-pane-editor) {
+  .resume-workbench-layout.is-mobile-edit > :slotted(.mobile-pane-editor) {
     display: flex;
   }
 
-  .resume-workbench-layout.is-mobile-review > :deep(.mobile-pane-inspector),
-  .resume-workbench-layout.is-mobile-ai > :deep(.mobile-pane-inspector) {
+  .resume-workbench-layout.is-mobile-review > :slotted(.mobile-pane-inspector),
+  .resume-workbench-layout.is-mobile-ai > :slotted(.mobile-pane-inspector) {
     display: flex;
   }
 
-  .resume-workbench-layout.is-mobile-preview > :deep(.mobile-pane-preview) {
+  .resume-workbench-layout.is-mobile-preview > :slotted(.mobile-pane-preview) {
     display: flex;
   }
 
-  .resume-workbench-layout > :deep(.resume-workbench-pane--editor),
-  .resume-workbench-layout > :deep(.resume-workbench-pane--inspector),
-  .resume-workbench-layout > :deep(.resume-workbench-pane--preview) {
+  .resume-workbench-layout > :slotted(.resume-workbench-pane--editor),
+  .resume-workbench-layout > :slotted(.resume-workbench-pane--inspector),
+  .resume-workbench-layout > :slotted(.resume-workbench-pane--preview) {
     position: static;
     width: 100%;
     min-width: 0;
@@ -303,16 +311,16 @@ onBeforeUnmount(stopResize)
     border-left: 0;
   }
 
-  .resume-workbench-layout > :deep(.resume-workbench-pane--editor > *),
-  .resume-workbench-layout > :deep(.resume-workbench-pane--inspector > *) {
+  .resume-workbench-layout > :slotted(.resume-workbench-pane--editor) > *,
+  .resume-workbench-layout > :slotted(.resume-workbench-pane--inspector) > * {
     visibility: visible;
   }
 }
 
 @media (max-width: 720px) {
-  .resume-workbench-layout > :deep(.resume-workbench-pane--editor),
-  .resume-workbench-layout > :deep(.resume-workbench-pane--inspector),
-  .resume-workbench-layout > :deep(.resume-workbench-pane--preview) {
+  .resume-workbench-layout > :slotted(.resume-workbench-pane--editor),
+  .resume-workbench-layout > :slotted(.resume-workbench-pane--inspector),
+  .resume-workbench-layout > :slotted(.resume-workbench-pane--preview) {
     height: auto;
     min-height: calc(100dvh - 158px);
     max-height: none;

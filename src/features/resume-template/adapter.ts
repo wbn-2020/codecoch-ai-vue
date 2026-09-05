@@ -5,7 +5,7 @@ import {
   type ResumePreviewDensity,
   type ResumeDocumentDraft
 } from '@/features/resume-document'
-import type { ResumeDocumentV2 } from '@/features/resume-workbench/document'
+import type { ResumeDocumentV2, ResumeEntryItem } from '@/features/resume-workbench/document'
 import { buildRenderSections } from './render-sections'
 import { normalizeResumePresentation } from '@/features/resume-presentation'
 import type { ResumePresentationConfig } from '@/types/resumePresentation'
@@ -115,10 +115,54 @@ export const buildResumeRenderModel = (
     presentation.sectionOrder = resumeTemplateSectionOrder(templateCode)
   }
 
+  // 工作经历/教育经历以文档分区条目为事实来源（魔方式条目编辑直写文档），
+  // 没有文档或分区为空时回退到旧文本解析，保证未升级调用方不变。
+  // 摘要/技能与经历同理：文档分区是事实来源（块文本保留 markdown-lite 内联标记），
+  // 旧文本字段只作为没有文档时的回退。
+  const documentSummaryLines = () => {
+    const section = document?.sections.find((item) => item.builtinKey === 'summary')
+    const blocks = (section?.content as { blocks?: Array<{ text: string }> } | undefined)?.blocks
+    if (!blocks?.length) return null
+    const lines = blocks.map((block) => block.text).filter((text) => text.trim().length > 0)
+    return lines.length ? lines : null
+  }
+
+  const documentSkillGroups = () => {
+    const section = document?.sections.find((item) => item.builtinKey === 'skills')
+    const groups = (section?.content as { groups?: Array<{ id: string; label: string; items: string[] }> } | undefined)?.groups
+    if (!groups?.length) return null
+    return groups.map((group) => ({ id: group.id, label: group.label, items: group.items }))
+  }
+
+  const documentEntryItems = (key: 'experience' | 'education') => {
+    const section = document?.sections.find((item) => item.builtinKey === key)
+    const items = section?.content as { items?: ResumeEntryItem[] } | undefined
+    if (!section || !Array.isArray(items?.items) || !items.items.length) return null
+    // 保留块文本的 markdown-lite 内联标记（**加粗**等），由设计版渲染器解析；
+    // 纯文本口径由导出链路自行降级。
+    return items.items
+      .filter((item) => item.visible !== false)
+      .map((item) => ({
+        key: item.id,
+        title: item.heading,
+        subtitle: item.subheading || undefined,
+        period: item.period || undefined,
+        meta: item.meta || undefined,
+        bullets: item.blocks.map((block) => block.text)
+      }))
+  }
+
   const model: ResumeRenderModel = {
     identity: {
       name: documentModel.name,
       targetPosition: documentModel.targetPosition
+    },
+    avatar: {
+      url: String(document?.basics?.avatar?.url || '').trim(),
+      visible: presentation.avatar.visible !== false
+        && Boolean(String(document?.basics?.avatar?.url || '').trim()),
+      shape: document?.basics?.avatar?.shape || presentation.avatar.shape || 'ROUNDED',
+      position: presentation.avatar.position || 'LEFT'
     },
     basicLayout: presentation.basicLayout,
     basicFieldOrder: presentation.basicFieldOrder,
@@ -127,12 +171,12 @@ export const buildResumeRenderModel = (
     iconMode: presentation.iconMode,
     density,
     contacts: appendCustomContacts(normalizeContact(draft, presentation), document),
-    summary: documentModel.summary,
+    summary: documentSummaryLines() ?? documentModel.summary,
     skills: documentModel.skills,
-    skillGroups: documentModel.skillGroups,
-    experience: documentModel.workEntries,
+    skillGroups: documentSkillGroups() ?? documentModel.skillGroups,
+    experience: documentEntryItems('experience') ?? documentModel.workEntries,
     projects: documentModel.projectEntries,
-    education: documentModel.educationEntries,
+    education: documentEntryItems('education') ?? documentModel.educationEntries,
     sectionOrder: presentation.sectionOrder,
     hiddenSections: presentation.hiddenSections,
     renderSections: [] as ResumeRenderSection[],

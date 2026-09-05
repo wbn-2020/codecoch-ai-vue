@@ -52,11 +52,12 @@ describe('direction D critical flows', () => {
     expect(resumeEditor).toContain('<template #editor>')
     expect(resumeEditor).toContain('resume-workbench-pane--preview')
     expect(resumeEditor).toContain('resume-workbench-pane--editor')
+    // v22 列序：editor 居中（col 2），preview 居右（col 3），由 Shell :slotted 托管
     expect(resumeWorkbenchShell).toMatch(
-      /\.resume-workbench-pane--preview[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;/
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;/
     )
     expect(resumeWorkbenchShell).toMatch(
-      /\.resume-workbench-pane--editor[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;/
+      /\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;/
     )
   })
 

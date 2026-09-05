@@ -44,6 +44,10 @@ import {
   StreakTemplateRenderer,
   STREAK_RENDERER_KEY
 } from './streak'
+import {
+  MagicLRRenderer,
+  MAGIC_LR_RENDERER_KEY
+} from './magic-lr'
 
 export {
   ClassicTemplateRenderer,
@@ -81,7 +85,8 @@ export const resumeRendererComponents: Record<string, Component> = {
   [CREATIVE_RENDERER_KEY]: CreativeTemplateRenderer,
   [SWISS_RENDERER_KEY]: SwissTemplateRenderer,
   [PROJECT_RENDERER_KEY]: ProjectTemplateRenderer,
-  [STREAK_RENDERER_KEY]: StreakTemplateRenderer
+  [STREAK_RENDERER_KEY]: StreakTemplateRenderer,
+  [MAGIC_LR_RENDERER_KEY]: MagicLRRenderer
 }
 
 export const getResumeRendererComponent = (

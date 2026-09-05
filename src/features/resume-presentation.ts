@@ -1,5 +1,6 @@
 import {
   normalizeResumeTemplateCode,
+  resolveAccentHex,
   type ResumeAccent,
   type ResumeTemplateCode
 } from '@/features/resume-document'
@@ -143,24 +144,9 @@ const uniqueSections = (
   )) as ResumePresentationSection[]
 }
 
-const normalizeAccent = (value: unknown): ResumeAccent => {
-  const aliases: Record<string, ResumeAccent> = {
-    ocean: 'blue',
-    teal: 'green',
-    graphite: 'slate',
-    berry: 'red'
-  }
-  if (typeof value === 'string' && aliases[value]) return aliases[value]
-  return value === 'blue'
-    || value === 'green'
-    || value === 'purple'
-    || value === 'orange'
-    || value === 'red'
-    || value === 'slate'
-    || value === 'black'
-    || value === 'default'
-    ? value
-    : 'default'
+const normalizeAccent = (value: unknown): string => {
+  // V5 起主题色存自由 hex；旧枚举/别名统一迁移（见 resolveAccentHex）。
+  return resolveAccentHex(value)
 }
 
 const normalizeFont = (value: unknown): ResumePresentationFont =>
@@ -265,7 +251,7 @@ export const createDefaultResumePresentation = (
   basicFieldIcons: { ...DEFAULT_BASIC_FIELD_ICONS },
   iconMode: 'ICON',
   autoOnePage: false,
-  accentColor: 'default',
+  accentColor: '#0047AB',
   fontFamily: 'Arial',
   fontScale: 1,
   lineHeight: 1.2,

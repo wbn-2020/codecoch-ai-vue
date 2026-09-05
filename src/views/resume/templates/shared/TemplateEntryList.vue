@@ -105,21 +105,11 @@ defineProps<{
 }
 
 .template-entry__sections strong {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--template-accent-strong);
+  display: block;
+  color: var(--template-ink);
   font-size: calc(11px * var(--template-font-scale, 1));
-  font-weight: 700;
-  letter-spacing: 0.03em;
-
-  &::before {
-    content: '';
-    flex: none;
-    width: 3px;
-    height: 10px;
-    border-radius: 2px;
-    background: var(--template-accent);
-  }
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
 }
 </style>

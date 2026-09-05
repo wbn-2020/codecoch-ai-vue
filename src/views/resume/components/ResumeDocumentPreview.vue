@@ -129,6 +129,7 @@
     v-else
     :is="rendererComponent"
     :model="model"
+    :fit-scale="fitScale"
     :class="[
       `is-${templateMeta.className}`,
       `is-${accent}`,
@@ -142,8 +143,10 @@ import { Circle, FileText, Link, Mail, MapPin, Phone } from 'lucide-vue-next'
 import { computed, defineComponent, h, type PropType } from 'vue'
 
 import {
+  alphaAccent,
   normalizeResumeTemplateCode,
-  type ResumeAccent,
+  resolveAccentHex,
+  shadeAccent,
   type ResumeDocumentDraft,
   type ResumeDocumentEntry,
   type ResumePreviewDensity,
@@ -161,15 +164,17 @@ const props = withDefaults(defineProps<{
   draft: ResumeDocumentDraft
   document?: ResumeDocumentV2 | null
   templateCode?: ResumeTemplateCode | string
-  accent?: ResumeAccent
+  accent?: string
   density?: ResumePreviewDensity
   presentationConfig?: ResumePresentationConfig
+  fitScale?: number
 }>(), {
   document: null,
   templateCode: 'ATS_SINGLE_COLUMN',
   accent: 'default',
   density: 'comfortable',
-  presentationConfig: undefined
+  presentationConfig: undefined,
+  fitScale: 1
 })
 
 const ResumeDocumentEntries = defineComponent({
@@ -244,21 +249,27 @@ const visibleContacts = computed(() => model.value.contacts.map((contact) => ({
   ...contact,
   icon: contactIcon(contact.iconKey)
 })))
-const paperStyle = computed(() => ({
+const paperStyle = computed(() => {
+  const accentHex = resolveAccentHex(presentation.value.accentColor)
+  return {
+  '--paper-accent': accentHex,
+  '--paper-accent-strong': shadeAccent(accentHex, 0.22),
+  '--paper-accent-soft': alphaAccent(accentHex, 0.1),
   '--paper-font-family': presentation.value.fontFamily,
   '--paper-font-scale': String(presentation.value.fontScale),
   '--paper-line-height': String(presentation.value.lineHeight),
   '--paper-section-gap': `${17 * presentation.value.sectionSpacing}px`,
   '--paper-pad-x': `${presentation.value.pageMarginPt}px`,
   '--paper-pad-y': `${presentation.value.pageMarginPt}px`
-}))
+  }
+})
 </script>
 
 <style scoped lang="scss">
 .resume-document {
-  --paper-accent: #1779a7;
-  --paper-accent-strong: #0d5c7f;
-  --paper-accent-soft: #e9f5fa;
+  --paper-accent: #0047AB;
+  --paper-accent-strong: #003a8c;
+  --paper-accent-soft: rgba(0, 71, 171, 0.1);
   --paper-ink: #17202a;
   --paper-body: #303b47;
   --paper-muted: #66717d;
@@ -269,15 +280,15 @@ const paperStyle = computed(() => ({
   --paper-line-height: 1.62;
   box-sizing: border-box;
   width: 100%;
-  max-width: 720px;
-  height: auto;
-  aspect-ratio: 210 / 297;
-  min-height: max-content;
+  max-width: 794px;
+  /* 不再用 aspect-ratio 锁定高度：纸面随内容生长，分页由预览画布的参考线表达。 */
+  min-height: 1123px;
   padding: var(--paper-pad-y) var(--paper-pad-x);
-  border: 1px solid #d6dce3;
+  border: 0;
+  border-radius: 2px;
   background: #fff;
   color: var(--paper-ink);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.25);
   font-family: var(--paper-font-family, Arial), "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   overflow-wrap: anywhere;
 
@@ -905,7 +916,6 @@ const paperStyle = computed(() => ({
   .resume-document {
     --paper-pad-x: 25px;
     --paper-pad-y: 26px;
-    min-height: max-content;
   }
 
   .document-header {

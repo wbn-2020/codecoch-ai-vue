@@ -22,24 +22,21 @@
     </AppState>
 
     <template v-else>
-    <ResumeWorkbenchTopbar
+    <MagicTopbar
       :title="form.resumeName?.trim() || '未命名简历'"
       :save-state="documentSaveStatus"
-      :completion="completion"
-      :has-started="hasResumeContentStarted"
       :saving="saving"
-      :is-edit="isEdit"
       :can-undo="resumeHistory.canUndo.value"
       :can-redo="resumeHistory.canRedo.value"
-      :template-label="selectedResumeTemplateLabel"
       :inspector-mode="inspectorMode"
-      :active-step="activeWorkbenchStep"
       @back="router.push('/resumes')"
+      @rename="handleTopbarRename"
       @save="handleSave('complete')"
       @save-draft="handleSave('draft')"
-      @open-templates="openTemplateGallery"
       @open-export="openDeliveryChecks"
-      @open-preview="openPreviewStep"
+      @reset-resume="handleWorkbenchResetResume"
+      @export-pdf="openPdfExport"
+      @open-print="openPrintPreview"
       @undo="undoResumeEdit"
       @redo="redoResumeEdit"
       @mode-change="setInspectorMode"
@@ -117,22 +114,18 @@
       :preview-focus="previewFocusMode"
     >
       <template #rail>
-      <ResumeSectionRail
-        :items="sectionNavItems"
-        :active-id="activeWorkshopModule"
-        :collapsed="railCollapsed || previewFocusMode"
-        :completion="completion"
-        :has-started="hasResumeContentStarted"
-        :export-ready-count="exportReadyCount"
-        :export-total="exportChecklistItems.length"
-        :hidden-ids="hiddenPaneIds"
-        :custom-section-quota="customSectionQuota"
-        @select="focusSection"
+      <MagicSidePanel
+        :modules="magicSideModules"
+        :active-id="magicActiveItemId"
+        :hidden-ids="magicHiddenIds"
+        :settings="presentationConfig"
+        @select="handleMagicSelect"
+        @toggle-visibility="handleMagicToggleVisibility"
+        @remove-section="removeCustomSectionPane"
         @add-section="addCustomSectionPane"
-        @review="setInspectorMode('review')"
-        @move="moveWorkshopModule"
-        @reorder="moveWorkshopModuleTo"
-        @toggle-visibility="toggleWorkshopModule"
+        @reorder="handleMagicReorder"
+        @setting-change="handleWorkbenchSettingChange"
+        @setting-toggle="handleWorkbenchSettingToggle"
       />
       </template>
       <template #editor>
@@ -143,23 +136,28 @@
         role="tabpanel"
         aria-labelledby="resume-tab-edit"
       >
-        <header class="resume-inspector-header">
-          <div>
-            <span class="resume-inspector-header__eyebrow">当前编辑</span>
-            <h1>{{ activeWorkshopModuleMeta.title }}</h1>
-            <p>{{ activeWorkshopModuleMeta.description }}</p>
-          </div>
+        <div class="magic-module-card">
+          <span class="magic-module-card__icon">{{ magicActiveModuleIcon }}</span>
+          <input
+            v-if="magicActiveCustomSectionId"
+            class="magic-module-card__title-input"
+            :value="activeWorkshopModuleMeta.title"
+            aria-label="板块标题"
+            @change="renameCustomSection(magicActiveCustomSectionId, ($event.target as HTMLInputElement).value)"
+          >
+          <span v-else class="magic-module-card__title">{{ activeWorkshopModuleMeta.title }}</span>
+          <Pencil v-if="magicActiveCustomSectionId" :size="14" class="magic-module-card__pen" />
           <button
             type="button"
-            class="resume-inspector-header__template"
+            class="magic-module-card__template"
             :aria-label="`打开模板设置，当前模板为 ${selectedResumeTemplateLabel}`"
             @click="openTemplateGallery"
           >
-            <LayoutTemplate :size="16" aria-hidden="true" />
+            <LayoutTemplate :size="15" aria-hidden="true" />
             <span>{{ selectedResumeTemplateLabel }}</span>
-            <ChevronRight :size="15" aria-hidden="true" />
+            <ChevronRight :size="14" aria-hidden="true" />
           </button>
-        </header>
+        </div>
 
         <section
           v-show="!isCustomSectionPane && activeWorkshopModule !== 'resume-projects'"
@@ -174,113 +172,31 @@
             :disabled="saving"
             label-position="top"
           >
-            <div v-show="activeWorkshopModule === 'resume-basic'" id="resume-basic" class="editor-block">
-              <div class="block-head">
-                <span>基本信息</span>
-                <el-tag size="small" :type="form.resumeName && form.realName ? 'success' : 'warning'" effect="plain">
-                  {{ form.resumeName && form.realName ? '可识别' : '待补充' }}
-                </el-tag>
-              </div>
-            <div class="form-grid">
-              <el-form-item label="简历名称" prop="resumeName">
-                <el-input
-                  v-model.trim="form.resumeName"
-                  placeholder="例如：Java 后端 3 年经验简历"
-                  @update:model-value="clearResolvedValidation('resumeName', $event)"
-                />
-              </el-form-item>
-              <el-form-item label="真实姓名">
-                <el-input v-model.trim="form.realName" placeholder="请输入姓名" />
-              </el-form-item>
-              <el-form-item label="邮箱">
-                <el-input v-model.trim="form.email" placeholder="用于补充联系方式" />
-              </el-form-item>
-              <el-form-item label="手机号">
-                <el-input v-model.trim="form.phone" placeholder="用于补充联系方式" />
-              </el-form-item>
-            </div>
-
-            <div class="custom-fields">
-              <div class="block-head">
-                <span>自定义字段</span>
-                <el-tag size="small" :type="customContacts.length ? 'success' : 'info'" effect="plain">
-                  {{ customContacts.length ? customContacts.length + ' 项' : '可补充' }}
-                </el-tag>
-              </div>
-              <p class="custom-fields__hint">添加链接、所在地或其他信息，会显示在简历抬头的联系方式中。</p>
-
-              <div v-if="customContacts.length === 0" class="custom-fields__empty">
-                <FileText :size="22" aria-hidden="true" />
-                <p>还没添加自定义字段。可补充 <strong>个人网站 / 微信 / 所在地</strong> 等信息，会显示在简历抬头。</p>
-              </div>
-
-              <div v-for="contact in customContacts" :key="contact.id" class="custom-field-row">
-                <span class="custom-field-row__badge" :title="customFieldKindLabel(contact.kind)">
-                  <component :is="customFieldIcon(contact.kind)" :size="16" aria-hidden="true" />
-                </span>
-                <el-select
-                  :model-value="contact.kind"
-                  class="custom-field-row__kind"
-                  :prefix-icon="customFieldIcon(contact.kind)"
-                  @change="handleCustomContactKindChange(contact.id, $event)"
-                >
-                  <el-option label="链接" value="url" />
-                  <el-option label="所在地" value="location" />
-                  <el-option label="其他" value="text" />
-                </el-select>
-                <el-input
-                  :model-value="contact.label"
-                  class="custom-field-row__label"
-                  placeholder="字段名称"
-                  @update:model-value="handleCustomContactLabelChange(contact.id, $event)"
-                />
-                <el-input
-                  :model-value="contact.value"
-                  class="custom-field-row__value"
-                  placeholder="字段内容"
-                  @update:model-value="handleCustomContactValueChange(contact.id, $event)"
-                />
-                <button
-                  type="button"
-                  class="custom-field-row__remove"
-                  :aria-label="`删除自定义字段 ${contact.label || contact.kind}`"
-                  @click="removeCustomContact(contact.id)"
-                >
-                  <Trash2 :size="15" aria-hidden="true" />
-                </button>
-                <div class="custom-field-row__meta">
-                  <label class="custom-field-row__toggle">
-                    <el-switch
-                      :model-value="contact.visible"
-                      :active-value="true"
-                      :inactive-value="false"
-                      @change="handleCustomContactVisibilityChange(contact.id, $event)"
-                    />
-                    <span>显示</span>
-                  </label>
-                  <label class="custom-field-row__toggle">
-                    <el-switch
-                      :model-value="contact.showLabel"
-                      :active-value="true"
-                      :inactive-value="false"
-                      @change="handleCustomContactLabelVisibilityChange(contact.id, $event)"
-                    />
-                    <span>名称</span>
-                  </label>
-                </div>
-              </div>
-
-              <button
-                v-if="canAddCustomContact"
-                type="button"
-                class="custom-field-add"
-                @click="addCustomContact"
-              >
-                <Plus :size="16" aria-hidden="true" />
-                <span>添加自定义字段</span>
-              </button>
-              <p v-else class="custom-fields__cap">已达联系方式上限（含电话、邮箱共 8 项）。</p>
-            </div>
+            <div v-show="activeWorkshopModule === 'resume-basic'" id="resume-basic" class="editor-block magic-basic-wrap">
+              <MagicBasicPanel
+                :name="form.realName || ''"
+                :headline="form.targetPosition || ''"
+                :phone="form.phone || ''"
+                :email="form.email || ''"
+                :phone-visible="presentationConfig.basicFieldVisibility.phone !== false"
+                :email-visible="presentationConfig.basicFieldVisibility.email !== false"
+                :phone-icon="presentationConfig.basicFieldIcons.phone || 'phone'"
+                :email-icon="presentationConfig.basicFieldIcons.email || 'mail'"
+                :custom-contacts="customContacts"
+                :avatar="magicAvatar"
+                :layout-value="presentationConfig.basicLayout"
+                @update:name="form.realName = $event"
+                @update:headline="form.targetPosition = $event"
+                @update:phone="form.phone = $event"
+                @update:email="form.email = $event"
+                @toggle-field="handleMagicFieldVisibility"
+                @layout-change="handleMagicLayoutChange"
+                @add-contact="addCustomContact"
+                @update-contact="handleMagicContactUpdate"
+                @remove-contact="removeCustomContact"
+                @reorder-contacts="handleMagicContactsReorder"
+                @update-avatar="handleMagicAvatarUpdate"
+              />
             </div>
 
             <div v-show="activeWorkshopModule === 'resume-target'" id="resume-target" class="editor-block">
@@ -296,7 +212,14 @@
               </el-form-item>
               <el-form-item label="默认简历">
                 <div class="switch-line">
-                  <el-switch v-model="form.isDefault" :active-value="1" :inactive-value="0" />
+                  <button
+                    type="button"
+                    class="wb-toggle"
+                    :class="{ 'is-on': form.isDefault === 1 }"
+                    :aria-pressed="form.isDefault === 1"
+                    aria-label="设为默认简历"
+                    @click="form.isDefault = form.isDefault === 1 ? 0 : 1"
+                  ><i /></button>
                   <span>保存后会更新你的默认简历</span>
                 </div>
               </el-form-item>
@@ -310,14 +233,11 @@
                   {{ form.summary ? '已填写' : '可继续补充' }}
                 </el-tag>
               </div>
-            <el-form-item label="个人摘要">
-              <TextBlocksField
-                :blocks="summaryBlocks"
-                label="个人摘要"
-                placeholder="简要说明工作背景、优势方向、项目类型和求职重点"
-                @update:blocks="applySummaryBlocks"
-              />
-            </el-form-item>
+            <MagicBlocksInput
+              :blocks="summaryBlocks"
+              placeholder="简要说明工作背景、优势方向、项目类型和求职重点"
+              @update:blocks="applySummaryBlocks"
+            />
             </div>
 
             <div v-show="activeWorkshopModule === 'resume-skills'" id="resume-skills" class="editor-block">
@@ -333,28 +253,36 @@
             </div>
 
             <div v-show="activeWorkshopModule === 'resume-experience'" id="resume-experience" class="editor-block">
-              <div class="block-head">
-                <span>经历与教育</span>
-                <el-tag size="small" :type="form.workSummary || form.education ? 'success' : 'info'" effect="plain">
-                  {{ form.workSummary || form.education ? '已填写' : '可继续补充' }}
-                </el-tag>
-            </div>
-            <el-form-item label="工作经历 / 工作摘要">
-              <EntryItemEditor
-                :items="workItems"
-                label="工作经历"
-                :headings="['公司 / 组织', '职位', '规模、技术栈或地点', '描述这一段的职责与结果']"
-                @update:items="(items) => applyEntryItems('experience', items, (value) => { form.workSummary = value })"
-              />
-            </el-form-item>
-            <el-form-item label="教育经历">
-              <EntryItemEditor
-                :items="educationItems"
-                label="教育经历"
-                :headings="['学校', '专业与学历', '补充', '主修课程、荣誉等']"
-                @update:items="(items) => applyEntryItems('education', items, (value) => { form.education = value })"
-              />
-            </el-form-item>
+            <h3 class="magic-group-heading">工作经历</h3>
+            <MagicEntryPanel
+              :items="workItems"
+              :labels="{
+                heading: '公司 / 组织',
+                subheading: '职位',
+                period: '时间范围',
+                details: '工作内容',
+                detailsPlaceholder: '描述这一段的职责与结果，可用列表逐条写',
+                headingPlaceholder: '未填写公司'
+              }"
+              add-button-label="添加工作经历"
+              @update:items="applyBuiltinEntryItems('experience', $event)"
+              @add="addBuiltinEntry('experience')"
+            />
+            <h3 class="magic-group-heading">教育经历</h3>
+            <MagicEntryPanel
+              :items="educationItems"
+              :labels="{
+                heading: '学校',
+                subheading: '专业与学历',
+                period: '起止时间',
+                details: '备注',
+                detailsPlaceholder: '主修课程、荣誉等',
+                headingPlaceholder: '未填写学校'
+              }"
+              add-button-label="添加教育经历"
+              @update:items="applyBuiltinEntryItems('education', $event)"
+              @add="addBuiltinEntry('education')"
+            />
             </div>
           </el-form>
 
@@ -373,118 +301,64 @@
           id="resume-projects"
           class="content-card editor-section project-section"
         >
-          <div class="section-heading project-header">
-            <div class="section-heading__left">
-              <div class="section-icon">
-                <Layers3 :size="18" />
-              </div>
-              <div>
-                <h2>{{ selectedInlineProject ? `项目经历 · ${selectedInlineProject.projectName}` : '项目经历' }}</h2>
-                <p>{{ isEdit ? '先补真实背景、技术决策和量化结果，右侧修改会实时同步到预览。' : '创建简历时可先补项目草稿，保存后会自动挂到这份简历下。' }}</p>
-              </div>
-            </div>
-            <div class="project-header__actions">
-              <el-button
-                v-if="selectedInlineProject"
-                :disabled="saving"
-                @click="openProjectDialog(selectedInlineProject)"
-              >
-                <FilePenLine :size="16" />
-                完整编辑
-              </el-button>
-              <el-button type="primary" :disabled="saving" @click="openProjectDialog()">
-                <Plus :size="16" />
-                {{ isEdit ? '新增项目' : '添加项目草稿' }}
-              </el-button>
-            </div>
-          </div>
-
           <template v-if="selectedInlineProject">
-            <div class="project-switcher" role="tablist" aria-label="选择项目经历">
-              <button
-                v-for="project in projects"
-                :key="project.projectId"
-                type="button"
-                role="tab"
-                :aria-selected="selectedInlineProject.projectId === project.projectId"
-                :class="{ active: selectedInlineProject.projectId === project.projectId }"
-                @click="selectInlineProject(project.projectId)"
-              >
-                <span>{{ project.projectName }}</span>
-                <small>{{ project.projectTime || project.projectPeriod || '未填写项目时间' }}</small>
-              </button>
-            </div>
+            <MagicProjectPanel
+              :projects="projects"
+              :selected-id="selectedInlineProject.projectId"
+              :fields="inlineProjectFields"
+              :saving="saving"
+              :project-saving="projectSaving"
+              @select="selectInlineProject"
+              @patch="patchInlineProject"
+              @update:fields="applyProjectFields"
+              @add="openProjectDialog()"
+              @remove="handleDeleteProjectById"
+              @reorder="reorderProjectRows"
+              @save="handleSaveInlineProject"
+            >
+              <template #extras>
+                <div class="inline-project-skills">
+                  <span>技术栈标签</span>
+                  <div>
+                    <el-tag
+                      v-for="tag in inlineProjectTechTags"
+                      :key="tag"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ tag }}
+                    </el-tag>
+                    <el-button text size="small" @click="openProjectDialog(selectedInlineProject)">
+                      {{ inlineProjectTechTags.length ? '编辑技术栈' : '添加技术栈' }}
+                    </el-button>
+                  </div>
+                </div>
 
-            <el-form class="inline-project-editor" :disabled="saving" label-position="top">
-              <div class="inline-project-editor__meta">
-                <el-form-item label="项目名称">
-                  <el-input
-                    :model-value="selectedInlineProject.projectName"
-                    placeholder="例如：招聘平台简历解析服务"
-                    @update:model-value="setInlineProjectName"
-                  />
-                </el-form-item>
-                <el-form-item label="项目时间">
-                  <el-input
-                    :model-value="selectedInlineProject.projectTime"
-                    placeholder="例如：2024.03 - 2024.08"
-                    @update:model-value="setInlineProjectPeriod"
-                  />
-                </el-form-item>
-              </div>
-
-              <ProjectItemEditor
-                :fields="inlineProjectFields"
-                :label="selectedInlineProject.projectName || '项目经历'"
-                :disabled="saving"
-                @update:fields="applyProjectFields"
-              />
-            </el-form>
-
-            <div class="inline-project-skills">
-              <span>技术栈</span>
-              <div>
-                <el-tag
-                  v-for="tag in inlineProjectTechTags"
-                  :key="tag"
-                  size="small"
-                  effect="plain"
-                >
-                  {{ tag }}
-                </el-tag>
-                <el-button text size="small" @click="openProjectDialog(selectedInlineProject)">
-                  {{ inlineProjectTechTags.length ? '编辑技术栈' : '添加技术栈' }}
-                </el-button>
-              </div>
-            </div>
-
-            <section class="workshop-ai-rewrite">
-              <div>
-                <span>✦ AI 教练 · 改写建议</span>
-                <strong>{{ latestOptimizeRecord ? '已生成建议，先核对事实再采纳' : '把结果写成可被验证的证据' }}</strong>
-                <p class="workshop-ai-rewrite__before">「{{ inlineProjectOriginalStatement }}」</p>
-                <p class="workshop-ai-rewrite__after">{{ inlineProjectSuggestedStatement }}</p>
-              </div>
-              <div class="workshop-ai-rewrite__actions">
-                <el-button
-                  v-if="isEdit && resumeId"
-                  type="primary"
-                  :loading="optimizing"
-                  @click="handleOptimizeResume"
-                >
-                  <Sparkles :size="16" />
-                  {{ latestOptimizeRecord ? '查看建议' : '生成建议' }}
-                </el-button>
-                <el-button v-else type="primary" :loading="saving" @click="handleSave('complete')">
-                  <Save :size="16" />
-                  保存后生成
-                </el-button>
-                <el-button :loading="projectSaving" :disabled="saving" @click="handleSaveInlineProject">
-                  <Save :size="16" />
-                  保存项目
-                </el-button>
-              </div>
-            </section>
+                <section class="workshop-ai-rewrite">
+                  <div>
+                    <span>✦ AI 教练 · 改写建议</span>
+                    <strong>{{ latestOptimizeRecord ? '已生成建议，先核对事实再采纳' : '把结果写成可被验证的证据' }}</strong>
+                    <p class="workshop-ai-rewrite__before">「{{ inlineProjectOriginalStatement }}」</p>
+                    <p class="workshop-ai-rewrite__after">{{ inlineProjectSuggestedStatement }}</p>
+                  </div>
+                  <div class="workshop-ai-rewrite__actions">
+                    <el-button
+                      v-if="isEdit && resumeId"
+                      type="primary"
+                      :loading="optimizing"
+                      @click="handleOptimizeResume"
+                    >
+                      <Sparkles :size="16" />
+                      {{ latestOptimizeRecord ? '查看建议' : '生成建议' }}
+                    </el-button>
+                    <el-button v-else type="primary" :loading="saving" @click="handleSave('complete')">
+                      <Save :size="16" />
+                      保存后生成
+                    </el-button>
+                  </div>
+                </section>
+              </template>
+            </MagicProjectPanel>
           </template>
 
           <div v-else class="project-list">
@@ -507,12 +381,70 @@
           :key="section.id"
           class="content-card editor-section custom-section"
         >
-          <SectionCard
-            :section="section"
-            @update:blocks="applyCustomSectionBlocks"
-            @update:items="applyCustomSectionItems"
-            @rename="renameCustomSection"
-            @remove="removeCustomSectionPane"
+          <div
+            v-if="section.variant === 'certificates'"
+            class="magic-cert-panel"
+          >
+            <div
+              v-for="cert in customSectionCertificates(section.id)"
+              :key="cert.id"
+              class="magic-cert-row"
+            >
+              <input
+                class="magic-field__input magic-cert-row__name"
+                :value="cert.name"
+                placeholder="证书名称，例如 PMP"
+                aria-label="证书名称"
+                @input="patchCertificateRow(section.id, cert.id, { name: ($event.target as HTMLInputElement).value })"
+              >
+              <input
+                class="magic-field__input"
+                :value="cert.issuer"
+                placeholder="颁发机构（可选）"
+                aria-label="颁发机构"
+                @input="patchCertificateRow(section.id, cert.id, { issuer: ($event.target as HTMLInputElement).value })"
+              >
+              <input
+                class="magic-field__input magic-cert-row__date"
+                :value="cert.date"
+                placeholder="2024/06"
+                aria-label="获证时间"
+                @input="patchCertificateRow(section.id, cert.id, { date: ($event.target as HTMLInputElement).value })"
+              >
+              <button
+                type="button"
+                class="magic-item-card__btn is-danger"
+                :aria-label="`删除证书 ${cert.name || ''}`"
+                @click="removeCertificateRow(section.id, cert.id)"
+              >
+                <Trash2 :size="15" />
+              </button>
+            </div>
+            <button type="button" class="magic-cert-panel__add" @click="addCertificateRow(section.id)">
+              <CirclePlus :size="15" />
+              添加证书
+            </button>
+          </div>
+          <MagicBlocksInput
+            v-else-if="section.variant === 'text' || !section.variant"
+            :blocks="customSectionBlocks(section.id)"
+            placeholder="输入本板块内容，可用列表逐条写"
+            @update:blocks="applyCustomSectionBlocks(section.id, $event)"
+          />
+          <MagicEntryPanel
+            v-else
+            :items="customSectionItems(section.id)"
+            :labels="{
+              heading: '标题',
+              subheading: '副标题',
+              period: '时间范围',
+              details: '详细描述',
+              detailsPlaceholder: '请输入详细描述…',
+              headingPlaceholder: '未命名条目'
+            }"
+            add-button-label="添加条目"
+            @update:items="applyCustomSectionItems(section.id, $event)"
+            @add="addCustomEntry(section.id)"
           />
         </section>
       </main>
@@ -521,7 +453,7 @@
       <template #preview>
       <section
         id="resume-panel-preview"
-        class="resume-workbench-pane--preview content-card mobile-pane-preview"
+        class="resume-workbench-pane--preview content-card mobile-pane-preview magic-preview-pane"
         role="tabpanel"
         aria-labelledby="resume-tab-preview"
       >
@@ -587,13 +519,16 @@
 
           <div class="resume-paper-wrap">
             <div class="resume-paper-stage" :style="{ '--resume-preview-zoom': previewZoom }">
-              <ResumeDocumentPreview
+              <ResumePreviewCanvas
                 :draft="resumeDocumentDraft"
                 :template-code="selectedResumeTemplateCode"
                 :accent="previewAccent"
                 :presentation-config="presentationConfig"
                 :density="selectedResumeTemplateCode === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
                 :document="resumeDocument.document.value"
+                :page-break-lines-visible="magicPageBreaksVisible"
+                @section-activate="handlePreviewSectionActivate"
+                @page-status="handlePreviewPageStatus"
               />
             </div>
           </div>
@@ -609,8 +544,26 @@
             <el-button @click="enlargePreview">
               放大检查
             </el-button>
-            <span class="resume-preview-page-chip">A4 预览 · 分页以导出为准</span>
+            <span class="resume-preview-page-chip" :class="{ 'is-warning': previewPageStatus.cannotFit }">
+              {{ previewPageChipText }}
+            </span>
           </div>
+          <MagicPreviewDock
+            :auto-one-page="presentationConfig.autoOnePage === true"
+            :page-break-lines-visible="magicPageBreaksVisible"
+            :side-collapsed="railCollapsed"
+            :editor-collapsed="editorPanelCollapsed"
+            :preview-focus="previewFocusMode"
+            @toggle-auto-one-page="handleWorkbenchSettingToggle('autoOnePage')"
+            @toggle-page-breaks="magicPageBreaksVisible = !magicPageBreaksVisible"
+            @export-pdf="openPdfExport"
+            @save-draft="handleSave('draft')"
+            @toggle-side="railCollapsed = !railCollapsed"
+            @toggle-editor="editorPanelCollapsed = !editorPanelCollapsed"
+            @toggle-preview="previewFocusMode = !previewFocusMode"
+            @open-templates="openTemplateGallery"
+            @back="router.push('/resumes')"
+          />
       </section>
       </template>
 
@@ -934,7 +887,6 @@ import {
   CheckCircle2,
   Circle,
   FileCheck2,
-  FilePenLine,
   FileText,
   FolderOpen,
   GitCompareArrows,
@@ -955,6 +907,7 @@ import {
   Save,
   Trash2,
   Sparkles,
+  Pencil
 } from 'lucide-vue-next'
 import { getActivePinia } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
@@ -980,10 +933,9 @@ import AppState from '@/components/common/AppState.vue'
 import ResumeProjectForm from '@/components/resume/ResumeProjectForm.vue'
 import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import SkillGroupEditor from '@/views/resume/workbench/blocks/SkillGroupEditor.vue'
-import EntryItemEditor from '@/views/resume/workbench/blocks/EntryItemEditor.vue'
-import ProjectItemEditor from '@/views/resume/workbench/blocks/ProjectItemEditor.vue'
-import TextBlocksField from '@/views/resume/workbench/blocks/TextBlocksField.vue'
-import SectionCard from '@/views/resume/workbench/blocks/SectionCard.vue'
+import MagicEntryPanel from '@/views/resume/workbench/magic/MagicEntryPanel.vue'
+import MagicBlocksInput from '@/views/resume/workbench/magic/MagicBlocksInput.vue'
+import MagicProjectPanel from '@/views/resume/workbench/magic/MagicProjectPanel.vue'
 import PrintPreviewOverlay from '@/views/resume/workbench/dialogs/PrintPreviewOverlay.vue'
 import { useResumeHistory } from '@/composables/useResumeHistory'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
@@ -1007,13 +959,16 @@ import { useResumeDocument } from '@/features/resume-workbench/use-resume-docume
 import { getResumeTemplateDefinition } from '@/features/resume-template/registry'
 import { projectToDocumentItem } from '@/features/resume-workbench/document-migrator'
 import {
+  createCertificateItem,
+  createEntryItem,
   reorderBuiltInSections,
   updateProjectItems,
   updateSectionBlocks,
+  updateSectionCertificates,
   updateSectionGroups,
   updateSectionItems
 } from '@/features/resume-workbench/section-ops'
-import { MAX_CUSTOM_SECTIONS, MAX_RESUME_CONTACTS } from '@/features/resume-workbench/document'
+import { MAX_CUSTOM_SECTIONS, MAX_RESUME_CONTACTS, type ResumeCertificateItem } from '@/features/resume-workbench/document'
 import type {
   CustomSection,
   ResumeBlock,
@@ -1024,12 +979,23 @@ import type {
   ResumeProjectItem,
   ResumeSkillGroupItem
 } from '@/features/resume-workbench/document'
-import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPreview.vue'
+import ResumePreviewCanvas from '@/views/resume/components/ResumePreviewCanvas.vue'
 import ResumeDeliveryWorkbench from '@/views/resume/components/ResumeDeliveryWorkbench.vue'
-import ResumeSectionRail from '@/views/resume/components/ResumeSectionRail.vue'
+import MagicSidePanel from '@/views/resume/workbench/magic/MagicSidePanel.vue'
+import type { MagicSideModule } from '@/views/resume/workbench/magic/MagicSidePanel.vue'
 import ResumeTemplateBrowser from '@/views/resume/components/ResumeTemplateBrowser.vue'
 import ResumeWorkbenchShell from '@/views/resume/components/ResumeWorkbenchShell.vue'
-import ResumeWorkbenchTopbar from '@/views/resume/components/ResumeWorkbenchTopbar.vue'
+import MagicTopbar from '@/views/resume/workbench/magic/MagicTopbar.vue'
+import MagicBasicPanel from '@/views/resume/workbench/magic/MagicBasicPanel.vue'
+import MagicPreviewDock from '@/views/resume/workbench/magic/MagicPreviewDock.vue'
+import {
+  addContact as addDocumentContact,
+  removeContact as removeDocumentContact,
+  reorderContacts as reorderDocumentContacts,
+  updateBasics as updateDocumentBasics,
+  updateContact as updateDocumentContact
+} from '@/features/resume-workbench/basics-ops'
+import { moveSection as moveDocumentSection, toggleSectionVisible as toggleDocumentSectionVisible } from '@/features/resume-workbench/section-ops'
 import type {
   ResumeCreateDTO,
   ResumeDetailVO,
@@ -1103,24 +1069,241 @@ const invalidSectionIds = ref<ResumeWorkbenchModule[]>([])
 const invalidFieldProps = ref<string[]>([])
 const selectedResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
 const pendingResumeTemplateCode = ref<ResumeTemplateCode>('ATS_SINGLE_COLUMN')
-const previewAccent = ref<ResumeAccent>('default')
+const previewAccent = ref<string>('#0047AB')
 const previewZoom = ref(0.88)
 const presentationConfig = ref<ResumePresentationConfig>(createDefaultResumePresentation())
+const previewPageStatus = ref({ pageCount: 1, fitted: false, cannotFit: false })
+
+// 魔方简历式分页口径：纸张随内容生长，按 A4 高度实时折算页数；
+// 自动一页开启且压缩到下限仍放不下时提示用户精简内容。
+const previewPageChipText = computed(() => {
+  if (previewPageStatus.value.cannotFit) {
+    return `内容约 ${previewPageStatus.value.pageCount} 页 · 建议精简或关闭一页模式`
+  }
+  if (previewPageStatus.value.fitted) {
+    return 'A4 · 已自适应为 1 页'
+  }
+  if (previewPageStatus.value.pageCount > 1) {
+    return `A4 · 内容约 ${previewPageStatus.value.pageCount} 页`
+  }
+  return 'A4 · 单页'
+})
+
+// 预览板块 -> 编辑器表单锚点；教育经历与工作经历同属 resume-experience 模块。
+const previewSectionToEditorId: Record<string, string> = {
+  summary: 'resume-summary',
+  skills: 'resume-skills',
+  experience: 'resume-experience',
+  education: 'resume-experience',
+  projects: 'resume-projects'
+}
+
+const handlePreviewSectionActivate = (key: string) => {
+  focusSection(previewSectionToEditorId[key] ?? key)
+}
+
+const handlePreviewPageStatus = (status: { pageCount: number; fitted: boolean; cannotFit: boolean }) => {
+  previewPageStatus.value = status
+}
+
+// v22 原型：左侧栏「主题色 / 排版 / 间距 / 模式」直接驱动 presentationConfig，
+// 预览通过 paperStyle（--paper-*）与 is-${accent} 类实时反映。
+const handleWorkbenchSettingChange = (
+  key: 'accentColor' | 'fontFamily' | 'lineHeight' | 'fontScale' | 'sectionSpacing' | 'pageMarginPt',
+  value: string | number
+) => {
+  if (key === 'accentColor') {
+    const next = value as ResumeAccent
+    previewAccent.value = String(next)
+    presentationConfig.value.accentColor = String(next)
+    return
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(presentationConfig.value as any)[key] = value
+}
+
+const handleWorkbenchSettingToggle = (key: 'iconMode' | 'autoOnePage') => {
+  if (key === 'iconMode') {
+    presentationConfig.value.iconMode =
+      presentationConfig.value.iconMode === 'ICON' ? 'TEXT' : 'ICON'
+    return
+  }
+  if (key === 'autoOnePage') {
+    presentationConfig.value.autoOnePage = !presentationConfig.value.autoOnePage
+  }
+}
+
+/* ====================== 魔方简历式工作台（1:1 布局） ====================== */
+const magicPageBreaksVisible = ref(true)
+
+const magicSide = computed(() => {
+  const modules: MagicSideModule[] = [{
+    id: 'resume-basic',
+    title: '基本信息',
+    icon: '👤',
+    isBasic: true
+  }]
+  const targetById: Record<string, string> = { 'resume-basic': 'resume-basic' }
+  const sectionIdById: Record<string, string> = {}
+  const hiddenIds: string[] = []
+  const emojiByBuiltin: Record<string, string> = {
+    summary: '💬',
+    skills: '⚡',
+    experience: '💼',
+    projects: '🚀',
+    education: '🎓'
+  }
+  const targetByBuiltin: Record<string, string> = {
+    summary: 'resume-summary',
+    skills: 'resume-skills',
+    experience: 'resume-experience',
+    projects: 'resume-projects',
+    education: 'resume-experience'
+  }
+
+  for (const section of resumeDocument.document.value.sections) {
+    if (!section.builtinKey && section.visible === false) hiddenIds.push(section.id)
+    const target = section.builtinKey
+      ? (targetByBuiltin[section.builtinKey] || 'resume-basic')
+      : section.id
+    targetById[section.id] = target
+    sectionIdById[section.id] = section.id
+    modules.push({
+      id: section.id,
+      title: section.title?.trim() || '未命名板块',
+      icon: section.builtinKey ? (emojiByBuiltin[section.builtinKey] || '📄') : '📄',
+      isCustom: !section.builtinKey
+    })
+    if (section.visible === false) hiddenIds.push(section.id)
+  }
+
+  return { modules, targetById, sectionIdById, hiddenIds }
+})
+
+const magicSideModules = computed(() => magicSide.value.modules)
+const magicHiddenIds = computed(() => magicSide.value.hiddenIds)
+const magicActiveItemId = computed(() => {
+  const active = magicSide.value.modules.find(
+    (module) => module.id !== 'resume-basic' && magicSide.value.targetById[module.id] === activeWorkshopModule.value
+  )
+  return active?.id ?? activeWorkshopModule.value
+})
+
+const magicActiveCustomSectionId = computed(() => {
+  const section = resumeDocument.document.value.sections.find(
+    (item) => item.id === activeWorkshopModule.value && !item.builtinKey
+  )
+  return section ? section.id : ''
+})
+
+const magicActiveModuleIcon = computed(() => {
+  if (activeWorkshopModule.value === 'resume-basic') return '👤'
+  const item = magicSide.value.modules.find(
+    (module) => magicSide.value.targetById[module.id] === activeWorkshopModule.value
+  )
+  return item?.icon ?? '📄'
+})
+
+const magicAvatar = computed(() => ({
+  url: resumeDocument.document.value.basics.avatar?.url || '',
+  visible: presentationConfig.value.avatar.visible !== false,
+  shape: resumeDocument.document.value.basics.avatar?.shape || presentationConfig.value.avatar.shape
+}))
+
+const handleTopbarRename = (value: string) => {
+  form.resumeName = value.trim()
+  clearResolvedValidation('resumeName', form.resumeName)
+}
+
+const handleMagicSelect = (id: string) => {
+  focusSection(magicSide.value.targetById[id] ?? id)
+}
+
+const handleMagicToggleVisibility = (id: string) => {
+  const sectionId = magicSide.value.sectionIdById[id]
+  if (!sectionId) return
+  resumeDocument.replace(toggleDocumentSectionVisible(resumeDocument.document.value, sectionId))
+}
+
+const handleMagicReorder = (id: string, targetIndex: number) => {
+  const sectionId = magicSide.value.sectionIdById[id]
+  if (!sectionId) return
+  const sections = resumeDocument.document.value.sections
+  // 面板首项是固定的「基本信息」，面板索引 - 1 才是文档分区索引。
+  const toIndex = Math.max(0, Math.min(sections.length - 1, targetIndex - 1))
+  resumeDocument.replace(moveDocumentSection(resumeDocument.document.value, sectionId, toIndex))
+}
+
+const handleMagicFieldVisibility = (key: 'phone' | 'email', visible: boolean) => {
+  presentationConfig.value.basicFieldVisibility = {
+    ...presentationConfig.value.basicFieldVisibility,
+    [key]: visible
+  }
+  presentationConfig.value.overrides = {
+    ...presentationConfig.value.overrides,
+    basicFieldVisibility: true
+  }
+}
+
+const handleMagicLayoutChange = (layout: 'LEFT' | 'CENTER' | 'RIGHT') => {
+  presentationConfig.value.basicLayout = layout
+  presentationConfig.value.overrides = {
+    ...presentationConfig.value.overrides,
+    basicLayout: true
+  }
+}
+
+const handleMagicContactUpdate = (
+  id: string,
+  patch: Partial<ResumeContactItem>
+) => {
+  if (patch.kind !== undefined) handleCustomContactKindChange(id, patch.kind)
+  if (patch.label !== undefined) handleCustomContactLabelChange(id, patch.label)
+  if (patch.value !== undefined) handleCustomContactValueChange(id, patch.value)
+  if (patch.visible !== undefined) handleCustomContactVisibilityChange(id, patch.visible)
+  if (patch.showLabel !== undefined) handleCustomContactLabelVisibilityChange(id, patch.showLabel)
+  if (patch.iconKey !== undefined) {
+    resumeDocument.replace(updateDocumentContact(resumeDocument.document.value, id, { iconKey: patch.iconKey }))
+  }
+}
+
+const handleMagicContactsReorder = (ids: string[]) => {
+  resumeDocument.replace(reorderDocumentContacts(resumeDocument.document.value, ids))
+}
+
+const handleMagicAvatarUpdate = (
+  patch: Partial<{ url: string; visible: boolean; shape: 'SQUARE' | 'ROUNDED' | 'CIRCLE' }>
+) => {
+  if (patch.visible !== undefined || patch.shape !== undefined) {
+    presentationConfig.value.avatar = {
+      ...presentationConfig.value.avatar,
+      ...(patch.visible !== undefined ? { visible: patch.visible } : {}),
+      ...(patch.shape !== undefined ? { shape: patch.shape } : {})
+    }
+    presentationConfig.value.overrides = {
+      ...presentationConfig.value.overrides,
+      avatar: true
+    }
+  }
+  if (patch.url !== undefined) {
+    resumeDocument.replace(updateDocumentBasics(resumeDocument.document.value, { avatar: { url: patch.url } }))
+  }
+}
 const resumeAtsTemplates = ref<ResumeAtsTemplateVO[]>([])
 const templateRegistryError = ref('')
 const deliveryRefreshKey = ref(0)
 let resumeLoadGeneration = 0
 let resumeSaveOperationGeneration = 0
 let projectWriteOperationGeneration = 0
-const resumeAccentOptions: Array<{ value: ResumeAccent; label: string }> = [
-  { value: 'default', label: '默认黑' },
-  { value: 'blue', label: '蓝色' },
-  { value: 'green', label: '绿色' },
-  { value: 'purple', label: '紫色' },
-  { value: 'orange', label: '橙色' },
-  { value: 'red', label: '红色' },
-  { value: 'slate', label: '石板灰' },
-  { value: 'black', label: '纯黑' }
+const resumeAccentOptions: Array<{ value: string; label: string }> = [
+  { value: '#0047AB', label: '钴蓝' },
+  { value: '#000000', label: '纯黑' },
+  { value: '#1A1A1A', label: '墨黑' },
+  { value: '#666666', label: '中灰' },
+  { value: '#8B0000', label: '深红' },
+  { value: '#FF4500', label: '橙红' },
+  { value: '#4B0082', label: '靛紫' },
+  { value: '#2E8B57', label: '海绿' }
 ]
 const mobileWorkspaceTabs = ['edit', 'review', 'ai', 'preview'] as const
 const isTemplateUnlocked = (template: ResumeTemplateOption) =>
@@ -1384,9 +1567,9 @@ const customSectionDone = (section: CustomSection) => section.variant === 'text'
   ? (section.content.blocks || []).some((block) => block.text.trim().length > 0)
   : (section.content.items || []).length > 0
 
-const addCustomSectionPane = (variant: 'text' | 'entry') => {
+const addCustomSectionPane = (variant: 'text' | 'entry' | 'certificates') => {
   if (customSectionQuota.value <= 0) return
-  resumeDocument.addCustomSection({ variant })
+  resumeDocument.addCustomSection({ variant, title: variant === 'certificates' ? '证书' : undefined })
   const created = customSections.value[customSections.value.length - 1]
   if (created) {
     activeWorkshopModule.value = created.id
@@ -1430,6 +1613,70 @@ const applyEntryItems = (
   writeField(key === 'experience'
     ? resumeDocument.legacy.value.workExperience
     : resumeDocument.legacy.value.educationExperience)
+}
+
+/**
+ * 魔方式条目编辑直接写文档分区（条目块是唯一事实来源）。
+ * 不再走 workSummary/education 旧文本回流——那条路会用纯文本重建分区，
+ * 把加粗/斜体等内联标记洗掉；保存时服务器用文档投影覆盖扁平列，无需手工同步。
+ */
+const applyBuiltinEntryItems = (key: 'experience' | 'education', items: ResumeEntryItem[]) => {
+  const section = builtinSection(key)
+  if (!section) return
+  resumeDocument.replace(updateSectionItems(resumeDocument.document.value, section.id, items))
+}
+
+/** 魔方式「添加条目」：在对应内置分区尾部追加空条目。 */
+const addBuiltinEntry = (key: 'experience' | 'education') => {
+  const section = builtinSection(key)
+  if (!section) return
+  const items = key === 'experience' ? workItems.value : educationItems.value
+  applyBuiltinEntryItems(key, [...items, createEntryItem()])
+}
+
+const customSectionBlocks = (sectionId: string) => {
+  const section = resumeDocument.document.value.sections.find((item) => item.id === sectionId)
+  return section && (section.kind === 'custom' || section.kind === 'text') && section.content.blocks
+    ? section.content.blocks
+    : []
+}
+
+const customSectionItems = (sectionId: string) => {
+  const section = resumeDocument.document.value.sections.find((item) => item.id === sectionId)
+  return section && section.kind === 'custom' && section.content.items ? section.content.items : []
+}
+
+const addCustomEntry = (sectionId: string) => {
+  const section = resumeDocument.document.value.sections.find((item) => item.id === sectionId)
+  if (!section || section.kind !== 'custom') return
+  applyCustomSectionItems(sectionId, [...(section.content.items || []), createEntryItem()])
+}
+
+/* ---- 证书板块 ---- */
+const customSectionCertificates = (sectionId: string) => {
+  const section = resumeDocument.document.value.sections.find((item) => item.id === sectionId)
+  return section && section.kind === 'custom' && section.content.certificates
+    ? section.content.certificates
+    : []
+}
+
+const applyCertificates = (sectionId: string, items: ResumeCertificateItem[]) => {
+  resumeDocument.replace(updateSectionCertificates(resumeDocument.document.value, sectionId, items))
+}
+
+const addCertificateRow = (sectionId: string) => {
+  applyCertificates(sectionId, [...customSectionCertificates(sectionId), createCertificateItem()])
+}
+
+const patchCertificateRow = (sectionId: string, certId: string, patch: Partial<ResumeCertificateItem>) => {
+  applyCertificates(
+    sectionId,
+    customSectionCertificates(sectionId).map((item) => (item.id === certId ? { ...item, ...patch } : item))
+  )
+}
+
+const removeCertificateRow = (sectionId: string, certId: string) => {
+  applyCertificates(sectionId, customSectionCertificates(sectionId).filter((item) => item.id !== certId))
 }
 
 watch([() => form.workSummary, () => form.education], () => {
@@ -1687,7 +1934,7 @@ const activeWorkshopModuleMeta = computed(() => {
       description: '把背景、职责、技术决策和量化结果写成可追问的证据。'
     },
     'resume-experience': {
-      title: '教育经历',
+      title: '工作与教育经历',
       description: '补齐经历上下文和教育信息，让整份简历可被完整理解。'
     }
   } as const
@@ -1728,6 +1975,41 @@ const selectedResumeTemplateLabel = computed(() =>
     || selectableResumeTemplateOptions.value.find((item) => item.code === selectedResumeTemplateCode.value)?.name
     || '极光绿'} · v${activeResumeTemplate.value?.templateVersion || presentationConfig.value.templateVersion || 1}`
 )
+
+// v22 原型：顶栏中央的模板切换 tab 与原型 6 个模板变体（classic/twocol/banner/timeline/
+// minimal/hybrid）一一对应。这里精选 6 套真实模板，标签直接取自 resumeTemplateOptions 的
+// name，杜绝写死导致的「经典模板/两栏布局/模块标题背景色」等错名瑕疵，保证 tab 与预览渲染一致。
+const WORKBENCH_TEMPLATE_TABS: ResumeTemplateCode[] = [
+  'ATS_SINGLE_COLUMN', // 极光绿   ≈ classic
+  'ATS_CLASSIC_SIDEBAR', // 雅黑侧栏 ≈ twocol
+  'ATS_STREAK_SIGNATURE', // 连胜典藏 ≈ banner
+  'MAGIC_TIMELINE', // 时间轴    ≈ timeline
+  'MAGIC_MINIMALIST', // 极简      ≈ minimal
+  'MAGIC_EDITORIAL' // 画报风    ≈ hybrid
+]
+const workbenchTemplateTabs = computed(() => {
+  const byCode = new Map(resumeTemplateOptions.map((option) => [option.code, option]))
+  return WORKBENCH_TEMPLATE_TABS
+    .map((code) => byCode.get(code))
+    .filter((option): option is (typeof resumeTemplateOptions)[number] => Boolean(option))
+    .map((option) => ({ id: option.code, label: option.name }))
+})
+
+const handleWorkbenchTemplateChange = (templateId: string) => {
+  // 兼容 ResumeTemplateCode 与原写死五套模板 ID 字符串
+  if (!templateId) return
+  selectedResumeTemplateCode.value = templateId as ResumeTemplateCode
+}
+
+const handleWorkbenchResetResume = () => {
+  // v22 原型：重置 = 还原为当前模板的初始占位；保持轻量提示避免误清空
+  // （保留原有 selectedResumeTemplateCode，不破坏 9701001 demo）
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('resume-workbench-toast', {
+      detail: { message: '已重置当前模板视图（不会清空已填写的简历数据）', tone: 'success' }
+    }))
+  }
+}
 
 const splitTextTags = (value?: string) =>
   (value || '')
@@ -1783,6 +2065,20 @@ const inlineProjectItem = computed<ResumeProjectItem | null>(() => {
 })
 
 const inlineProjectFields = computed(() => inlineProjectItem.value?.fields || EMPTY_PROJECT_FIELDS)
+
+const handleDeleteProjectById = (projectId: number) => {
+  const project = projects.value.find((entry) => entry.projectId === projectId)
+  if (project) void handleDeleteProject(project)
+}
+
+/** 魔方式拖拽排序：重排 VO 数组后由 projects 深度监听同步进文档分区。 */
+const reorderProjectRows = (fromIndex: number, toIndex: number) => {
+  const list = [...projects.value]
+  if (fromIndex < 0 || toIndex < 0 || fromIndex >= list.length || toIndex >= list.length) return
+  const [moved] = list.splice(fromIndex, 1)
+  list.splice(toIndex, 0, moved)
+  projects.value = list
+}
 
 /**
  * 服务器项目行至今成对存储历史别名列（technicalDifficulties / optimizationResults / projectPeriod…），
@@ -2045,8 +2341,8 @@ const loadPreviewPreferences = () => {
         sectionOrder: resumeTemplateSectionOrder(storedTemplate.code)
       })
     }
-    if (resumeAccentOptions.some((item) => item.value === preference.accent)) {
-      previewAccent.value = preference.accent as ResumeAccent
+    if (preference.accent && resumeAccentOptions.some((item) => item.value === preference.accent)) {
+      previewAccent.value = preference.accent
     }
     if (typeof preference.zoom === 'number' && Number.isFinite(preference.zoom)) {
       previewZoom.value = Math.min(1.12, Math.max(0.72, preference.zoom))
@@ -3399,6 +3695,7 @@ onBeforeUnmount(() => {
   --resume-success: var(--user-success);
   --resume-warning: var(--user-warning);
   --resume-danger: var(--user-danger);
+  --resume-workbench-toolbar-bg: color-mix(in srgb, var(--user-surface) 55%, transparent);
   gap: var(--user-space-4);
   min-width: 0;
   min-height: 100%;
@@ -3629,6 +3926,72 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
+/* ===== v22 原型对齐：编辑器表单控件匹配 .mf-in / .mf-ta / .mf-f ===== */
+.resume-workbench-pane--editor {
+  :deep(.el-input__wrapper) {
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--resume-workbench-surface);
+    box-shadow: 0 0 0 1px var(--resume-workbench-line) inset;
+    transition: box-shadow 0.15s ease;
+  }
+
+  :deep(.el-input__wrapper:hover) {
+    box-shadow: 0 0 0 1px var(--resume-workbench-line-strong) inset;
+  }
+
+  :deep(.el-input__wrapper.is-focus) {
+    box-shadow:
+      0 0 0 1px var(--resume-workbench-accent) inset,
+      0 0 0 3px var(--resume-workbench-accent-soft);
+  }
+
+  :deep(.el-input__inner) {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--resume-workbench-text);
+  }
+
+  :deep(.el-textarea__inner) {
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    background: var(--resume-workbench-surface);
+    color: var(--resume-workbench-text);
+    box-shadow: 0 0 0 1px var(--resume-workbench-line) inset;
+    transition: box-shadow 0.15s ease;
+  }
+
+  :deep(.el-textarea__inner:focus) {
+    box-shadow:
+      0 0 0 1px var(--resume-workbench-accent) inset,
+      0 0 0 3px var(--resume-workbench-accent-soft);
+  }
+
+  :deep(.el-select__wrapper) {
+    border-radius: 8px;
+    min-height: 36px;
+    background: var(--resume-workbench-surface);
+    box-shadow: 0 0 0 1px var(--resume-workbench-line) inset;
+    transition: box-shadow 0.15s ease;
+  }
+
+  :deep(.el-select__wrapper.is-focused) {
+    box-shadow:
+      0 0 0 1px var(--resume-workbench-accent) inset,
+      0 0 0 3px var(--resume-workbench-accent-soft);
+  }
+
+  :deep(.el-form-item__label) {
+    height: auto;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--resume-workbench-muted);
+    line-height: 1.4;
+  }
+}
+
 .panel-kicker {
   display: inline-flex;
   gap: 7px;
@@ -3782,7 +4145,7 @@ onBeforeUnmount(() => {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .section-divider {
@@ -3792,6 +4155,8 @@ onBeforeUnmount(() => {
 }
 
 .switch-line {
+  display: flex;
+  align-items: center;
   min-height: 32px;
   gap: 10px;
   color: var(--resume-muted);
@@ -4176,6 +4541,152 @@ onBeforeUnmount(() => {
     font-size: 11px;
     text-align: center;
   }
+}
+
+.magic-preview-pane {
+  position: relative;
+}
+
+.magic-module-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 16px 12px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.magic-module-card__icon {
+  font-size: 17px;
+}
+
+.magic-module-card__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--el-color-primary, #0047ab);
+  font-size: 17px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.magic-module-card__title-input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-bottom: 1px solid rgba(0, 71, 171, 0.35);
+  background: transparent;
+  color: var(--el-color-primary, #0047ab);
+  font-size: 17px;
+  font-weight: 600;
+  outline: none;
+
+  &:focus { border-bottom-color: var(--el-color-primary, #0047ab); }
+}
+
+.magic-module-card__pen {
+  flex: 0 0 auto;
+  color: var(--el-color-primary, #0047ab);
+}
+
+.magic-module-card__template {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 12.5px;
+
+  &:hover {
+    background: #f9fafb;
+    color: #111827;
+  }
+}
+
+.magic-basic-wrap {
+  margin: 0 16px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+/* 编辑列子卡不参与 flex 收缩：超出高度交给列本身滚动，避免 overflow:hidden 静默裁切。 */
+.resume-workbench-pane--editor {
+  > .edit-card,
+  > .project-section,
+  > .custom-section,
+  > .magic-module-card {
+    flex-shrink: 0;
+  }
+}
+
+.magic-group-heading {
+  margin: 4px 16px 8px;
+  color: #111827;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.magic-cert-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.magic-cert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.magic-cert-row:hover {
+  border-color: rgba(0, 71, 171, 0.28);
+}
+
+.magic-cert-row .magic-field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.magic-cert-row .magic-cert-row__name {
+  flex: 1.4;
+}
+
+.magic-cert-row .magic-cert-row__date {
+  flex: 0 0 110px;
+}
+
+.magic-cert-panel__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--el-color-primary, #0047ab);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.magic-cert-panel__add:hover {
+  background: #003a8c;
 }
 
 .resume-paper-wrap {
@@ -6246,7 +6757,7 @@ onBeforeUnmount(() => {
   .resume-workbench-shell {
     display: grid;
     flex: 1 1 auto;
-    grid-template-columns: 220px minmax(0, 1fr) minmax(360px, 420px);
+    grid-template-columns: var(--workbench-rail-width, 220px) minmax(0, 1fr) minmax(360px, var(--workbench-editor-width, 420px));
     grid-template-rows: minmax(0, 1fr);
     gap: 0;
     min-width: 0;
@@ -6270,28 +6781,19 @@ onBeforeUnmount(() => {
     box-shadow: none;
   }
 
-  .resume-workbench-pane--preview {
-    position: relative;
-    top: auto;
-    grid-column: 2;
-    grid-row: 1;
-    display: flex;
-    flex-direction: column;
-    max-height: 100%;
-    padding: 0;
-    overflow: hidden;
-    background: var(--resume-workbench-bg);
-  }
+  /* v22: 三栏栅格与预览画布背景由 ResumeWorkbenchShell 通过 :slotted 统一托管，
+     此处不再重复设置 grid-column / background，避免列序/背景覆盖。 */
 
   .preview-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
-    min-height: 55px;
-    padding: 0 18px;
+    gap: 12px;
+    min-height: 44px;
+    padding: 0 16px;
     border-bottom: 1px solid var(--resume-workbench-line);
-    background: var(--resume-workbench-surface);
+    background: var(--resume-workbench-toolbar-bg, var(--user-surface));
+    backdrop-filter: blur(8px);
 
     > div:first-child {
       display: flex;
@@ -6302,15 +6804,15 @@ onBeforeUnmount(() => {
 
     > div:first-child > span {
       color: var(--resume-workbench-muted);
-      font-size: 11px;
+      font-size: 10.5px;
     }
 
     h2 {
       overflow: hidden;
       margin: 0;
       color: var(--resume-workbench-text);
-      font-size: 13px;
-      font-weight: 700;
+      font-size: 12.5px;
+      font-weight: 650;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -6391,7 +6893,7 @@ onBeforeUnmount(() => {
     max-height: none;
     padding: 24px 32px 38px;
     overflow: auto;
-    background: var(--resume-workbench-bg);
+    background: transparent;
     scrollbar-gutter: stable both-edges;
   }
 
@@ -6431,18 +6933,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  .resume-workbench-pane--editor,
-  .resume-workbench-pane--inspector {
-    grid-column: 3;
-    grid-row: 1;
-    align-content: start;
-    max-height: 100%;
-    padding: 0;
-    overflow: auto;
-    border-left: 1px solid var(--resume-workbench-line);
-    background: var(--resume-workbench-surface);
-    scrollbar-gutter: stable;
-  }
+  /* v22: 编辑器/检查器栅格定位由 ResumeWorkbenchShell 统一托管。 */
 
   .resume-workbench-pane--editor {
     display: flex;
@@ -6521,11 +7012,7 @@ onBeforeUnmount(() => {
     }
   }
 
-  .resume-workbench-pane--inspector {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
+  /* v22: inspector 的 flex 布局由 ResumeWorkbenchShell 统一托管。 */
 
   .resume-workbench-pane--inspector > .side-panel:not(.section-nav-card) {
     display: block;
@@ -6604,7 +7091,8 @@ onBeforeUnmount(() => {
     }
   }
 
-  .content-card,
+  /* v22: 预览画布需要点阵背景，不纳入透明重置 */
+  .content-card:not(.resume-workbench-pane--preview),
   .side-panel,
   .editor-section {
     border: 0;
@@ -7267,11 +7755,16 @@ onBeforeUnmount(() => {
   border-top: 1px dashed var(--user-border);
 }
 
+/* v22 原型对齐：自定义字段提示框匹配 .mf-tip（信息盒：ai-soft 底 + primary 边） */
 .custom-fields__hint {
-  margin: 0 0 var(--user-space-3);
-  color: var(--user-text-muted);
+  margin: 0 0 10px;
+  padding: 8px 10px;
   font-size: 12px;
   line-height: 1.6;
+  color: var(--user-text-muted);
+  background: var(--user-ai-soft);
+  border: 1px solid var(--user-primary-border);
+  border-radius: 8px;
 }
 
 .custom-field-row {
@@ -7324,8 +7817,41 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.custom-field-row__toggle .el-switch {
-  --el-switch-on-color: var(--user-primary);
+/* v22 原型对齐：编辑器开关替换 EP switch，1:1 匹配 .mf-toggle（38x22 拨杆） */
+.wb-toggle {
+  flex: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--user-border);
+  position: relative;
+  transition: background 0.2s ease;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.wb-toggle i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--user-primary-contrast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: left 0.2s ease;
+}
+
+.wb-toggle.is-on {
+  background: var(--user-primary);
+}
+
+.wb-toggle.is-on i {
+  left: 18px;
 }
 
 .custom-field-row__remove {

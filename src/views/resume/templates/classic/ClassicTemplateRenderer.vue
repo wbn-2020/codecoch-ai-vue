@@ -24,7 +24,7 @@
         class="classic-renderer__section"
         :data-section="section.builtinKey || section.id"
       >
-        <TemplateSectionTitle :title="section.title" />
+        <TemplateSectionTitle :title="section.title" tone="classic" />
 
         <div v-if="section.builtinKey === 'summary'" class="classic-renderer__summary">
           <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>

@@ -109,14 +109,16 @@ describe('Direction D prototype fidelity contracts', () => {
     const acceptanceEnv = readSource('.env.acceptance')
     const routes = readSource('src/router/routes.ts')
 
-    // Resume workbench v2 keeps the A4 canvas central and the contextual editor on the right.
+    // Resume workbench v2 mirrors the v22 prototype: editor is now the central column (col 2)
+    // and the A4 preview moves to the right column (col 3). Both default widths are preserved
+    // so the rail/editor resizer contracts keep their existing range.
     expect(resumeShell).toContain('--workbench-rail-width: 220px')
     expect(resumeShell).toContain('--workbench-editor-width: 420px')
     expect(resume).toContain('<ResumeSectionRail')
     expect(resume).toContain('<ResumeWorkbenchTopbar')
     expect(resume).toContain('<ResumeTemplateBrowser')
-    expect(resumeShell).toMatch(/\.resume-workbench-layout > :deep\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*2;/)
-    expect(resumeShell).toMatch(/\.resume-workbench-layout > :deep\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :deep\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*3;/)
+    expect(resumeShell).toMatch(/\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),\s*[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--inspector\)\s*\{[\s\S]*?grid-column:\s*2;/)
+    expect(resumeShell).toMatch(/\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--preview\)\s*\{[\s\S]*?grid-column:\s*3;/)
     // 行内项目三段随工作台重构下沉到块编辑器组件，标签契约随之搬移。
     const projectEditor = readSource('src/views/resume/workbench/blocks/ProjectItemEditor.vue')
     expect(resume).toContain('<ProjectItemEditor')

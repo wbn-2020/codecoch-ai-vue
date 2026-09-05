@@ -1,4 +1,4 @@
-import type { ResumeAccent, ResumeTemplateCode } from '@/features/resume-document'
+import type { ResumeTemplateCode } from '@/features/resume-document'
 import type {
   ResumePresentationFont,
   ResumePresentationOverrideKey
@@ -59,7 +59,7 @@ export interface ResumeBasics {
 export interface ResumeLayoutMeta {
   templateCode: ResumeTemplateCode | string
   templateVersion: number
-  accentColor: ResumeAccent
+  accentColor: string
   fontFamily: ResumePresentationFont
   fontScale: number
   lineHeight: number
@@ -103,6 +103,8 @@ export interface ResumeEntryItem {
   period: string
   meta: string
   blocks: ResumeBlock[]
+  /** 魔方式条目级显隐；undefined 视为显示。 */
+  visible?: boolean
 }
 
 export interface EntrySection extends SectionBase {
@@ -134,10 +136,21 @@ export interface ProjectSection extends SectionBase {
   content: { items: ResumeProjectItem[] }
 }
 
+/** 证书条目（魔方 certificates 模块对齐）。 */
+export interface ResumeCertificateItem {
+  id: string
+  /** 证书名称，例如「PMP项目管理认证」 */
+  name: string
+  /** 颁发机构，可选 */
+  issuer: string
+  /** 获证时间，自由文本（如 2024/06） */
+  date: string
+}
+
 export interface CustomSection extends SectionBase {
   kind: 'custom'
-  variant: 'text' | 'entry'
-  content: { blocks?: ResumeBlock[]; items?: ResumeEntryItem[] }
+  variant: 'text' | 'entry' | 'certificates'
+  content: { blocks?: ResumeBlock[]; items?: ResumeEntryItem[]; certificates?: ResumeCertificateItem[] }
 }
 
 export type ResumeSection =

@@ -63,7 +63,7 @@ import { Printer } from 'lucide-vue-next'
 import { ElMessage } from 'element-plus'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import type { ResumeAccent, ResumeDocumentDraft, ResumePreviewDensity, ResumeTemplateCode } from '@/features/resume-document'
+import type { ResumeDocumentDraft, ResumePreviewDensity, ResumeTemplateCode } from '@/features/resume-document'
 import type { ResumeDocumentV2 } from '@/features/resume-workbench/document'
 import type { ResumePresentationConfig } from '@/types/resumePresentation'
 import { A4_PAGE_WIDTH_PX } from '@/features/resume-template/pagination'
@@ -74,7 +74,7 @@ import ResumeDocumentPreview from '@/views/resume/components/ResumeDocumentPrevi
 const props = defineProps<{
   draft: ResumeDocumentDraft
   templateCode: ResumeTemplateCode | string
-  accent: ResumeAccent
+  accent: string
   density: ResumePreviewDensity
   presentationConfig?: ResumePresentationConfig
   document?: ResumeDocumentV2 | null

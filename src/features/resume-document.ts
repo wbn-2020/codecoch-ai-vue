@@ -101,9 +101,9 @@ export interface ResumeExportCheckInput extends ResumeDocumentDraft {
 export const resumeTemplateOptions: ResumeTemplateOption[] = [
   {
     code: 'ATS_SINGLE_COLUMN',
-    name: '极光绿',
-    description: '清晰时间线与强调色标题，适合通用投递',
-    shortLabel: '极光',
+    name: '经典蓝',
+    description: '左右分栏头部与色条分区标题，魔方经典版式',
+    shortLabel: '经典',
     className: 'professional',
     roleFit: '通用岗位、研发、产品与运营',
     pageTendency: '内容适中时偏 1 页，经历较多时自然延展到 2 页',
@@ -245,6 +245,47 @@ export const resumeTemplateOptions: ResumeTemplateOption[] = [
   }
 ]
 
+/** 魔方简历式自由主题色：历史枚举值到 hex 的映射（读取旧数据时迁移）。 */
+export const LEGACY_ACCENT_HEX: Record<string, string> = {
+  default: '#0047AB',
+  blue: '#1A1A1A',
+  green: '#2E8B57',
+  purple: '#4B0082',
+  orange: '#FF4500',
+  red: '#8B0000',
+  slate: '#666666',
+  black: '#000000'
+}
+
+/** accentColor 统一解析为 hex：hex 直通、旧枚举迁移、非法值回退默认钴蓝。 */
+export const resolveAccentHex = (value: unknown): string => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toUpperCase()
+    if (LEGACY_ACCENT_HEX[trimmed]) return LEGACY_ACCENT_HEX[trimmed]
+  }
+  return LEGACY_ACCENT_HEX.default
+}
+
+const hexToRgb = (hex: string): [number, number, number] => [
+  parseInt(hex.slice(1, 3), 16),
+  parseInt(hex.slice(3, 5), 16),
+  parseInt(hex.slice(5, 7), 16)
+]
+
+/** 按比例向黑色压暗（amount 0-1），用于强调色 hover/strong 派生。 */
+export const shadeAccent = (hex: string, amount: number): string => {
+  const [r, g, b] = hexToRgb(resolveAccentHex(hex))
+  const mix = (channel: number) => Math.round(channel * (1 - amount))
+  return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`.toUpperCase()
+}
+
+/** 带透明度的强调色，用于色带/软背景。 */
+export const alphaAccent = (hex: string, alpha: number): string => {
+  const [r, g, b] = hexToRgb(resolveAccentHex(hex))
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 export const isResumeTemplateUnlocked = (
   template: ResumeTemplateOption,
   streakDays: number
@@ -286,7 +327,8 @@ export const normalizeText = (value: unknown) =>
 export const splitLines = (value: unknown) =>
   normalizeText(value)
     .split(/\n+/)
-    .map((line) => line.replace(/^\s*(?:(?:[-*•·])\s*|(?:\d+[.)、])\s+)/, '').trim())
+    // 行首 “*” 只有在不成对时才视作列表标记：避免吃掉 “**加粗**” 的第一个星号。
+    .map((line) => line.replace(/^\s*(?:(?:[-•·])\s*|\*(?!\*)\s*|(?:\d+[.)、])\s+)/, '').trim())
     .filter(Boolean)
 
 export const splitSentences = (value: string) => {

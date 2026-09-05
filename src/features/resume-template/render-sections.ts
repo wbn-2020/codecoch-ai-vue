@@ -42,7 +42,7 @@ const BUILTIN_FIELD_KEYS: Record<ResumePresentationSection, string> = {
 const blockLines = (blocks?: ResumeBlock[]) =>
   toPlainLines(blocks || []).map((line) => line.text)
 
-const entryItemToRender = (item: ResumeEntryItem): ResumeDocumentEntry => ({
+export const entryItemToRender = (item: ResumeEntryItem): ResumeDocumentEntry => ({
   key: item.id,
   title: item.heading,
   subtitle: item.subheading || undefined,
@@ -100,13 +100,24 @@ const mapDocumentSection = (
   }
 
   if (section.kind === 'custom' && section.variant === 'entry') {
-    const items = section.content.items || []
+    const items = (section.content.items || []).filter((item) => item.visible !== false)
     if (!items.length) return null
     return {
       id: section.id,
       title: section.title?.trim() || '自定义分区',
       kind: 'custom',
       entries: items.map(entryItemToRender)
+    }
+  }
+
+  if (section.kind === 'custom' && section.variant === 'certificates') {
+    const items = (section.content.certificates || []).filter((item) => item.name.trim().length > 0)
+    if (!items.length) return null
+    return {
+      id: section.id,
+      title: section.title?.trim() || '证书',
+      kind: 'custom',
+      certificates: items.map((item) => ({ name: item.name, issuer: item.issuer, date: item.date }))
     }
   }
 

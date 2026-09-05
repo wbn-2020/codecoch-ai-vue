@@ -12,6 +12,7 @@ describe('resume presentation config', () => {
 
     expect(config.templateCode).toBe('ATS_COMPACT')
     expect(config.templateVersion).toBe(3)
+    expect(config.accentColor).toBe('green')
     expect(config.moduleOrder).toHaveLength(5)
     expect(config.sectionOrder).toEqual([
       'summary',

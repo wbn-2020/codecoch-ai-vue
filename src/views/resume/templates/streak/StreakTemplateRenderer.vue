@@ -27,7 +27,7 @@
           class="streak-renderer__section streak-renderer__section--summary"
           data-section="summary"
         >
-          <TemplateSectionTitle :title="section.title" />
+          <TemplateSectionTitle :title="section.title" tone="band" />
           <div class="streak-renderer__summary">
             <p v-for="paragraph in model.summary" :key="paragraph">{{ paragraph }}</p>
           </div>
@@ -38,7 +38,7 @@
           class="streak-renderer__section streak-renderer__section--skills"
           data-section="skills"
         >
-          <TemplateSectionTitle :title="section.title" />
+          <TemplateSectionTitle :title="section.title" tone="band" />
           <div class="streak-renderer__skills">
             <div
               v-for="group in model.skillGroups"
@@ -57,7 +57,7 @@
           class="streak-renderer__section streak-renderer__section--stream"
           :data-section="section.builtinKey"
         >
-          <TemplateSectionTitle :title="section.title" />
+          <TemplateSectionTitle :title="section.title" tone="band" />
           <div class="streak-renderer__stream">
             <article
               v-for="entry in streamEntriesBySection[section.builtinKey]"
@@ -94,7 +94,7 @@
           class="streak-renderer__section streak-renderer__section--custom"
           :data-section="section.id"
         >
-          <TemplateSectionTitle :title="section.title" />
+          <TemplateSectionTitle :title="section.title" tone="band" />
           <TemplateSectionBody :section="section" />
         </section>
       </template>
@@ -253,8 +253,15 @@ const streamEntriesBySection = computed<Record<ResumePresentationSection, Streak
   letter-spacing: 0.08em;
 }
 
-.streak-renderer__section :deep(.template-section-title span) {
-  background: #d7b98f;
+/* 模块标题背景色：section 标题以暖色实底 band 呈现，呼应 streak 的签名暖调 */
+.streak-renderer__section :deep(.template-section-title--band h3) {
+  padding: 4px 10px;
+  background: #6c3f00;
+  color: #fff7ec !important;
+}
+
+.streak-renderer__section :deep(.template-section-title--band span) {
+  display: none;
 }
 
 .streak-renderer__summary,

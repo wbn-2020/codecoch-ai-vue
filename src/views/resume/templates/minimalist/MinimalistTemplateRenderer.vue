@@ -141,10 +141,13 @@ const sections = computed(() => visibleRenderSections(props.model))
 }
 
 .minimalist-renderer__section h2 {
-  margin: 0 0 12px;
-  color: var(--template-ink);
-  font-size: calc(11px * var(--template-font-scale, 1));
-  font-weight: 800;
+  margin: 0 0 8px;
+  /* 全局标题色规则会渗透进预览，强制 !important 锁定中性极简风（对标原型 .mf-tpl-minimal） */
+  color: var(--template-ink) !important;
+  font-size: calc(15px * var(--template-font-scale, 1));
+  font-weight: 600;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #ddd;
 }
 
 .minimalist-renderer__summary {

@@ -79,20 +79,37 @@ const normalizeSection = (section: unknown): ResumeSection | null => {
     }
     case 'entry':
     case 'custom': {
-      const variant = kind === 'entry' ? undefined : source.variant === 'entry' ? 'entry' : 'text'
+      const variant = kind === 'entry'
+        ? undefined
+        : source.variant === 'entry' || source.variant === 'certificates'
+          ? source.variant
+          : 'text'
       const normalizeItem = (item: Record<string, unknown>) => ({
         id: typeof item.id === 'string' && item.id ? item.id : nextDocumentId('item'),
         heading: String(item.heading ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 120),
         subheading: String(item.subheading ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 120),
         period: String(item.period ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 60),
         meta: String(item.meta ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 120),
-        blocks: sanitizeBlocks(item.blocks)
+        blocks: sanitizeBlocks(item.blocks),
+        ...(item.visible === false ? { visible: false } : {})
       })
       if (kind === 'entry') {
         const items = Array.isArray((source.content as { items?: unknown })?.items)
           ? (source.content as unknown as { items: Array<Record<string, unknown>> }).items.slice(0, 50).map(normalizeItem)
           : []
         return { ...base, builtinKey, kind: 'entry', content: { items } }
+      }
+      if (variant === 'certificates') {
+        const rawItems = (source.content as { certificates?: unknown })?.certificates
+        const items = Array.isArray(rawItems)
+          ? (rawItems as Array<Record<string, unknown>>).slice(0, 50).map((item) => ({
+            id: typeof item.id === 'string' && item.id ? item.id : nextDocumentId('cert'),
+            name: String(item.name ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 120),
+            issuer: String(item.issuer ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 120),
+            date: String(item.date ?? '').replace(CONTROL_PATTERN, ' ').slice(0, 40)
+          }))
+          : []
+        return { ...base, builtinKey, kind, variant, content: { certificates: items } }
       }
       if (variant === 'entry') {
         const items = Array.isArray((source.content as { items?: unknown })?.items)

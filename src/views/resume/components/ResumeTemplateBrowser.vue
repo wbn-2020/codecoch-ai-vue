@@ -1,11 +1,12 @@
 <template>
-  <el-dialog
+  <el-drawer
     :model-value="modelValue"
-    class="resume-template-browser-dialog"
-    fullscreen
+    class="resume-template-browser-drawer"
+    direction="ltr"
+    size="52%"
     append-to-body
-    :show-close="false"
-    :close-on-click-modal="false"
+    :with-header="false"
+    :modal-class="'resume-template-browser-modal'"
     @update:model-value="handleVisibilityChange"
   >
     <div class="template-browser">
@@ -64,70 +65,60 @@
             }"
             :style="{ '--template-index': index }"
           >
-            <button
-              type="button"
-              class="template-card__preview"
-              :aria-label="`预览${template.name}模板`"
-              @click="openPreview(template)"
-            >
-              <span
-                :ref="(element) => registerPreviewFrame(element, template.code)"
-                class="template-card__paper-frame"
-              >
-                <span class="template-card__paper">
-                  <ResumeDocumentPreview
-                    :draft="sampleDraft"
-                    :template-code="template.code"
-                    :accent="localAccent"
-                    :density="template.code === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
-                    :presentation-config="previewTemplatePresentation(template.code)"
-                  />
-                </span>
-              </span>
-
-              <span class="template-card__fade" aria-hidden="true"></span>
-              <span class="template-card__meta">
-                <span class="template-card__title">
-                  <strong>{{ template.name }}</strong>
-                  <span v-if="pendingCode === template.code" class="template-card__selected">
-                    <Check :size="13" aria-hidden="true" />
-                    当前
-                  </span>
-                  <span v-else-if="!isUnlocked(template)" class="template-card__locked">
-                    <LockKeyhole :size="13" aria-hidden="true" />
-                    未解锁
-                  </span>
-                </span>
-                <span class="template-card__description">{{ template.description }}</span>
-                <span
-                  class="template-card__availability"
-                  :class="{ 'is-formal': isFormalExportTemplate(template.code) }"
-                >
-                  {{ isFormalExportTemplate(template.code) ? '正式导出模板' : '仅预览模板' }}
-                </span>
-              </span>
-            </button>
-
-            <footer class="template-card__actions">
-              <button type="button" class="template-card__secondary" @click="openPreview(template)">
-                <Eye :size="15" aria-hidden="true" />
-                预览
-              </button>
+            <div class="template-card__cover">
               <button
                 type="button"
-                class="template-card__primary"
+                class="template-card__select"
+                :aria-label="`使用${template.name}模板`"
                 :disabled="!isUnlocked(template)"
                 @click="useTemplate(template)"
               >
-                <LayoutTemplate :size="15" aria-hidden="true" />
-                使用此模板
+                <span
+                  :ref="(element) => registerPreviewFrame(element, template.code)"
+                  class="template-card__paper-frame"
+                >
+                  <span class="template-card__paper">
+                    <ResumeDocumentPreview
+                      :draft="sampleDraft"
+                      :template-code="template.code"
+                      :accent="localAccent"
+                      :density="template.code === 'ATS_COMPACT' ? 'compact' : 'comfortable'"
+                      :presentation-config="previewTemplatePresentation(template.code)"
+                    />
+                  </span>
+                </span>
               </button>
+
+              <span v-if="pendingCode === template.code" class="template-card__veil" aria-hidden="true">
+                <LayoutTemplate :size="26" />
+              </span>
+              <span v-else-if="!isUnlocked(template)" class="template-card__veil is-lock">
+                <LockKeyhole :size="18" aria-hidden="true" />
+                <em>连续打卡 7 天解锁</em>
+              </span>
+
+              <button
+                type="button"
+                class="template-card__zoom"
+                :aria-label="`放大预览${template.name}模板`"
+                :disabled="!isUnlocked(template)"
+                @click.stop="openPreview(template)"
+              >
+                <Eye :size="13" aria-hidden="true" />
+                预览
+              </button>
+            </div>
+
+            <footer class="template-card__name">
+              <strong>{{ template.name }}</strong>
+              <span :class="{ 'is-formal': isFormalExportTemplate(template.code) }">
+                {{ isFormalExportTemplate(template.code) ? '正式导出' : '仅预览' }}
+              </span>
             </footer>
           </article>
         </div>
       </main>
     </div>
-
     <el-dialog
       v-model="previewVisible"
       class="resume-template-preview-dialog"
@@ -173,7 +164,7 @@
         </footer>
       </div>
     </el-dialog>
-  </el-dialog>
+  </el-drawer>
 </template>
 
 <script setup lang="ts">
@@ -195,11 +186,11 @@ import {
 } from '@/features/resume-presentation'
 import { listResumeTemplateDefinitions } from '@/features/resume-template/registry'
 import type { ResumeTemplateDefinition } from '@/features/resume-template/schema'
-import type {
-  ResumeAccent,
-  ResumeDocumentDraft,
-  ResumeTemplateCode,
-  ResumeTemplateOption
+import {
+  resolveAccentHex,
+  type ResumeDocumentDraft,
+  type ResumeTemplateCode,
+  type ResumeTemplateOption
 } from '@/features/resume-document'
 import type { ResumeAtsTemplateVO } from '@/types/resumeDelivery'
 import type { ResumePresentationConfig } from '@/types/resumePresentation'
@@ -211,8 +202,8 @@ const props = defineProps<{
   modelValue: boolean
   templates: ResumeTemplateOption[]
   pendingCode: ResumeTemplateCode
-  accent: ResumeAccent
-  accentOptions: Array<{ value: ResumeAccent; label: string }>
+  accent: string
+  accentOptions: Array<{ value: string; label: string }>
   zoom: number
   isUnlocked: (template: ResumeTemplateOption) => boolean
   templateRegistry?: ResumeAtsTemplateVO[]
@@ -223,13 +214,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   select: [code: ResumeTemplateCode]
-  'accent-change': [accent: ResumeAccent]
+  'accent-change': [accent: string]
   'zoom-change': [delta: number]
   cancel: []
   confirm: []
 }>()
 
-const localAccent = ref<ResumeAccent>(props.accent)
+const localAccent = ref<string>(props.accent)
 const previewVisible = ref(false)
 const activePreviewCode = ref<ResumeTemplateCode | null>(null)
 const previewFrames = new Map<ResumeTemplateCode, HTMLElement>()
@@ -252,16 +243,7 @@ const activePreviewTemplate = computed(() =>
   props.templates.find((template) => template.code === activePreviewCode.value)
 )
 
-const accentColor = (accent: ResumeAccent) => ({
-  default: '#1b1b18',
-  blue: '#3E6AAE',
-  green: '#1f6f5c',
-  purple: '#7E6CB0',
-  orange: '#f97316',
-  red: '#ef4444',
-  slate: '#57534e',
-  black: '#000000'
-})[accent]
+const accentColor = (accent: string) => resolveAccentHex(accent)
 
 const sampleDraft: ResumeDocumentDraft = {
   resumeName: 'Java 后端工程师简历',
@@ -356,7 +338,7 @@ const startAutoplay = () => {
   }, 3000)
 }
 
-const selectAccent = (accent: ResumeAccent) => {
+const selectAccent = (accent: string) => {
   localAccent.value = accent
   stopAutoplay()
 }
@@ -424,232 +406,173 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-:global(.resume-template-browser-dialog) {
-  --magic-page: #f9f8f6;
-  --magic-surface: #ffffff;
-  --magic-ink: #1b1b18;
-  --magic-ink-soft: #4a4944;
-  --magic-muted: #77756e;
-  --magic-line: #dedcd6;
-  --magic-line-strong: #c9c6bd;
-  --magic-hover: #efede8;
-  --magic-primary: #1b1b18;
-  --magic-primary-foreground: #f9f8f6;
-  margin: 0;
-  background: var(--magic-page);
+:global(.resume-template-browser-drawer) {
+  --el-drawer-bg-color: #ffffff;
 }
 
-:global(.resume-template-browser-dialog .el-dialog__header) {
-  display: none;
-}
-
-:global(.resume-template-browser-dialog .el-dialog__body) {
-  height: 100%;
+:global(.resume-template-browser-drawer .el-drawer__body) {
   padding: 0;
-  overflow: auto;
 }
 
 .template-browser {
-  min-height: 100%;
-  color: var(--magic-ink);
-  background: var(--magic-page);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #ffffff;
 }
 
 .template-browser__header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 22px max(24px, calc((100vw - 1600px) / 2));
-  border-bottom: 1px solid color-mix(in srgb, var(--magic-line) 72%, transparent);
-  background: color-mix(in srgb, var(--magic-page) 94%, transparent);
-  backdrop-filter: blur(12px);
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .template-browser__heading {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-width: 0;
-
-  h2,
-  p {
-    margin: 0;
-  }
+  gap: 10px;
 
   h2 {
-    font-size: 28px;
-    line-height: 1.2;
+    margin: 0;
+    color: #111827;
+    font-size: 17px;
+    font-weight: 600;
   }
 
   p {
-    margin-top: 4px;
-    color: var(--magic-muted);
-    font-size: 13px;
+    margin: 2px 0 0;
+    color: #9ca3af;
+    font-size: 12px;
   }
 }
 
-.template-browser__close,
-.template-preview__header button {
+.template-browser__close {
   display: inline-flex;
-  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   padding: 0;
-  border: 1px solid var(--magic-line);
+  border: 0;
   border-radius: 8px;
-  background: var(--magic-surface);
-  color: var(--magic-ink);
+  background: transparent;
+  color: #6b7280;
   cursor: pointer;
 
-  &:hover {
-    border-color: var(--magic-line-strong);
-    background: var(--magic-hover);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--magic-ink);
-    outline-offset: 2px;
-  }
+  &:hover { background: #f3f4f6; color: #111827; }
 }
 
 .template-browser__palette {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 7px;
-  padding: 7px;
-  overflow-x: auto;
-  border: 1px solid var(--magic-line);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--magic-surface) 86%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 
-  > button {
-    position: relative;
+  button {
     display: inline-flex;
-    flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    width: 22px;
+    height: 22px;
     padding: 0;
     border: 0;
-    border-radius: 50%;
-    background: transparent;
+    border-radius: 999px;
     cursor: pointer;
-    transition: transform 180ms ease;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 
-    &:hover {
-      transform: scale(1.08);
+    span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      border-radius: 999px;
+      background: var(--swatch-color, #e5e7eb);
+      color: #ffffff;
     }
+
+    &:hover { transform: scale(1.12); }
 
     &.is-active {
-      box-shadow: 0 0 0 2px var(--magic-ink), 0 0 0 4px var(--magic-page);
-      transform: scale(1.08);
+      box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--el-color-primary, #0047ab);
     }
-
-    &:focus-visible {
-      outline: 2px solid var(--magic-ink);
-      outline-offset: 2px;
-    }
-  }
-
-  span {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    border-radius: 50%;
-    background: var(--swatch-color);
-    color: #57534e;
-  }
-
-  .is-default {
-    background: linear-gradient(145deg, #f5f5f4, #d6d3d1);
   }
 }
 
 .template-browser__error {
   display: flex;
   align-items: center;
-  gap: 9px;
-  max-width: 1600px;
-  margin: 18px auto 0;
-  padding: 10px 14px;
-  border: 1px solid #e7c98d;
+  gap: 8px;
+  margin: 12px 20px 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
-  background: #fff8e8;
-  color: #774b14;
-  font-size: 13px;
+  background: rgba(239, 68, 68, 0.06);
+  color: #b91c1c;
+  font-size: 12.5px;
 }
 
 .template-browser__content {
-  width: min(100%, 1600px);
-  margin: 0 auto;
-  padding: 28px 24px 56px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .template-browser__grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px 20px 28px;
 }
 
+/* ---- 模板卡（魔方 TemplateSheet 同款纯封面卡） ---- */
 .template-card {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+  position: relative;
+}
+
+.template-card__cover {
+  position: relative;
   aspect-ratio: 210 / 297;
   overflow: hidden;
-  border: 1px solid var(--magic-line);
-  border-radius: 8px;
-  background: var(--magic-surface);
-  animation: template-card-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--template-index) * 45ms);
-  transition: border-color 180ms ease, transform 180ms ease;
+  border: 2px solid #f3f4f6;
+  border-radius: 10px;
+  background: #f9fafb;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 
-  &:hover {
-    border-color: var(--magic-line-strong);
-    transform: translateY(-2px);
+  .template-card:hover & {
+    border-color: #e5e7eb;
+    transform: scale(1.02);
   }
 
-  &.is-selected {
-    border-color: var(--magic-ink);
-    box-shadow: 0 0 0 1px var(--magic-ink);
-  }
-
-  &.is-locked {
-    background: #f5f5f4;
+  .template-card.is-selected & {
+    border-color: var(--el-color-primary, #0047ab);
+    box-shadow: 0 10px 24px rgba(0, 71, 171, 0.18);
   }
 }
 
-.template-card__preview {
-  position: relative;
+.template-card__select {
+  position: absolute;
+  inset: 0;
   display: block;
-  flex: 1 1 auto;
-  min-width: 0;
+  width: 100%;
   padding: 0;
-  overflow: hidden;
   border: 0;
-  background: #f4f4f3;
-  color: var(--magic-ink);
+  background: transparent;
+  cursor: pointer;
   text-align: left;
-  cursor: zoom-in;
+
+  &:disabled { cursor: not-allowed; }
 }
 
 .template-card__paper-frame {
   position: absolute;
-  inset: 0 0 52px;
+  inset: 0;
   display: block;
   overflow: hidden;
-  background: #f3f4f6;
+  background: #ffffff;
 }
 
 .template-card__paper {
@@ -672,157 +595,82 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
-.template-card__fade {
+.template-card__veil {
   position: absolute;
-  inset: 54% 0 52px;
-  z-index: 1;
-  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.94) 68%, #fff 100%);
-  pointer-events: none;
-}
-
-.template-card__meta {
-  position: absolute;
-  right: 0;
-  bottom: 52px;
-  left: 0;
+  inset: 0;
   z-index: 2;
-  display: grid;
-  gap: 4px;
-  padding: 24px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(17, 24, 39, 0.35);
+  color: #ffffff;
   pointer-events: none;
+
+  &.is-lock {
+    background: rgba(17, 24, 39, 0.55);
+
+    em {
+      color: #f3f4f6;
+      font-size: 11px;
+      font-style: normal;
+    }
+  }
 }
 
-.template-card__title {
+.template-card__zoom {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #374151;
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+
+  &:hover { background: #ffffff; color: #111827; }
+
+  &:disabled { opacity: 0 !important; cursor: not-allowed; }
+
+  .template-card:hover & { opacity: 1; }
+}
+
+.template-card__name {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-width: 0;
+  padding: 8px 2px 0;
 
-  > strong {
+  strong {
+    flex: 1;
     min-width: 0;
     overflow: hidden;
-    font-size: 15px;
-    line-height: 1.35;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-}
 
-.template-card__selected,
-.template-card__locked {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  font-weight: 650;
-}
-
-.template-card__selected {
-  color: #176b4d;
-}
-
-.template-card__locked {
-  color: #8a5b14;
-}
-
-.template-card__description {
-  overflow: hidden;
-  color: #57534e;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.template-card__availability {
-  color: #8a5b14;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.35;
-
-  &.is-formal {
-    color: #176b4d;
-  }
-}
-
-.template-card__actions {
-  display: grid;
-  flex: 0 0 52px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  align-items: center;
-  padding: 8px;
-  border-top: 1px solid #ebe9e5;
-  background: var(--magic-surface);
-
-  button {
-    display: inline-flex;
-    min-width: 0;
-    height: 34px;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 0 8px;
-    border-radius: 6px;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
+    .template-card.is-selected & { color: var(--el-color-primary, #0047ab); }
   }
 
-  button:focus-visible {
-    outline: 2px solid var(--magic-ink);
-    outline-offset: 2px;
+  span {
+    flex: 0 0 auto;
+    color: #9ca3af;
+    font-size: 11px;
+
+    &.is-formal { color: var(--el-color-primary, #0047ab); }
   }
-}
-
-.template-card__secondary {
-  border: 1px solid var(--magic-line);
-  background: #fff;
-  color: var(--magic-ink);
-
-  &:hover {
-    background: var(--magic-hover);
-  }
-}
-
-.template-card__primary {
-  border: 1px solid var(--magic-primary);
-  background: var(--magic-primary);
-  color: var(--magic-primary-foreground);
-
-  &:hover:not(:disabled) {
-    background: #33332f;
-  }
-
-  &:disabled {
-    border-color: #d6d3d1;
-    background: #d6d3d1;
-    color: #78716c;
-    cursor: not-allowed;
-  }
-}
-
-:global(.resume-template-preview-dialog) {
-  --magic-page: #f9f8f6;
-  --magic-surface: #ffffff;
-  --magic-ink: #1b1b18;
-  --magic-muted: #77756e;
-  --magic-line: #dedcd6;
-  overflow: hidden;
-  border-radius: 10px;
-  background: var(--magic-surface);
-}
-
-:global(.resume-template-preview-dialog .el-dialog__header) {
-  display: none;
-}
-
-:global(.resume-template-preview-dialog .el-dialog__body) {
-  padding: 0;
 }
 
 .template-preview__header {
