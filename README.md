@@ -1,8 +1,8 @@
 # CodeCoachAI Vue 前端
 
-CodeCoachAI 前端承载用户侧求职训练、管理后台 AI 工程化能力和作品集演示入口。当前项目基于 Vue 3、Vite、Element Plus、Pinia、Vue Router 和 TypeScript 构建。
+CodeCoachAI 前端承载用户侧求职训练、管理后台 AI 工程化能力和作品集演示入口。当前项目基于 Vue 3、Vite、Element Plus、Pinia、Vue Router 和 TypeScript 构建，开发分支为 `dev-260905`。
 
-阶段五 README 口径：前端不是只列启动命令，而是说明它如何支撑“可演示的个人求职训练闭环”：作品集演示、AI 建议证据链、求职实验台、个人知识库、长期记忆、演示数据和质量门禁。
+当前口径（2026-09-07 产品战略拍板后）：前端围绕 P0 核心闭环（JD 匹配 → 定向训练 → 模拟面试 → 复盘 → 下一步行动）收敛，用户侧主导航为六项（今日/求职/资料/面试/训练/准备度）；知识库、长期记忆、求职实验台等历史入口保留代码与路由，但已从主导航移除，按 MVP/预览口径说明。
 
 ## 项目定位
 
@@ -29,13 +29,13 @@ CodeCoachAI 前端承载用户侧求职训练、管理后台 AI 工程化能力�
 
 | 能力 | 前端口径 |
 | --- | --- |
-| 目标岗位、简历中心、面试、学习计划 | 已接入主链路，可作为已完成核心页面说明 |
-| Agent 今日任务、任务中心、运行详情 | V4-A 主线，按 MVP 主路径说明 |
-| `/portfolio-demo` 作品集演示 | 已有入口，阶段五作为统一演示入口继续收口 |
-| `/applications` 投递管理 | 当前服务于 `APPLICATION_FOLLOW_UP` 任务深链和求职进度记录，不等同于完整求职实验平台验收完成 |
-| `/knowledge` 个人知识库 | previewOnly / MVP 入口，适合说明私域知识方向，不写成完全成熟知识平台 |
-| `/agent/memory` 长期记忆 | previewOnly / 后续阶段能力，按长期记忆治理方向说明 |
-| `/agent/reviews`、`/growth/*` | previewOnly / 后续阶段能力，不作为 V4-A 必验收入口 |
+| 六项主导航（今日/求职/资料/面试/训练/准备度） | P0 主线，已收口；JD 匹配、推荐训练、错题间隔复习、学习计划已接入主链路 |
+| Agent 今日任务 | 今日导航组内入口 `/agent/today`，按 MVP 主路径说明 |
+| `/portfolio-demo` 作品集演示 | 已有入口，作为统一演示入口 |
+| `/applications` 投递管理 | 求职导航组正式入口；投递包并入求职详情 |
+| `/knowledge` 个人知识库 | 已从主导航移除（路由保留 / previewOnly），按私域知识方向说明 |
+| `/agent/memory` 长期记忆 | 已从主导航移除（路由保留 / previewOnly），按记忆治理方向说明 |
+| `/agent/reviews`、`/growth/*`、求职实验台、排行榜、协作练习 | 已从主导航移除（路由保留），不作为验收入口 |
 | OfferLab 社区、企业入驻、支付、自动投递 | 非 CodeCoachAI 前端目标，不接入、不展示为已完成能力 |
 
 ## 第三次拓展演示重点
@@ -49,17 +49,22 @@ CodeCoachAI 前端承载用户侧求职训练、管理后台 AI 工程化能力�
 
 ## 关键页面索引
 
-| 场景 | 入口 |
-| --- | --- |
-| 作品集演示 | `/portfolio-demo` |
-| 管理后台 Prompt 回归 | `/admin/ai/prompt-regression` |
-| Agent 任务 | `/agent/tasks` |
-| Agent 运行详情 | `/agent/runs/:id` |
-| 个人知识库 | `/knowledge` |
-| 长期记忆 | `/agent/memory`（previewOnly / MVP 治理入口） |
-| 投递管理 / 投递跟进 | `/applications` |
-| 简历中心 | `/resumes` |
-| 文件治理与下载 | 管理后台文件页 |
+用户侧主导航已按 2026-09-07 P0 决策收敛为六项（见 `src/config/userNavigation.ts` 的 `PRIMARY_NAVIGATION_KEYS`）：今日 / 求职 / 资料 / 面试 / 训练 / 准备度。
+
+| 场景 | 入口 | 说明 |
+| --- | --- | --- |
+| 今日总览 | `/dashboard` | 今日任务、完成记录和下一步行动 |
+| 岗位目标 / JD 匹配 | `/job-targets`、`/resume-match` | 求职导航组 |
+| 投递管理 | `/applications` | 投递阶段、跟进和结果 |
+| 简历工作台 / 简历管理 | `/resumes/workbench`、`/resumes/manage` | 资料导航组 |
+| 我的项目（原项目证据库） | `/project-evidence` | 项目事实与可复用能力证据 |
+| 开始面试 / 面试记录 | `/interviews/create`、`/interviews/history` | 面试导航组 |
+| 推荐训练 / 错题复盘 / 学习计划 | `/questions/recommendations`、`/questions/wrong-records`、`/study-plans` | 训练导航组；错题 1/3/7/15 天间隔复习 |
+| 能力图谱 / 能力画像 / 薄弱点分析 | `/ability-map`、`/skill-profile`、`/weakness-analysis` | 准备度导航组 |
+| 作品集演示 | `/portfolio-demo` | 统一演示入口 |
+| 管理后台（Prompt 回归、AI 日志、Trace Cockpit、文件治理） | `/admin/**` | 管理侧治理能力 |
+
+已从主导航移除但路由保留的入口（按 MVP/预览口径说明，不写成正式能力）：个人知识库 `/knowledge`、长期记忆 `/agent/memory`、求职实验台、成长档案 `/growth/*`、AI 任务中心、排行榜、协作练习等。
 
 ## 技术栈
 
@@ -87,7 +92,7 @@ CodeCoachAI 前端承载用户侧求职训练、管理后台 AI 工程化能力�
 npm install
 ```
 
-以下命令会启动服务或执行构建/验证，阶段五静态收口期间不要执行：
+以下命令会启动服务或执行构建/验证。工作纪律：本地只做代码开发与静态检查；启动服务、接口调用与页面级验收一律在测试环境部署后执行：
 
 ```text
 npm run dev
@@ -104,7 +109,7 @@ Vite 开发服务默认绑定 `127.0.0.1`；只有在明确需要局域网访问
 
 V4 预览入口采用总开关加子开关：`VITE_ENABLE_V4_PREVIEW=true` 只开放通用 V4 预览入口；`/agent/reviews`、`/growth/*`、`/agent/memory` 还需要 `VITE_ENABLE_V4_GROWTH=true`；`/knowledge` 还需要 `VITE_ENABLE_V4_KNOWLEDGE=true`。这两个前端子开关需要和后端 `codecoachai.v4.features.growth-enabled`、`codecoachai.v4.features.knowledge-enabled` 保持一致。
 
-阶段五本地只允许阅读文件、搜索文本、检查 Markdown 结构和编辑 README；发布后再由主 Agent 或用户统一执行真实页面、接口、构建和测试验收。
+本地只允许阅读文件、搜索文本、检查 Markdown 结构、编辑文档和执行静态检查；真实页面、接口、构建和测试验收在测试环境（默认 `http://103.236.97.252:30080/`，可用 `node scripts/acceptance-check.mjs` 跑约 20 项脚本化验收）部署后统一执行。
 
 ## 质量门禁与发布后验收
 
