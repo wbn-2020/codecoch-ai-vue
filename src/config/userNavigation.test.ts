@@ -14,7 +14,7 @@ describe('user navigation route matching', () => {
     })
 
     expect(result).toMatchObject({
-      group: { key: 'prepare' },
+      group: { key: 'resources' },
       item: { key: 'resume-workbench' }
     })
   })

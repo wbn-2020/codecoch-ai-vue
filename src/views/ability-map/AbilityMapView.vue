@@ -46,52 +46,6 @@
       />
     </section>
 
-    <section class="growth-hero ability-summary">
-      <div class="growth-hero__main">
-        <div class="eyebrow">
-          <Map :size="16" />
-          {{ assessmentSummary }}
-        </div>
-        <h1>能力评估概览</h1>
-        <p>
-          汇总训练记录、能力状态和评估依据，帮助你确定下一轮准备重点；没有证据的能力不会被推断为强项或薄弱项。
-        </p>
-        <div class="hero-actions">
-          <el-button @click="router.push('/project-evidence')">
-            <FolderOpen :size="16" />
-            查看项目证据
-          </el-button>
-          <el-button plain :disabled="!canStartTraining" @click="startDomainTraining(activeDomain)">
-            <Play :size="16" />
-            开始专项训练
-          </el-button>
-        </div>
-      </div>
-
-      <aside class="next-training-card next-training-card--desktop" :class="{ 'is-muted': !hasAssessedSkills }">
-        <div class="next-training-card__label">
-          <Target :size="16" />
-          下一步训练建议
-        </div>
-        <h2>{{ nextTrainingTitle }}</h2>
-        <p>{{ nextTrainingDescription }}</p>
-        <div class="next-training-card__meta">
-          <span>
-            <BookOpenCheck :size="15" />
-            {{ nextTrainingMeta }}
-          </span>
-          <span>
-            <ShieldCheck :size="15" />
-            {{ trainingTrustText }}
-          </span>
-        </div>
-        <el-button type="primary" size="large" :disabled="!canStartTraining" @click="startRecommendedTraining">
-          {{ nextTrainingActionLabel }}
-          <ArrowRight :size="16" />
-        </el-button>
-      </aside>
-    </section>
-
     <el-alert
       v-if="isEvidenceInsufficient"
       class="honesty-alert"
@@ -692,21 +646,6 @@ const practiceQueryForSkill = (skill?: AbilitySkillNodeVO) => {
   }
 }
 
-const startDomainTraining = (domain?: AbilityDomainVO) => {
-  if (!canStartTraining.value) return
-  const keyword = domain ? safeDomainName(domain) : activeDomainName.value
-  router.push({
-    path: '/questions/practice',
-    query: {
-      mode: 'category',
-      keyword,
-      skillName: keyword,
-      sourceType: 'SKILL_PROFILE',
-      trustStatus: totalEvidenceCount.value > 0 ? 'PARTIAL' : 'FALLBACK'
-    }
-  })
-}
-
 const startSkillTraining = (skill: AbilitySkillNodeVO) => {
   if (!canStartTraining.value) return
   router.push({
@@ -760,7 +699,6 @@ onMounted(fetchAbilityMap)
   }
 }
 
-.growth-hero,
 .signal-card,
 .domain-rail,
 .domain-panel,
@@ -773,36 +711,9 @@ onMounted(fetchAbilityMap)
   box-shadow: none;
 }
 
-.growth-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 14px;
-  padding: 18px;
-  background: var(--user-surface);
-}
+/* 2026-09-09 测评整改：.growth-hero / .next-training-card / .eyebrow / .hero-actions
+   系列样式随重复 hero 标记一并移除（方向 D 布局下该 hero 本就被 display:none 隐藏） */
 
-.growth-hero__main {
-  min-width: 0;
-
-  h1 {
-    margin: 10px 0 0;
-    color: var(--app-text);
-    font-size: 32px;
-    line-height: 1.18;
-  }
-
-  p {
-    max-width: 760px;
-    margin: 12px 0 0;
-    color: var(--app-text-muted);
-    line-height: 1.7;
-  }
-}
-
-.eyebrow,
-.hero-actions,
-.next-training-card__label,
-.next-training-card__meta,
 .section-title,
 .skill-evidence-row,
 .load-error-card > div,
@@ -810,71 +721,6 @@ onMounted(fetchAbilityMap)
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.eyebrow {
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.hero-actions {
-  flex-wrap: wrap;
-  margin-top: 22px;
-}
-
-.next-training-card {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  padding: 20px;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 8px;
-  background: var(--user-warning-soft);
-
-  h2,
-  p {
-    margin: 0;
-  }
-
-  h2 {
-    color: var(--app-text);
-    font-size: 22px;
-    line-height: 1.35;
-  }
-
-  p {
-    color: var(--user-text-muted);
-    line-height: 1.7;
-  }
-
-  &.is-muted {
-    border-color: rgba(37, 99, 235, 0.22);
-    background: var(--user-primary-soft);
-  }
-}
-
-.next-training-card__label {
-  color: var(--user-warning);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.next-training-card__meta {
-  flex-wrap: wrap;
-
-  span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--user-text-muted);
-    font-size: 12px;
-  }
-}
-
-.next-training-card--mobile {
-  display: none;
 }
 
 .signal-grid {
@@ -1514,7 +1360,6 @@ onMounted(fetchAbilityMap)
 }
 
 @media (max-width: 1180px) {
-  .growth-hero,
   .map-workspace {
     grid-template-columns: 1fr;
   }
@@ -1541,10 +1386,6 @@ onMounted(fetchAbilityMap)
     order: 1;
   }
 
-  .growth-hero {
-    order: 2;
-  }
-
   .signal-grid {
     order: 3;
   }
@@ -1553,23 +1394,6 @@ onMounted(fetchAbilityMap)
   .load-error-card,
   .empty-map-card {
     order: 4;
-  }
-
-  .growth-hero__main,
-  .next-training-card--desktop {
-    display: none;
-  }
-
-  .growth-hero {
-    padding: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .next-training-card--mobile {
-    display: grid;
-    margin-bottom: 14px;
   }
 
   .domain-rail {
@@ -1625,27 +1449,17 @@ onMounted(fetchAbilityMap)
 
   .skill-action,
   .current-shortfall-card__actions .el-button,
-  .domain-panel__head .el-button,
-  .next-training-card .el-button {
+  .domain-panel__head .el-button {
     width: 100%;
   }
 }
 
 @media (max-width: 640px) {
-  .growth-hero {
-    padding: 0;
-  }
-
-  .growth-hero__main h1 {
-    font-size: 28px;
-  }
-
   .domain-rail {
     grid-template-columns: 1fr;
     margin: 0 -2px;
   }
 
-  .next-training-card,
   .growth-map-card,
   .current-shortfall-card,
   .domain-panel,
@@ -1878,7 +1692,6 @@ onMounted(fetchAbilityMap)
     gap: 16px;
   }
 
-  .growth-hero,
   .signal-card,
   .power-radar-card,
   .domain-rail-shell,
@@ -1893,27 +1706,8 @@ onMounted(fetchAbilityMap)
     box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
   }
 
-  .growth-hero {
-    border-color: var(--user-primary-border);
-    background: linear-gradient(135deg, var(--user-primary-soft), var(--user-surface) 72%);
-
-    h1 {
-      font-size: 28px;
-      font-weight: 600;
-    }
-  }
-
-  .eyebrow,
-  .section-title span,
-  .next-training-card__label {
+  .section-title span {
     color: var(--arena-grn-d);
-  }
-
-  .next-training-card {
-    border: 1.5px solid var(--user-primary-border);
-    border-radius: var(--arena-radius-card);
-    background: linear-gradient(135deg, var(--user-primary-soft), var(--user-surface) 76%);
-    box-shadow: 0 2px 4px rgba(21, 33, 27, 0.04);
   }
 
   .signal-card {
@@ -2038,40 +1832,6 @@ onMounted(fetchAbilityMap)
 .arena-ability {
   .honesty-alert {
     display: none;
-  }
-
-  .growth-hero {
-    display: none;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 18px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .growth-hero__main h1 {
-    margin-top: 7px;
-    color: var(--arena-ink);
-    font-size: 26px;
-    font-weight: 600;
-    line-height: 1.25;
-  }
-
-  .growth-hero__main > p,
-  .growth-hero__main .hero-actions,
-  .next-training-card--desktop {
-    display: none;
-  }
-
-  .growth-hero__main {
-    min-width: 0;
-  }
-
-  .ability-summary {
-    width: min(100%, 1060px);
-    margin: 0 auto;
   }
 
   .ability-tree-layout {
@@ -2468,18 +2228,6 @@ onMounted(fetchAbilityMap)
 
 @media (max-width: 860px) {
   .arena-ability {
-    .growth-hero__main {
-      display: block;
-    }
-
-    .growth-hero {
-      display: block;
-    }
-
-    .next-training-card--desktop {
-      display: none;
-    }
-
     .ability-tree-layout {
       grid-template-columns: 1fr;
     }

@@ -53,10 +53,11 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(appShell).toContain('useDocumentScrollLock(mobileOpen)')
     expect(sidebar).toContain("from '@/config/userNavigation'")
 
-    for (const label of ['今日', '简历准备', '岗位匹配', '面试训练', '模拟面试', '投递管理', '求职资料', '成长分析']) {
+    // P0 六项主导航口径：今日/求职/资料/面试/训练/准备度
+    for (const label of ['今日', '求职', '资料', '面试', '训练', '准备度']) {
       expect(navigation, `primary navigation: ${label}`).toContain(`label: '${label}'`)
     }
-    expect(navigation).toContain("path: '/tools'")
+    expect(navigation).toContain("PRIMARY_NAVIGATION_KEYS")
 
     for (const route of [
       "path: 'dashboard'",
@@ -68,7 +69,7 @@ describe('Direction D prototype fidelity contracts', () => {
       "path: 'interviews/create'",
       "path: 'interviews/:id/report'",
       "path: 'ability-map'",
-      "path: 'tools'"
+      "path: 'project-evidence'"
     ]) {
       expect(routes, route).toContain(route)
     }
@@ -102,7 +103,8 @@ describe('Direction D prototype fidelity contracts', () => {
   it('preserves the signed-off resume workbench and prototype tools layout without weakening mobile reflow', () => {
     const resume = readSource('src/views/resume/ResumeEditView.vue')
     const resumeShell = readSource('src/views/resume/components/ResumeWorkbenchShell.vue')
-    const tools = readSource('src/views/tools/RecordsToolsView.vue')
+    // P0 收敛后 RecordsToolsView 已无路由引用，工具页契约改锚定投递工作台（六项内页面）
+    const tools = readSource('src/views/v4/JobApplicationView.vue')
     const userComponents = readSource('src/styles/user-components.scss')
     const layout = readSource('src/layouts/UserLayout.vue')
     const navigation = readSource('src/config/userNavigation.ts')
@@ -137,16 +139,10 @@ describe('Direction D prototype fidelity contracts', () => {
     expect(routes).toContain("layoutMode: 'resume-workbench'")
 
     // The tools page keeps the Direction D inventory and adds a wider operational summary.
-    expect(tools).toContain('width: min(100%, 1180px)')
+    // P0 收敛后改锚定投递工作台（原 tools 视图已无路由引用），断言其响应式布局契约。
     expect(tools).toContain('gap: 14px')
-    expect(tools).toContain('@media (max-width: 720px)')
-    expect(tools).toContain('求职资料与工具')
-    expect(tools).toContain(':data-tool-path="item.path"')
-    expect(tools).toContain(':disabled="item.enabled === false"')
-    expect(tools).toContain("appConfig.enableV4KnowledgePreview ? '私域资料与引用来源' : '当前环境暂未开放'")
-    expect(tools).toContain('class="arena-tools__operations"')
-    expect(tools).toContain('最近产物')
-    expect(tools).toContain('异常状态')
+    expect(tools).toContain('@media (max-width: 900px)')
+    expect(tools).toContain('@media (max-width: 560px)')
     expect(acceptanceEnv).toContain('VITE_ENABLE_V6_WEEKLY_REPORT=true')
 
     for (const toolRoute of [
@@ -164,18 +160,14 @@ describe('Direction D prototype fidelity contracts', () => {
     ]) {
       expect(routes, `tools entry route: ${toolRoute}`).toContain(toolRoute)
     }
+    // P0 收敛后这些入口已从导航配置移除（路由仍保留重定向/隐藏），
+    // 导航归属断言只保留仍在主导航或逻辑组内的路径。
     for (const routePrefix of [
       "'/applications'",
       "'/career-calendar'",
       "'/project-evidence'",
       "'/application-packages'",
-      "'/knowledge'",
-      "'/ability-map'",
-      "'/agent/weekly-reports'",
-      "'/analytics/personal'",
-      "'/job-experiments'",
-      "'/portfolio-demo'",
-      "'/onboarding'"
+      "'/ability-map'"
     ]) {
       expect(navigation, `navigation ownership: ${routePrefix}`).toContain(routePrefix)
     }

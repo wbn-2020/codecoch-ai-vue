@@ -21,6 +21,8 @@ const recommendationApi = vi.hoisted(() => ({
 const skillProfileApi = vi.hoisted(() => ({
   generateSkillProfileApi: vi.fn()
 }))
+const jdColdStartItems = vi.hoisted(() => ({ value: [] as unknown[] }))
+const currentJob = vi.hoisted(() => ({ value: null as Record<string, unknown> | null }))
 
 vi.mock('@/api/questionRecommendation', () => ({
   getQuestionRecommendationBatchDetailApi: vi.fn(),
@@ -29,9 +31,13 @@ vi.mock('@/api/questionRecommendation', () => ({
   getQuestionRecommendationItemsFromGapBatchApi: vi.fn(async () => gapItems.value),
   getQuestionRecommendationItemsFromMatchReportBatchApi: vi.fn(async () => []),
   getQuestionRecommendationItemsFromStudyPlanBatchApi: vi.fn(async () => []),
+  getQuestionRecommendationsByJdApi: vi.fn(async () => jdColdStartItems.value),
   submitQuestionRecommendationsFromGapApi: vi.fn(),
   submitQuestionRecommendationsFromMatchReportApi: recommendationApi.submitQuestionRecommendationsFromMatchReportApi,
   submitQuestionRecommendationsFromStudyPlanApi: vi.fn()
+}))
+vi.mock('@/api/jobTarget', () => ({
+  getCurrentJobTargetApi: vi.fn(async () => currentJob.value)
 }))
 vi.mock('@/api/resumeJobMatch', () => ({
   getResumeJobMatchReportDetailApi: vi.fn(async () => matchReportDetail.value),
@@ -95,6 +101,8 @@ describe('ArenaTrainView', () => {
     routeQuery.value = {}
     matchReportDetail.value = null
     recommendationBatches.value = { records: [] }
+    jdColdStartItems.value = []
+    currentJob.value = null
     recommendationApi.getQuestionRecommendationBatchesApi.mockReset()
     recommendationApi.getQuestionRecommendationBatchesApi.mockResolvedValue(recommendationBatches.value)
     recommendationApi.getQuestionRecommendationBatchItemsApi.mockReset()
@@ -186,6 +194,41 @@ describe('ArenaTrainView', () => {
 
     expect(wrapper.text()).toContain('暂时没有推荐题')
     expect(wrapper.text()).toContain('重新生成')
+  })
+
+  it('falls back to JD keyword cold start from the current parsed target job when the gap batch is empty', async () => {
+    gapItems.value = []
+    currentJob.value = { id: 88, parseStatus: 'PARSED' }
+    jdColdStartItems.value = [
+      {
+        id: 901,
+        questionTitle: '梳理 Spring MVC 请求处理流程',
+        skillName: 'Spring Boot',
+        difficulty: 'HARD',
+        questionType: 'SHORT_ANSWER',
+        canPractice: true,
+        practiceQuestionId: 6023,
+        practiceKind: 'QUESTION_BANK',
+        sourceType: 'JD_KEYWORD',
+        trustStatus: 'PARTIAL',
+        recommendReason: '岗位 JD 命中 Spring Boot 知识点'
+      }
+    ]
+    const wrapper = mountTrain()
+    await flush()
+
+    expect(wrapper.text()).toContain('梳理 Spring MVC 请求处理流程')
+    expect(wrapper.text()).toContain('今天先练：Spring Boot')
+    expect(wrapper.text()).not.toContain('暂时没有推荐题')
+  })
+
+  it('keeps the honest empty state when the current target job is not parsed yet', async () => {
+    gapItems.value = []
+    currentJob.value = { id: 88, parseStatus: 'PENDING' }
+    const wrapper = mountTrain()
+    await flush()
+
+    expect(wrapper.text()).toContain('暂时没有推荐题')
   })
 
   it('submits a JD-specific batch when a trusted match report has no prior recommendation batch', async () => {

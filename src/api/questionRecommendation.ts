@@ -9,6 +9,7 @@ import {
   type QuestionRecommendationGenerateFromStudyPlanDTO,
   type QuestionRecommendationGenerateVO,
   type QuestionRecommendationItemVO,
+  type QuestionRecommendationJdDTO,
   type QuestionRecommendationQueryDTO,
   type QuestionRecommendationSourceTypeVO
 } from '@/types/questionRecommendation'
@@ -92,6 +93,13 @@ export const getQuestionRecommendationBatchDetailApi = (batchId: number) => {
 export const getQuestionRecommendationBatchItemsApi = (batchId: number) => {
   return request.get<QuestionRecommendationItemVO[], QuestionRecommendationItemVO[]>(
     `/question-recommendations/batches/${batchId}/items`
+  )
+}
+
+export const getQuestionRecommendationsByJdApi = (data: QuestionRecommendationJdDTO) => {
+  return request.post<QuestionRecommendationItemVO[], QuestionRecommendationItemVO[]>(
+    '/question-recommendations/by-jd',
+    data
   )
 }
 

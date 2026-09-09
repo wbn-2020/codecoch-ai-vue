@@ -87,7 +87,7 @@
         <header class="arena-match-settlement__head">
           <div>
             <span class="arena-match-settlement__kicker">岗位匹配 · 结果概览</span>
-            <h2>{{ gapDetailCount ? `对账完成：还有 ${gapDetailCount} 个待补维度` : overviewConclusion.title }}</h2>
+            <h1>{{ gapDetailCount ? `对账完成：还有 ${gapDetailCount} 个待补维度` : overviewConclusion.title }}</h1>
           </div>
           <div class="arena-match-settlement__head-actions">
             <span class="arena-match-settlement__status">{{ scoreEvidenceText }}</span>
@@ -148,6 +148,39 @@
                 </div>
               </section>
             </div>
+          </section>
+
+          <section v-if="scoreHistory.length" class="arena-match-settlement__history">
+            <div class="arena-match-settlement__reconciliation-head">
+              <div>
+                <span>历史变化</span>
+                <h3>与{{ scoreHistoryPrevious ? '上一次' : '首次' }}报告对比（同岗位 {{ scoreHistory.length }} 次成功匹配）</h3>
+              </div>
+              <small>只比较同岗位的成功报告；分数缺失的的历史记录不参与对比。</small>
+            </div>
+            <div class="history-score-grid">
+              <div v-for="row in scoreHistoryRows" :key="row.key" class="history-score-row">
+                <span class="history-score-row__label">{{ row.label }}</span>
+                <div class="history-score-row__bar">
+                  <div class="history-score-row__fill" :style="{ width: `${row.current}%` }" :class="`is-${row.tone}`"></div>
+                  <div
+                    v-if="row.previous != null"
+                    class="history-score-row__marker"
+                    :style="{ left: `${row.previous}%` }"
+                    title="上一次分数位置"
+                  ></div>
+                </div>
+                <span class="history-score-row__value">
+                  {{ row.current }}
+                  <template v-if="row.delta != null">
+                    <em :class="row.delta > 0 ? 'is-up' : row.delta < 0 ? 'is-down' : 'is-flat'">
+                      {{ row.delta > 0 ? `+${row.delta}` : `${row.delta}` }}
+                    </em>
+                  </template>
+                </span>
+              </div>
+            </div>
+            <p class="history-score-note">对比基准：{{ scoreHistoryBaselineLabel }}。分维度分数缺失的历史报告不参与该维度对比。</p>
           </section>
         </div>
 
@@ -388,6 +421,15 @@
                 <dd>{{ item.suggestion || '结合报告摘要和推荐训练继续补充证据。' }}</dd>
               </div>
             </dl>
+            <div v-if="isActionableGap(item)" class="dimension-card__actions">
+              <el-button size="small" type="primary" plain @click="goGapDimensionTraining(item)">
+                <Rocket :size="14" />
+                按此维度直练
+              </el-button>
+              <el-button size="small" plain @click="goGapInterview(item)">
+                模拟追问
+              </el-button>
+            </div>
           </article>
         </div>
         <AppState v-else type="empty" title="暂无维度明细" description="当前报告暂无维度明细。" />
@@ -400,8 +442,9 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, FileChartColumn, FileText, PackageCheck, Radar, RefreshCw, Route as RouteIcon } from 'lucide-vue-next'
+import { ArrowLeft, FileChartColumn, FileText, PackageCheck, Radar, RefreshCw, Rocket, Route as RouteIcon } from 'lucide-vue-next'
 import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { trackFunnelStep } from '@/utils/funnel'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getResumeJobMatchReportDetailApi, regenerateResumeJobMatchReportApi } from '@/api/resumeJobMatch'
@@ -416,7 +459,7 @@ import {
   shouldPollAsyncOperation
 } from '@/features/async-operation-state'
 import { useGameProfileStore } from '@/features/game-profile'
-import type { ResumeJobMatchDetailItemVO, ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
+import type { ResumeJobMatchDetailItemVO, ResumeJobMatchReportDetailVO, ResumeJobMatchScorePointVO } from '@/types/resumeJobMatch'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
 import { redactSensitiveText } from '@/utils/sensitiveText'
@@ -1226,6 +1269,84 @@ const goMatchTaskCenter = () => {
   })
 }
 
+// 历史变化：后端返回同岗位成功报告升序序列（含当前）。与上一次对比；
+// 仅一份时 scoreHistory 为空、整块隐藏。
+const scoreHistory = computed(() => (Array.isArray(report.value?.scoreHistory) ? report.value.scoreHistory : []))
+const scoreHistoryPrevious = computed(() => (scoreHistory.value.length >= 2 ? scoreHistory.value[scoreHistory.value.length - 2] : null))
+const scoreHistoryBaselineLabel = computed(() => {
+  if (!scoreHistory.value.length) return ''
+  return scoreHistoryPrevious.value
+    ? `上一次 ${formatHistoryDate(scoreHistoryPrevious.value.createdAt)}`
+    : `首次 ${formatHistoryDate(scoreHistory.value[0]?.createdAt)}`
+})
+const formatHistoryDate = (value?: string) => {
+  if (!value) return '时间未知'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(date)
+}
+const scoreHistoryRows = computed(() => {
+  const current = scoreHistory.value[scoreHistory.value.length - 1]
+  if (!current) return []
+  const previous = scoreHistoryPrevious.value
+  const build = (key: keyof ResumeJobMatchScorePointVO, label: string) => {
+    const currentValue = Number(current[key])
+    const previousValue = previous ? Number(previous[key]) : Number.NaN
+    if (!Number.isFinite(currentValue) || currentValue <= 0) return null
+    const delta = Number.isFinite(previousValue) && previousValue > 0 ? currentValue - previousValue : null
+    return {
+      key,
+      label,
+      current: currentValue,
+      previous: Number.isFinite(previousValue) && previousValue > 0 ? previousValue : null,
+      delta,
+      tone: currentValue >= 80 ? 'good' : currentValue >= 60 ? 'mid' : 'low'
+    }
+  }
+  const rows = [
+    build('overallScore', '综合匹配度'),
+    build('techStackScore', '技术栈'),
+    build('projectExperienceScore', '项目经验'),
+    build('businessFitScore', '业务契合'),
+    build('communicationScore', '沟通表达')
+  ]
+  return rows.filter((row): row is NonNullable<typeof row> => row != null)
+})
+
+// JD 缺口行动化：低分维度（<80 或无分但标注了差距）给出即席动作。
+// 直练走 /by-jd 冷启动（关键词=维度技能名），追问走岗位面试创建。
+const isActionableGap = (item: ResumeJobMatchDetailItemVO) => {
+  if (!isTrustedSuccessReport.value) return false
+  const score = Number(item.score)
+  if (!Number.isFinite(score) || !item.score) return Boolean(item.gapDescription)
+  return score < 80
+}
+
+const goGapDimensionTraining = (item: ResumeJobMatchDetailItemVO) => {
+  if (!report.value) return
+  router.push({
+    path: '/questions/recommendations',
+    query: compactQuery({
+      targetJobId: report.value.targetJobId ? String(report.value.targetJobId) : undefined,
+      jdText: item.skillName || item.dimension || undefined,
+      skillName: item.skillName || item.dimension || undefined
+    })
+  })
+}
+
+const goGapInterview = (item: ResumeJobMatchDetailItemVO) => {
+  if (!report.value) return
+  router.push({
+    path: '/interviews/create',
+    query: compactQuery({
+      source: 'job-target',
+      targetJobId: report.value.targetJobId ? String(report.value.targetJobId) : undefined,
+      resumeId: report.value.resumeId ? String(report.value.resumeId) : undefined,
+      matchReportId: report.value.reportId ? String(report.value.reportId) : undefined,
+      targetSkill: item.skillName || item.dimension || undefined
+    })
+  })
+}
+
 const goGapQuestionGroup = () => {
   if (!report.value) return
   router.push({
@@ -1357,7 +1478,14 @@ watch(reportId, (id, previousId) => {
   void loadReport()
 })
 
-onMounted(loadReport)
+onMounted(() => {
+  void loadReport()
+  trackFunnelStep('funnel_match_report_viewed', {
+    targetJobId: report.value?.targetJobId,
+    bizId: Number(route.params.id) || undefined,
+    sourcePage: 'resume-match-detail'
+  })
+})
 onBeforeUnmount(stopReportPoll)
 </script>
 
@@ -1441,6 +1569,13 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
 .dimension-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .dimension-card__head span { color: var(--app-text-muted); font-size: 12px; }
 .dimension-card__head h3 { margin-top: 4px; font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
+.dimension-card__actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .dimension-card__evidence { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(37, 99, 235, 0.08); font-size: 13px; }
 .dimension-card dl { display: grid; gap: 10px; margin: 12px 0 0; }
 .dimension-card dt { color: var(--app-text-muted); font-size: 12px; }
@@ -1592,7 +1727,7 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     justify-content: space-between;
     gap: 16px;
 
-    h2 {
+    h1 {
       margin: 5px 0 0;
       color: var(--arena-ink);
       font-size: 22px;
@@ -1797,7 +1932,78 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     }
   }
 
-  .arena-match-settlement__keywords {
+  .arena-match-settlement__history {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--arena-line, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+}
+
+.history-score-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.history-score-row {
+  display: grid;
+  grid-template-columns: 84px 1fr 92px;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-score-row__label {
+  font-size: 12.5px;
+  color: var(--user-text-muted, #6b6b66);
+}
+
+.history-score-row__bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--arena-line, rgba(0, 0, 0, 0.08));
+  overflow: visible;
+}
+
+.history-score-row__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.history-score-row__fill.is-good { background: var(--arena-grn, #1f6f5c); }
+.history-score-row__fill.is-mid { background: #c08a2d; }
+.history-score-row__fill.is-low { background: var(--arena-red, #b3423a); }
+
+.history-score-row__marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--user-text-muted, #6b6b66);
+  opacity: 0.7;
+}
+
+.history-score-row__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+  font-size: 13px;
+}
+
+.history-score-row__value em { font-style: normal; font-size: 12px; margin-left: 4px; }
+.history-score-row__value em.is-up { color: var(--arena-grn, #1f6f5c); }
+.history-score-row__value em.is-down { color: var(--arena-red, #b3423a); }
+.history-score-row__value em.is-flat { color: var(--user-text-muted, #6b6b66); }
+
+.history-score-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--user-text-muted, #6b6b66);
+}
+
+.arena-match-settlement__keywords {
     gap: 12px;
 
     section {
@@ -2060,7 +2266,14 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
     }
   }
 
-  .dimension-card__evidence {
+  .dimension-card__actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dimension-card__evidence {
     background: var(--arena-grn-soft);
   }
 
@@ -2133,7 +2346,78 @@ p { margin-top: 8px; color: var(--app-text-muted); line-height: 1.7; }
       grid-column: 1;
     }
 
-    .arena-match-settlement__keywords {
+    .arena-match-settlement__history {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--arena-line, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+}
+
+.history-score-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.history-score-row {
+  display: grid;
+  grid-template-columns: 84px 1fr 92px;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-score-row__label {
+  font-size: 12.5px;
+  color: var(--user-text-muted, #6b6b66);
+}
+
+.history-score-row__bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--arena-line, rgba(0, 0, 0, 0.08));
+  overflow: visible;
+}
+
+.history-score-row__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.history-score-row__fill.is-good { background: var(--arena-grn, #1f6f5c); }
+.history-score-row__fill.is-mid { background: #c08a2d; }
+.history-score-row__fill.is-low { background: var(--arena-red, #b3423a); }
+
+.history-score-row__marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--user-text-muted, #6b6b66);
+  opacity: 0.7;
+}
+
+.history-score-row__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+  font-size: 13px;
+}
+
+.history-score-row__value em { font-style: normal; font-size: 12px; margin-left: 4px; }
+.history-score-row__value em.is-up { color: var(--arena-grn, #1f6f5c); }
+.history-score-row__value em.is-down { color: var(--arena-red, #b3423a); }
+.history-score-row__value em.is-flat { color: var(--user-text-muted, #6b6b66); }
+
+.history-score-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--user-text-muted, #6b6b66);
+}
+
+.arena-match-settlement__keywords {
       flex-direction: column;
     }
 

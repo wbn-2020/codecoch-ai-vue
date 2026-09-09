@@ -117,23 +117,39 @@
           <el-table-column v-if="isColumnVisible('updatedAt')" label="更新时间" min-width="170">
             <template #default="{ row }">{{ row.updatedAt || row.updateTime || '-' }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="320" fixed="right">
+          <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">
+              <!-- 2026-09-09 测评整改：高频操作（版本管理/编辑）保持内联，
+                   低频与危险操作收进"更多"，降低行按钮密度与误触风险 -->
               <el-button link type="primary" @click="openVersionDrawer(row)">版本管理</el-button>
               <el-button v-permission="'admin:ai:prompt:write'" link type="primary" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="openDialog(row)">编辑</el-button>
-              <el-button link type="primary" @click="openTemplateCallLogs(row)">AI 运行记录</el-button>
-              <el-button
-                v-permission="row.status === 1 ? 'admin:ai:prompt:write' : 'admin:ai:prompt:publish'"
-                link
-                type="warning"
-                :disabled="isAdminMobileReadonly || statusChangingId === row.id"
-                :loading="statusChangingId === row.id"
-                :title="mobileReadonlyTitle()"
-                @click="handleStatus(row)"
-              >
-                {{ row.status === 1 ? '禁用' : '启用' }}
-              </el-button>
-              <el-button v-permission="'admin:ai:prompt:write'" link type="danger" :disabled="isAdminMobileReadonly" :title="mobileReadonlyTitle()" @click="handleDelete(row)">删除</el-button>
+              <el-dropdown trigger="click" @command="(command: string) => handleRowCommand(command, row)">
+                <el-button link type="primary">
+                  更多
+                  <ChevronDown :size="14" />
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="call-logs">AI 运行记录</el-dropdown-item>
+                    <el-dropdown-item
+                      v-permission="row.status === 1 ? 'admin:ai:prompt:write' : 'admin:ai:prompt:publish'"
+                      command="status"
+                      :disabled="isAdminMobileReadonly || statusChangingId === row.id"
+                    >
+                      {{ row.status === 1 ? '禁用模板' : '启用模板' }}
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      v-permission="'admin:ai:prompt:write'"
+                      command="delete"
+                      divided
+                      class="admin-row-menu__danger"
+                      :disabled="isAdminMobileReadonly"
+                    >
+                      删除模板
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </template>
           </el-table-column>
         </el-table>
@@ -666,7 +682,7 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { MessageSquareCode, Plus } from 'lucide-vue-next'
+import { ChevronDown, MessageSquareCode, Plus } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
@@ -1693,7 +1709,7 @@ const handleDelete = async (row: PromptTemplateVO) => {
   })
   if (!confirmed) return
   if (row.status === 1) {
-    ElMessage.warning('Please disable the prompt template before deleting it.')
+    ElMessage.warning('启用中的模板不能直接删除；请先禁用该模板，再执行删除。')
     return
   }
   try {
@@ -1709,6 +1725,21 @@ const handleDelete = async (row: PromptTemplateVO) => {
     await fetchPrompts()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '提示词模板删除失败，请确认没有线上版本依赖后重试。'))
+  }
+}
+
+/** 2026-09-09 测评整改：行操作折叠后的统一分发；权限与确认逻辑仍在各 handler 内部 */
+const handleRowCommand = (command: string, row: PromptTemplateVO) => {
+  if (command === 'call-logs') {
+    void openTemplateCallLogs(row)
+    return
+  }
+  if (command === 'status') {
+    void handleStatus(row)
+    return
+  }
+  if (command === 'delete') {
+    void handleDelete(row)
   }
 }
 
@@ -1783,6 +1814,17 @@ onMounted(fetchPrompts)
 </script>
 
 <style scoped lang="scss">
+/* 2026-09-09 测评整改：行操作下拉中的危险项视觉区分（红色文案） */
+.admin-row-menu__danger {
+  color: var(--el-color-danger, #c45656);
+
+  &:hover,
+  &:focus {
+    color: var(--el-color-danger, #c45656);
+    background: var(--el-color-danger-light-9, #fef0f0);
+  }
+}
+
 .field-note {
   margin-top: 8px;
   color: var(--app-text-muted);

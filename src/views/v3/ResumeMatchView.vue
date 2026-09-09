@@ -52,8 +52,8 @@
                 <span class="arena-kicker">开始一次匹配</span>
                 <h2 class="arena-h2">选择简历和目标岗位</h2>
               </div>
-              <span class="arena-chip" :class="canSubmit ? 'arena-chip--grn' : 'arena-chip--amber'">
-                {{ canSubmit ? '可以开始' : '需要补资料' }}
+              <span class="arena-chip" :class="canSubmit && !selectedResumeIncomplete ? 'arena-chip--grn' : 'arena-chip--amber'">
+                {{ canSubmit && !selectedResumeIncomplete ? '可以开始' : '需要补资料' }}
               </span>
             </div>
 
@@ -495,6 +495,20 @@ const emptyReportPrimaryDisabled = computed(() =>
 const canSubmit = computed(() =>
   Boolean(form.resumeId && form.targetJobId && !submitting.value && !matchQualityIssues.value.length && !versionResumeMismatch.value)
 )
+
+// 简历完整性预检（对应后端 ResumeContextEligibility 的 INCOMPLETE_PROFILE 拦截）：
+// 缺姓名/经历时提前引导去简历工作台补全，而不是让用户点生成后被报错挡回。
+const selectedResumeIncomplete = computed(() => {
+  const resume = resumes.value.find((item) => item.id === form.resumeId)
+  if (!resume) return false
+  return Boolean(!String(resume.realName || '').trim())
+})
+
+const resumeIncompleteHint = computed(() => {
+  if (!selectedResumeIncomplete.value) return ''
+  const resume = resumes.value.find((item) => item.id === form.resumeId)
+  return `「${resume?.resumeName || resume?.title || '当前简历'}」还没有填写姓名，生成匹配报告会被拦截。请先到简历工作台补全基础信息。`
+})
 const recentMatchSseEvents = computed(() => matchSseEvents.value.slice(-3))
 const latestMatchSseMessage = computed(() => {
   const recent = recentMatchSseEvents.value
@@ -728,6 +742,11 @@ const loadReports = async () => {
 
 const submitMatch = async () => {
   if (!form.resumeId || !form.targetJobId) return
+  if (selectedResumeIncomplete.value) {
+    ElMessage.warning(resumeIncompleteHint.value)
+    router.push('/resumes/workbench')
+    return
+  }
   if (versionResumeMismatch.value) {
     if (routeResumeId.value) {
       form.resumeId = routeResumeId.value

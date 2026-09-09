@@ -351,7 +351,7 @@
                 <b>还没有可用于追问的项目</b>
                 <p class="arena-p">在简历中补充项目背景、技术决策和结果指标后，面试房间和题目训练才能引用真实证据。</p>
                 <button class="arena-btn arena-btn--sec" style="padding: 10px 18px; font-size: 13px" @click="router.push('/project-evidence')">
-                  进入项目证据库
+                  进入我的项目
                 </button>
               </div>
             </div>
@@ -924,7 +924,7 @@ const mainDoneCount = computed(() => mainNodes.value.filter((node) => node.state
 const sideNodes = computed(() => [
   {
     key: 'evidence',
-    title: '项目证据库',
+    title: '我的项目',
     desc: projectCards.value.length ? `${projectCards.value.length} 个项目可复习，面试追问可引用真实证据` : '补充项目指标和技术决策',
     xp: 40,
     done: projectCards.value.length > 0,

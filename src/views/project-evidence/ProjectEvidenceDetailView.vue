@@ -160,7 +160,7 @@
       :description="pageState.description"
     >
       <div class="state-actions">
-        <el-button type="primary" @click="router.push('/project-evidence')">返回项目证据库</el-button>
+        <el-button type="primary" @click="router.push('/project-evidence')">返回我的项目</el-button>
         <el-button v-if="pageState.retryable" @click="fetchDetail">重新加载</el-button>
       </div>
     </AppState>
@@ -175,7 +175,7 @@
         :description="pageState.description"
       >
         <div class="state-actions">
-          <el-button type="primary" @click="router.push('/project-evidence')">返回项目证据库</el-button>
+          <el-button type="primary" @click="router.push('/project-evidence')">返回我的项目</el-button>
           <el-button v-if="pageState.retryable" @click="fetchDetail">重新加载</el-button>
         </div>
       </AppState>
@@ -184,7 +184,7 @@
         <p class="section-kicker">你点击的项目证据</p>
         <h2>{{ listContext.title || '未命名项目' }}</h2>
         <p class="fallback-origin-role">{{ listContext.role || '未填写项目角色' }}</p>
-        <p class="fallback-origin-hint">它在项目证据库中仍可见，但详情暂时无法打开。可返回列表重新进入，或点击「重新加载」重试。</p>
+        <p class="fallback-origin-hint">它在我的项目中仍可见，但详情暂时无法打开。可返回列表重新进入，或点击「重新加载」重试。</p>
       </article>
     </section>
   </div>
@@ -328,8 +328,8 @@ const classifyPageFailure = (error: unknown): ProjectEvidencePageState => {
   if (status === 404 || code === 40400) {
     const traceId = failureTraceId(failure)
     const description = traceId
-      ? `该项目证据不存在或已被删除，请返回项目证据库确认。（追踪号：${traceId}）`
-      : '该项目证据不存在或已被删除，请返回项目证据库确认。'
+      ? `该项目证据不存在或已被删除，请返回我的项目确认。（追踪号：${traceId}）`
+      : '该项目证据不存在或已被删除，请返回我的项目确认。'
     return {
       type: 'empty',
       title: '项目证据不存在',
@@ -391,7 +391,7 @@ const fetchDetail = async () => {
     pageState.value = {
       type: 'error',
       title: '项目证据编号无效',
-      description: '当前链接缺少有效的项目证据编号，请返回项目证据库重新进入。',
+      description: '当前链接缺少有效的项目证据编号，请返回我的项目重新进入。',
       retryable: false
     }
     loading.value = false

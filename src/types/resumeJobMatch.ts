@@ -92,6 +92,16 @@ export interface ResumeJobMatchDetailItemVO {
   updatedAt?: string
 }
 
+export interface ResumeJobMatchScorePointVO {
+  reportId: number
+  overallScore?: number
+  techStackScore?: number
+  projectExperienceScore?: number
+  businessFitScore?: number
+  communicationScore?: number
+  createdAt?: string
+}
+
 export interface ResumeJobMatchReportDetailVO extends ResumeJobMatchReportListVO {
   userId?: number
   jdAnalysisId?: number
@@ -108,6 +118,8 @@ export interface ResumeJobMatchReportDetailVO extends ResumeJobMatchReportListVO
   recommendedInterviewTopics?: unknown
   aiCallLogId?: number
   details?: ResumeJobMatchDetailItemVO[]
+  /** 同岗位历史成功报告分数序列（升序含当前；仅一份时为空） */
+  scoreHistory?: ResumeJobMatchScorePointVO[]
 }
 
 export type ResumeJobMatchSseEventType =

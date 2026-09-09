@@ -116,10 +116,6 @@
           <p>筛选、比较和查看报告都在这里进行，不影响当前的面试推进。</p>
         </div>
         <div class="history-view-actions">
-          <el-button @click="router.push('/tools')">
-            <Wrench :size="16" />
-            记录与工具
-          </el-button>
           <el-button @click="router.push('/questions/recommendations')">练今日题组</el-button>
         </div>
       </div>
@@ -307,6 +303,8 @@
                 <span>{{ item.industryDirection || '行业方向待补充' }}</span>
               </div>
 
+              <p v-if="reportBlockedHint(item)" class="report-hint">{{ reportBlockedHint(item) }}</p>
+
               <details class="record-details">
                 <summary>查看本轮摘要</summary>
                 <p>{{ nextActionText(item) }}</p>
@@ -363,7 +361,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronRight, FileText, GitCompareArrows, History, MessageSquare, Plus, RefreshCw, Search, Wrench } from 'lucide-vue-next'
+import { ChevronRight, FileText, GitCompareArrows, History, MessageSquare, Plus, RefreshCw, Search } from 'lucide-vue-next'
 
 import { getInterviewsApi } from '@/api/interview'
 import {
@@ -521,6 +519,28 @@ const scoreHint = (row: InterviewListVO) => {
   if (isReportFailed(row.reportStatus)) return '报告生成失败，可查看原因'
   if (canSubmitOrViewReport(row.status)) return '可进入报告页生成复盘'
   return '完成面试后可生成报告'
+}
+
+/**
+ * 报告未成功时的可理解解释（2026-09-09 测评整改）。
+ * 后端出分要求至少 REPORT_MIN_ANSWERS 条有效回答，历史页此前只展示
+ * "未生成/失败"状态标签，用户既不知道原因也不知道下一步该做什么。
+ */
+const REPORT_MIN_ANSWERS = 6
+const reportBlockedHint = (row: InterviewListVO) => {
+  const report = normalizeStatus(row.reportStatus)
+  if (report === 'GENERATED' || report === 'SUCCESS') return ''
+  if (isReportInProgress(report)) return '报告正在生成，稍后刷新即可；不需要重复提交。'
+  if (report === 'UNSCORABLE') {
+    return `有效回答不足 ${REPORT_MIN_ANSWERS} 条，报告暂时不出分；回到房间继续作答后可重新生成。`
+  }
+  if (isReportFailed(report)) {
+    return `报告生成失败。常见原因是有效回答不足 ${REPORT_MIN_ANSWERS} 条；可回到房间继续作答后重新生成。`
+  }
+  if (isInterviewDone(row.status)) {
+    return `本场还没出报告。报告需要至少 ${REPORT_MIN_ANSWERS} 条有效回答，也可以直接生成后查看结果。`
+  }
+  return `本场还没结束。报告需要至少 ${REPORT_MIN_ANSWERS} 条有效回答，先回到房间完成答题。`
 }
 
 const interviewModeLabel = (mode?: string) => {
@@ -1303,6 +1323,19 @@ onMounted(fetchInterviews)
     font-size: 12px;
     line-height: 1.35;
   }
+}
+
+/* 2026-09-09 测评整改：报告未成功时说明原因与下一步（出分需要至少 6 条有效回答） */
+.report-hint {
+  max-width: 72ch;
+  margin: 10px 0 0;
+  padding: 7px 10px;
+  border: 1px solid var(--user-warning-border, var(--user-border));
+  border-radius: var(--user-radius-sm, 8px);
+  background: var(--user-warning-soft, var(--user-surface-muted));
+  color: var(--user-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .record-details {

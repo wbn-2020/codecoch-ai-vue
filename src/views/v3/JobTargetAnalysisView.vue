@@ -106,6 +106,10 @@
 
                 <div v-if="hasStructuredAnalysis(analysis)" class="overview-secondary">
                   <span>已完成岗位分析</span>
+                  <el-button plain @click="goGapTraining">
+                    <Rocket :size="16" />
+                    按岗位 JD 直练
+                  </el-button>
                   <el-button plain @click="goApplicationPackage">
                     <PackageCheck :size="16" />
                     生成投递包
@@ -192,6 +196,85 @@
                 />
               </section>
             </el-tab-pane>
+
+            <el-tab-pane label="岗位作战" name="battle" lazy>
+              <section class="tab-section battle-pane">
+                <div class="section-head">
+                  <div>
+                    <h2>岗位作战台</h2>
+                    <p>围绕这个岗位的匹配、训练、面试和投递材料，全部行动集中在这里。</p>
+                  </div>
+                </div>
+
+                <AppState v-if="battleLoading" type="loading" title="正在汇总岗位作战信息" description="正在读取匹配报告、推荐训练和投递材料状态。" />
+
+                <AppState v-else-if="battleError" type="error" title="作战信息加载失败" :description="battleError">
+                  <el-button type="primary" @click="loadBattlePanel">重新加载</el-button>
+                </AppState>
+
+                <template v-else>
+                  <div class="battle-grid">
+                    <article class="battle-card">
+                      <div class="battle-card__head">
+                        <span>JD 匹配</span>
+                        <strong v-if="battleReport">{{ battleReport.overallScore ?? '--' }}</strong>
+                      </div>
+                      <p v-if="battleReport">{{ battleReport.summary || '已生成匹配报告，可进入详情查看差距与建议。' }}</p>
+                      <p v-else>还没有匹配报告。生成后可看到每个维度的差距和行动。</p>
+                      <div class="battle-card__actions">
+                        <el-button
+                          v-if="battleReport"
+                          size="small"
+                          type="primary"
+                          plain
+                          @click="router.push(`/resume-match/${battleReport.reportId}`)"
+                        >查看匹配报告</el-button>
+                        <el-button v-else size="small" type="primary" plain @click="goResumeMatch">生成匹配报告</el-button>
+                      </div>
+                    </article>
+
+                    <article class="battle-card">
+                      <div class="battle-card__head">
+                        <span>定向训练</span>
+                        <strong v-if="battleTopicsCount">{{ battleTopicsCount }}</strong>
+                      </div>
+                      <p>按岗位 JD 和缺口维度定向练题；缺口直练会带上技能关键词。</p>
+                      <div class="battle-card__actions">
+                        <el-button size="small" type="primary" plain @click="goGapTraining">按岗位 JD 直练</el-button>
+                        <el-button size="small" plain @click="router.push('/questions/wrong-records')">错题到期复习</el-button>
+                      </div>
+                    </article>
+
+                    <article class="battle-card">
+                      <div class="battle-card__head">
+                        <span>模拟面试</span>
+                      </div>
+                      <p>围绕岗位 JD 押题、项目深挖和技术基础，面试报告会回流训练建议。</p>
+                      <div class="battle-card__actions">
+                        <el-button
+                          size="small"
+                          type="primary"
+                          plain
+                          @click="router.push({ path: '/interviews/create', query: { source: 'job-target', targetJobId: String(target.id) } })"
+                        >创建岗位面试</el-button>
+                        <el-button size="small" plain @click="router.push('/interviews/history')">面试记录</el-button>
+                      </div>
+                    </article>
+
+                    <article class="battle-card">
+                      <div class="battle-card__head">
+                        <span>投递与材料</span>
+                      </div>
+                      <p>投递包聚合简历、匹配报告和导出文件；投递记录推进岗位状态。</p>
+                      <div class="battle-card__actions">
+                        <el-button size="small" type="primary" plain @click="goApplicationPackage">生成投递包</el-button>
+                        <el-button size="small" plain @click="router.push({ path: '/applications', query: { targetJobId: String(target.id) } })">投递记录</el-button>
+                      </div>
+                    </article>
+                  </div>
+                </template>
+              </section>
+            </el-tab-pane>
           </el-tabs>
         </div>
       </main>
@@ -253,7 +336,7 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Files, PackageCheck, Pencil, RefreshCw, ScanSearch, Sparkles } from 'lucide-vue-next'
+import { ArrowLeft, Files, PackageCheck, Pencil, RefreshCw, Rocket, ScanSearch, Sparkles } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -273,6 +356,7 @@ import {
   recalculateJobReadinessApi,
   refreshJobRequirementMatrixApi
 } from '@/api/jobRequirement'
+import { getResumeJobMatchReportDetailApi, getResumeJobMatchReportsApi } from '@/api/resumeJobMatch'
 import AppState from '@/components/common/AppState.vue'
 import PageHeader from '@/components/user-ui/PageHeader.vue'
 import { useSseState } from '@/composables/useSseState'
@@ -281,6 +365,7 @@ import {
   normalizeJobRequirementMatrix
 } from '@/features/job-requirement-matrix'
 import { resolveSafeActionPath } from '@/features/job-readiness/readiness'
+import { trackFunnelStep } from '@/utils/funnel'
 import {
   createAsyncOperationScope,
   isAsyncOperationTerminal,
@@ -300,6 +385,7 @@ import type {
   JobTargetParseSseEventType,
   TargetJobVO
 } from '@/types/jobTarget'
+import type { ResumeJobMatchReportDetailVO } from '@/types/resumeJobMatch'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { getErrorMessage, toFriendlyMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/format'
@@ -315,7 +401,7 @@ const loading = ref(false)
 const parsing = ref(false)
 const loadError = ref('')
 const partialLoadWarning = ref('')
-type AnalysisSection = 'overview' | 'jd' | 'analysis' | 'evidence'
+type AnalysisSection = 'overview' | 'jd' | 'analysis' | 'evidence' | 'battle'
 const activeSection = ref<AnalysisSection>('overview')
 const target = ref<TargetJobVO | null>(null)
 const analysis = ref<JobDescriptionAnalysisVO | null>(null)
@@ -766,11 +852,13 @@ const loadRequirementInsightsForActiveTab = async (silent = false) => {
 }
 
 const handleRequirementAction = (action: JobRequirementActionVO) => {
-  if (!action.actionUrl) {
+  // 后端 NextAction 字段是 path；历史契约曾用 actionUrl，两者都接受避免静默失效
+  const target = action.path || action.actionUrl
+  if (!target) {
     ElMessage.info(action.description || '该行动暂时没有可用入口。')
     return
   }
-  const resolved = resolveSafeActionPath(action.actionUrl)
+  const resolved = resolveSafeActionPath(target)
   if (resolved.unavailableReason) {
     ElMessage.warning(resolved.unavailableReason)
   }
@@ -1014,6 +1102,11 @@ const handleParse = async () => {
     })
     if (!confirmed) return
   }
+  trackFunnelStep('funnel_jd_analyzed', {
+    targetJobId: target.value.id,
+    bizId: target.value.id,
+    sourcePage: 'job-target-analysis'
+  })
   void submitParseTask(target.value.id, { forceRefresh })
 }
 
@@ -1048,6 +1141,60 @@ const goApplicationPackage = () => {
       jobTitle: target.value?.jobTitle || undefined,
       companyName: target.value?.companyName || undefined,
       jdSource: target.value?.jdSource || undefined
+    })
+  })
+}
+
+// 岗位作战台：聚合同岗位最新匹配报告（含历史），训练/面试/投递为静态入口。
+const battleTopicsCount = computed(() => {
+  const topics = battleReport.value?.recommendedLearningTopics
+  return Array.isArray(topics) ? topics.length : undefined
+})
+const battleLoading = ref(false)
+const battleError = ref('')
+const battleReport = ref<ResumeJobMatchReportDetailVO | null>(null)
+const battleLoadedFor = ref<number | null>(null)
+
+const loadBattlePanel = async () => {
+  if (!targetId.value) return
+  if (battleLoadedFor.value === targetId.value && battleReport.value) return
+  battleLoading.value = true
+  battleError.value = ''
+  try {
+    const reports = await getResumeJobMatchReportsApi({
+      pageNo: 1,
+      pageSize: 1,
+      targetJobId: targetId.value,
+      status: 'SUCCESS'
+    })
+    const record = reports.records?.[0]
+    if (record?.reportId) {
+      battleReport.value = await getResumeJobMatchReportDetailApi(record.reportId)
+    } else {
+      battleReport.value = null
+    }
+    battleLoadedFor.value = targetId.value
+  } catch (error) {
+    battleError.value = getErrorMessage(error, '作战信息暂时不可用，请稍后重试。')
+  } finally {
+    battleLoading.value = false
+  }
+}
+
+watch(activeSection, (section) => {
+  if (section === 'battle') void loadBattlePanel()
+})
+
+// 新用户零画像/零报告时的规则版冷启动：直接把岗位 JD 文本带到推荐训练页，
+// 由 ArenaTrainView 调 /question-recommendations/by-jd 按关键词匹配正式题库。
+const goGapTraining = () => {
+  if (!targetId.value) return
+  router.push({
+    path: '/questions/recommendations',
+    query: compactRouteQuery({
+      targetJobId: String(targetId.value),
+      jdText: target.value?.jdText || undefined,
+      skillName: target.value?.jobTitle || undefined
     })
   })
 }
@@ -1364,6 +1511,59 @@ onBeforeUnmount(() => {
   }
 }
 
+.battle-pane {
+  min-height: 240px;
+}
+
+.battle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.battle-card {
+  border: 1px solid var(--user-line, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--user-surface, #ffffff);
+}
+
+.battle-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.battle-card__head span {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--user-primary, var(--arena-action, #1f6f5c));
+}
+
+.battle-card__head strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--user-text-muted, #6b6b66);
+  flex: 1;
+}
+
+.battle-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .overview-secondary {
   display: flex;
   align-items: center;
@@ -1430,7 +1630,60 @@ onBeforeUnmount(() => {
   }
 
   .overview-context,
-  .overview-secondary {
+  .battle-pane {
+  min-height: 240px;
+}
+
+.battle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.battle-card {
+  border: 1px solid var(--user-line, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--user-surface, #ffffff);
+}
+
+.battle-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.battle-card__head span {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--user-primary, var(--arena-action, #1f6f5c));
+}
+
+.battle-card__head strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--user-text-muted, #6b6b66);
+  flex: 1;
+}
+
+.battle-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.overview-secondary {
     align-items: flex-start;
     flex-direction: column;
   }

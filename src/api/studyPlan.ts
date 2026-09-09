@@ -91,6 +91,17 @@ export const regenerateStudyPlanApi = (id: number) => {
   return request.post<StudyPlanGenerateVO, StudyPlanGenerateVO>(`/study-plans/${id}/regenerate`)
 }
 
+export interface StudyPlanAdjustResultVO {
+  rescheduledCount: number
+  addedReviewCount: number
+  message?: string
+}
+
+/** 学习计划动态调整：过期任务延期 + 到期错题注入复习任务（Phase 2） */
+export const adjustStudyPlanApi = (planId: number) => {
+  return request.post<StudyPlanAdjustResultVO, StudyPlanAdjustResultVO>(`/study-plans/${planId}/adjust`)
+}
+
 export const getStudyPlansApi = (params?: StudyPlanQueryDTO) => {
   return request
     .get<PageResult<StudyPlanListVO>, PageResult<StudyPlanListVO>>('/study-plans', {

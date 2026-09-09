@@ -373,7 +373,7 @@ describe('dynamic entity detail routes', () => {
     [
       { response: { status: 404, data: { code: 40400 } } },
       '项目证据不存在',
-      '该项目证据不存在或已被删除，请返回项目证据库确认。',
+      '该项目证据不存在或已被删除，请返回我的项目确认。',
       false
     ],
     [

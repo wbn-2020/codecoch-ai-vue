@@ -655,7 +655,7 @@
           </div>
           <el-button class="full-button" @click="router.push('/project-evidence')">
             <Layers3 :size="16" />
-            打开项目证据库
+            打开我的项目
           </el-button>
         </section>
 

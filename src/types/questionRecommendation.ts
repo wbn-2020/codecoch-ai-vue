@@ -6,8 +6,16 @@ export type QuestionRecommendationTrustStatus = 'VERIFIED' | 'PARTIAL' | 'FALLBA
 export const QUESTION_RECOMMENDATION_SOURCE_TYPE = {
   JD_GAP: 'JD_GAP',
   RESUME_JOB_MATCH: 'RESUME_JOB_MATCH',
-  STUDY_PLAN: 'STUDY_PLAN'
+  STUDY_PLAN: 'STUDY_PLAN',
+  JD_KEYWORD: 'JD_KEYWORD'
 } as const
+
+/** 规则版冷启动推荐请求：零数据（无画像/报告/计划）时按 JD 关键词直接匹配正式题库 */
+export interface QuestionRecommendationJdDTO {
+  targetJobId?: number
+  jdText?: string
+  limit?: number
+}
 
 export type QuestionRecommendationSourceType =
   (typeof QUESTION_RECOMMENDATION_SOURCE_TYPE)[keyof typeof QUESTION_RECOMMENDATION_SOURCE_TYPE]

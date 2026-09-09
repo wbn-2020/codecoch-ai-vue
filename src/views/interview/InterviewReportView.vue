@@ -739,6 +739,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   recordAgentMetricEventApi
 } from '@/api/agent'
+import { trackFunnelStep } from '@/utils/funnel'
 import {
   exportInterviewReportApi,
   getInterviewReportApi,
@@ -1342,7 +1343,9 @@ const goJdGapPractice = async () => {
 
 const failureReason = computed(() => toFriendlyMessage(
   report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage,
-  isUnscorable.value ? '本次面试答题样本不足或题目明细不完整，暂时无法生成可信评分。请继续答题或重新生成报告。' : '报告生成失败，请稍后重试。'
+  isUnscorable.value
+    ? '本次面试有效作答少于 6 题，暂时无法生成可信评分。系统至少需要 6 条有效回答才能拆分维度与评分；建议完整答完一轮（或创建题目数 ≥6 的面试）后重新生成报告。'
+    : '报告生成失败，请稍后重试。'
 ))
 const recoveryStatusLabel = computed(() => {
   if (isUnscorable.value) return '暂不可评分'
@@ -1633,6 +1636,14 @@ const pushNextActionUrl = async (actionUrl?: string, fallback = '/dashboard') =>
 const reportMetricId = () => report.value?.reportId || report.value?.id
 const canTrackReportNextActionMetric = () => isGenerated.value && Boolean(reportMetricId())
 
+const trackReportFunnelView = () => {
+  trackFunnelStep('funnel_report_viewed', {
+    targetJobId: report.value?.targetJobId,
+    bizId: interviewId.value,
+    sourcePage: 'interview-report'
+  })
+}
+
 const trackInterviewNextActionMetric = (eventCode: 'interview_report_next_action_shown' | 'interview_report_next_action_clicked', action?: InterviewReportNextActionVO) => {
   const metricId = reportMetricId()
   if (!metricId || !canTrackReportNextActionMetric()) return
@@ -1867,7 +1878,7 @@ const handleNextAction = async (action: InterviewReportNextActionVO) => {
     return
   }
   if (actionType === 'REVIEW_EXPERIMENT') {
-    await pushNextActionUrl(action.actionUrl, '/job-experiments')
+    await pushNextActionUrl(action.actionUrl, '/questions/recommendations')
     return
   }
   await pushNextActionUrl(action.actionUrl)
@@ -2151,6 +2162,7 @@ watch(backendNextActions, (actions) => {
   trackInterviewNextActionMetric('interview_report_next_action_shown', actions[0])
 })
 watch(isGenerated, (generated) => {
+  if (generated) trackReportFunnelView()
   const metricId = reportMetricId()
   if (!generated || !metricId || backendNextActions.value.length) return
   const key = `${metricId}:static-action-zone`

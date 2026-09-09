@@ -135,7 +135,8 @@ import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
-const moduleTabs = useUserModuleTabs('train')
+// 薄弱点分析按 P0 信息架构归属"准备度"组，与能力图谱/能力画像共享页内标签
+const moduleTabs = useUserModuleTabs('growth')
 const loading = ref(false)
 const error = ref('')
 const analysis = ref<WeaknessAnalysisVO>()

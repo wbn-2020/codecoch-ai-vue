@@ -171,7 +171,7 @@ export const buildInterviewReportKnowledgeCandidates = (
       id,
       boundary,
       candidateOnly: true,
-      actionUrl: candidate.actionUrl || withQuery('/knowledge', report, { candidate: candidate.sourceField }),
+      actionUrl: candidate.actionUrl || withQuery('/questions/recommendations', report, { candidate: candidate.sourceField }),
       ...candidate
     })
   }
@@ -271,13 +271,12 @@ export const buildInterviewReportNextActions = (
   if (knowledgeCandidates.length) {
     actions.push(action(report, {
       actionType: 'KNOWLEDGE_CANDIDATE',
-      title: `确认 ${knowledgeCandidates.length} 个知识候选`,
-      description: '先人工确认候选知识点，再决定是否整理到个人知识库。',
+      title: `针对薄弱知识点定向练习`,
+      description: '把报告标记的薄弱知识点转成一组定向训练，先练再决定是否沉淀笔记。',
       priority: 3,
-      actionUrl: withQuery('/knowledge', report, { candidate: 'interviewReport' }),
+      actionUrl: withQuery('/questions/recommendations', report, { candidate: 'interviewReport' }),
       evidence: knowledgeCandidates.slice(0, 3).map((item) => item.title).join('；'),
-      confidenceBoundary: '候选资产不自动入库，不写入长期记忆；需用户确认。',
-      candidateOnly: true,
+      confidenceBoundary: '来自报告薄弱点候选，仅作为训练入口，不自动入库。',
       sourceFields: ['weakPoints', 'rubricScores', 'adviceEvidence', 'abilityProfileUpdates']
     }))
   }
@@ -297,14 +296,14 @@ export const buildInterviewReportNextActions = (
 
   actions.push(action(report, {
     actionType: 'REVIEW_EXPERIMENT',
-    title: followUpRisk ? '复盘追问暴露风险' : '复盘本轮训练实验',
-    description: '把本轮报告沉淀为下一次训练或求职实验的假设。',
+    title: followUpRisk ? '针对追问风险安排训练' : '复盘本轮训练表现',
+    description: '把本轮报告暴露的问题转为下一次定向训练，弱项可回炉错题与薄弱点。',
     priority: actions.length + 1,
-    actionUrl: withQuery('/job-experiments', report, { sourceField: followUpRisk ? 'followUpTree' : 'reportSummary' }),
+    actionUrl: withQuery('/questions/recommendations', report, { sourceField: followUpRisk ? 'followUpTree' : 'reportSummary' }),
     evidence: shortText(followUpRisk?.exposedRisk || followUpRisk?.followUpReason || report?.summary || evidenceFallback),
     confidenceBoundary: followUpRisk?.exposedRisk
       ? '来自追问树暴露风险，仍需结合真实投递结果验证。'
-      : '报告证据不足时只生成复盘入口，不生成强结论。',
+      : '报告证据不足时只生成训练入口，不生成强结论。',
     fallbackReason: followUpRisk ? '' : '未发现追问树风险，使用报告摘要兜底。',
     sourceFields: ['followUpTree', 'summary', 'evidenceSummary']
   }))

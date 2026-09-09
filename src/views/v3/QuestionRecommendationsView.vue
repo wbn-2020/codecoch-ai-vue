@@ -147,6 +147,7 @@ import {
   getQuestionRecommendationBatchesApi,
   getQuestionRecommendationBatchDetailApi,
   getQuestionRecommendationBatchItemsApi,
+  getQuestionRecommendationsByJdApi,
   submitQuestionRecommendationsFromGapApi,
   submitQuestionRecommendationsFromMatchReportApi,
   submitQuestionRecommendationsFromStudyPlanApi
@@ -166,6 +167,7 @@ import {
   type QuestionRecommendationBatchListVO,
   type QuestionRecommendationGenerateVO,
   type QuestionRecommendationItemVO,
+  type QuestionRecommendationJdDTO,
   type QuestionRecommendationSourceType
 } from '@/types/questionRecommendation'
 import { getErrorMessage } from '@/utils/error'
@@ -294,6 +296,7 @@ const sourceLabels: Record<string, string> = {
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP]: '能力短板',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH]: '匹配报告',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.STUDY_PLAN]: '学习计划',
+  [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_KEYWORD]: 'JD 关键词',
   MATCH_REPORT: '匹配报告',
   SKILL_PROFILE: '能力画像',
   FALLBACK: '资料不足'
@@ -336,6 +339,10 @@ const emptyRecommendationDescription = computed(() =>
     ? '当前来源还没有推荐题。可以先生成推荐批次；如果生成耗时较久，可稍后从任务中心回来查看。'
     : '当前还没有可用于专项推荐的能力画像、匹配报告或学习计划。可以先进入通用训练保持节奏。')
 )
+const targetJobId = getQueryNumber('targetJobId')
+const jdText = getQueryText('jdText', 'jobDescription', 'description')
+const hasJdColdStartInput = computed(() => Boolean(targetJobId || jdText))
+
 const fallbackKeyword = computed(() => getQueryText('skillName', 'keyword', 'jobTitle', 'targetPosition', 'targetJobName'))
 const fallbackPracticeMode = computed(() => fallbackKeyword.value ? 'category' : 'random')
 const fallbackEvidenceSummary = computed(() =>
@@ -345,6 +352,7 @@ const fallbackEvidenceSummary = computed(() =>
 )
 const primaryActionText = computed(() => {
   if (hasRecommendationContext.value) return '生成推荐'
+  if (hasJdColdStartInput.value) return '按岗位描述匹配推荐'
   return fallbackKeyword.value ? '按关键词先练' : '先做一组通用训练'
 })
 const itemPracticeQuestionId = (item: QuestionRecommendationItemVO) => {
@@ -390,6 +398,7 @@ const evidenceText = (sourceType?: string | null, sourceId?: number, fallback?: 
   if (type === QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH || type === 'MATCH_REPORT') return `来自简历匹配报告${suffix}，报告完成后推荐会更贴合岗位。`
   if (type === QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP || type === 'SKILL_PROFILE') return `来自能力画像和岗位差距${suffix}，用于定位优先补强技能。`
   if (type === QUESTION_RECOMMENDATION_SOURCE_TYPE.STUDY_PLAN) return `来自学习计划${suffix}，用于承接当前训练路线。`
+  if (type === QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_KEYWORD) return `根据岗位描述命中的知识点匹配${suffix}，题目来自正式题库。`
   return '推荐来源待确认，请刷新或重新生成后再判断训练依据。'
 }
 
@@ -510,6 +519,32 @@ const setFallbackDiagnostic = (message?: string) => {
   }
 }
 
+/**
+ * JD 关键词规则版冷启动：当新用户没有任何画像/报告/计划（sourceId 为空），
+ * 但路由携带 targetJobId 或 JD 文本时，直接按关键词匹配正式题库返回带理由的推荐题。
+ * 返回 true 表示成功拿到推荐题，调用方应直接渲染、不再走 random 兜底。
+ */
+const loadJdColdStartRecommendations = async () => {
+  if (!hasJdColdStartInput.value) return false
+  const payload: QuestionRecommendationJdDTO = {
+    targetJobId: targetJobId || undefined,
+    jdText: jdText || undefined,
+    limit: query.questionCount
+  }
+  const result = await getQuestionRecommendationsByJdApi(payload)
+  if (!result || !result.length) return false
+  items.value = result
+  generationDiagnostic.value = {
+    status: 'SUCCESS',
+    questionCount: result.length,
+    sourceType: QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_KEYWORD,
+    trustStatus: 'PARTIAL',
+    evidenceSummary: '根据岗位描述命中的知识点，从正式题库匹配出对应题目。',
+    fallback: false
+  }
+  return true
+}
+
 const hydrateContext = async () => {
   const routeSourceId =
     query.source === 'studyPlan'
@@ -588,6 +623,13 @@ const loadRecommendations = async () => {
       }
     }
     if (!query.sourceId) {
+      let coldStarted = false
+      try {
+        coldStarted = await loadJdColdStartRecommendations()
+      } catch (error) {
+        coldStarted = false
+      }
+      if (coldStarted) return
       setFallbackDiagnostic(matchReportContextWarning.value || generationDiagnostic.value?.errorMessage)
       items.value = []
       return
@@ -672,6 +714,16 @@ const generateRecommendations = async () => {
       }
     }
     if (!query.sourceId) {
+      let coldStarted = false
+      try {
+        coldStarted = await loadJdColdStartRecommendations()
+      } catch (error) {
+        coldStarted = false
+      }
+      if (coldStarted) {
+        ElMessage.success('已根据岗位描述匹配到推荐题目，可直接开始练习。')
+        return
+      }
       setFallbackDiagnostic(matchReportContextWarning.value || generationDiagnostic.value?.errorMessage)
       ElMessage.info(fallbackKeyword.value ? '暂未找到可信推荐依据，先按关键词练一组。' : '暂未找到可信推荐依据，先做一组通用训练。')
       startFallbackPractice()

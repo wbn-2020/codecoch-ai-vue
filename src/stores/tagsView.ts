@@ -24,7 +24,7 @@ const TAG_TITLE_MAP: Record<string, string> = {
   '/resumes/manage': '简历列表',
   '/resume-match': '岗位匹配',
   '/skill-profile': '能力画像',
-  '/project-evidence': '项目证据库',
+  '/project-evidence': '我的项目',
   '/ability-map': '能力图谱',
   '/job-experiments': '求职实验台',
   '/portfolio-demo': '作品集演示',

@@ -202,6 +202,8 @@ export interface WrongQuestionQueryDTO extends PageQuery {
   keyword?: string
   categoryId?: number
   difficulty?: QuestionDifficulty | ''
+  /** 仅返回已到间隔复习期的错题（1/3/7/15 天调度） */
+  dueOnly?: boolean
 }
 
 export interface WrongQuestionVO {
@@ -216,6 +218,12 @@ export interface WrongQuestionVO {
   wrongCount: number
   lastWrongAt?: string
   masteryStatus?: MasteryStatus
+  /** 间隔复习档位（天）：1/3/7/15 */
+  reviewIntervalDays?: number
+  /** 下次复习到期时间 */
+  nextReviewAt?: string
+  /** 是否已到期可复习 */
+  reviewDue?: boolean
 }
 
 export interface UpdateMasteryDTO {

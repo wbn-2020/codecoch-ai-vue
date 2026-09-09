@@ -302,7 +302,7 @@
                 title="暂无项目证据覆盖"
                 description="还没有可展示的证据覆盖结果。建议先补项目证据或等待投递包接口返回。"
               >
-                <el-button @click="router.push('/project-evidence')">去项目证据库</el-button>
+                <el-button @click="router.push('/project-evidence')">去我的项目</el-button>
               </AppState>
             </article>
           </el-tab-pane>
@@ -599,7 +599,7 @@ const buildFallbackPackage = (): JobApplicationPackageVO => {
         key: 'project-evidence',
         title: '核心技能有项目证据支撑',
         status: 'PENDING',
-        description: '降级预览无法判断证据覆盖，请进入项目证据库补齐或等待接口返回覆盖结果。',
+        description: '降级预览无法判断证据覆盖，请进入我的项目补齐或等待接口返回覆盖结果。',
         actionLabel: '补项目证据',
         actionPath: '/project-evidence'
       },

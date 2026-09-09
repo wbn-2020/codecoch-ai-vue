@@ -21,7 +21,7 @@
           </el-button>
           <el-button size="large" @click="router.push('/project-evidence')">
             <ListChecks :size="17" />
-            项目证据库
+            我的项目
           </el-button>
           <el-button size="large" text :loading="loading || secondaryLoading" @click="loadAll">
             <RefreshCw :size="17" />
@@ -260,7 +260,7 @@
           title="还没有可用于追问的项目"
           description="在简历中补充项目背景、技术决策和结果指标后，面试房间和题目训练才能引用真实证据。"
         >
-          <el-button type="primary" @click="router.push('/project-evidence')">进入项目证据库</el-button>
+          <el-button type="primary" @click="router.push('/project-evidence')">进入我的项目</el-button>
         </AppState>
       </section>
     </div>

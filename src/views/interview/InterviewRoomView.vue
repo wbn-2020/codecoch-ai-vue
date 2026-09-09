@@ -406,6 +406,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowLeft, Bot, Check, FileText, Keyboard, Mic, MicOff, Rocket, RotateCcw, Send, UserRound } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { trackFunnelStep } from '@/utils/funnel'
 
 import {
   confirmInterviewVoiceTranscriptApi,
@@ -2009,6 +2010,10 @@ const handleManualFinish = async () => {
 }
 
 onMounted(() => {
+  trackFunnelStep('funnel_interview_started', {
+    bizId: Number(route.params.id) || undefined,
+    sourcePage: 'interview-room'
+  })
   void fetchCurrent()
   void loadScenarioBinding()
 })

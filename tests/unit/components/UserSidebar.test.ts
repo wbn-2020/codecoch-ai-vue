@@ -38,39 +38,41 @@ const mountSidebar = () => mount(UserSidebar, {
   }
 })
 
-describe('UserSidebar weekly report entry', () => {
+describe('UserSidebar P0 six-entry navigation', () => {
   beforeEach(() => {
     appConfig.enableV6WeeklyReport = false
     appConfig.enableV9EvidenceLearning = false
     routePath.value = '/dashboard'
   })
 
-  it('hides the weekly report destination while the feature is disabled', () => {
+  it('renders exactly the six P0 primary groups', () => {
+    const wrapper = mountSidebar()
+
+    expect(wrapper.text()).toContain('今日')
+    expect(wrapper.text()).toContain('求职')
+    expect(wrapper.text()).toContain('资料')
+    expect(wrapper.text()).toContain('面试')
+    expect(wrapper.text()).toContain('训练')
+    expect(wrapper.text()).toContain('准备度')
+  })
+
+  it('never exposes removed P0 destinations even with feature flags enabled', () => {
+    appConfig.enableV6WeeklyReport = true
+    appConfig.enableV9EvidenceLearning = true
     const wrapper = mountSidebar()
 
     expect(wrapper.find('[data-index="/agent/weekly-reports"]').exists()).toBe(false)
+    expect(wrapper.find('[data-index="/evidence-assets"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('求职周报')
+    expect(wrapper.text()).not.toContain('证据使用')
   })
 
-  it('shows the destination and selects it for weekly report routes when enabled', () => {
-    appConfig.enableV6WeeklyReport = true
-    routePath.value = '/agent/weekly-reports'
+  it('highlights the owning group and item for the current route', () => {
+    routePath.value = '/questions/recommendations'
     const wrapper = mountSidebar()
 
-    expect(wrapper.get('[data-index="/agent/weekly-reports"]').text()).toContain('求职周报')
-    expect(wrapper.get('[data-index="/agent/weekly-reports"]').classes()).toContain('is-active')
-  })
-
-  it('hides and reveals the V9 aggregate entry using the shared gate', () => {
-    const disabledWrapper = mountSidebar()
-    expect(disabledWrapper.find('[data-index="/evidence-assets"]').exists()).toBe(false)
-    disabledWrapper.unmount()
-
-    appConfig.enableV9EvidenceLearning = true
-    routePath.value = '/evidence-assets'
-    const enabledWrapper = mountSidebar()
-
-    expect(enabledWrapper.get('[data-index="/evidence-assets"]').text()).toContain('证据使用')
-    expect(enabledWrapper.get('[data-index="/evidence-assets"]').classes()).toContain('is-active')
+    // accordion：子菜单只在当前组展开时渲染，组行本身标记 is-active
+    expect(wrapper.get('[data-index="/questions/recommendations"]').classes()).toContain('is-active')
+    expect(wrapper.get('[data-index="/questions/recommendations"]').text()).toContain('训练')
   })
 })

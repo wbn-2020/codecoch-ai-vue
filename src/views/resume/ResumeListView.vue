@@ -31,46 +31,6 @@
       />
     </section>
 
-    <section class="resume-hero is-legacy-summary">
-      <div class="hero-copy">
-        <p class="hero-kicker">
-          <FileText :size="16" />
-          简历管理
-        </p>
-        <h1>简历管理</h1>
-        <p>集中管理简历、导入文件和查看 AI 建议，把简历准备串成一条更清晰的求职路径。</p>
-        <div class="hero-actions">
-          <el-button type="primary" size="large" @click="router.push('/resumes/create')">
-            <Plus :size="17" />
-            新建简历
-          </el-button>
-          <el-button size="large" :loading="uploading" @click="toggleUploadWorkbench">
-            <UploadCloud :size="17" />
-            {{ uploadWorkbenchExpanded ? '收起导入' : '导入简历' }}
-          </el-button>
-          <el-button size="large" text @click="router.push('/dashboard')">
-            <ArrowLeft :size="17" />
-            回到今日计划
-          </el-button>
-        </div>
-      </div>
-
-      <div class="hero-panel">
-        <div class="hero-panel__stat">
-          <span>简历资产</span>
-          <strong>{{ total }} 份</strong>
-        </div>
-        <div class="hero-panel__stat">
-          <span>最近更新</span>
-          <strong>{{ latestUpdatedAt }}</strong>
-        </div>
-        <div class="hero-panel__stat">
-          <span>AI 建议</span>
-          <strong :class="{ danger: optimizeRecordsLoadError }">{{ latestOptimizeStatus }}</strong>
-        </div>
-      </div>
-    </section>
-
     <el-collapse-transition>
     <section
       v-show="uploadWorkbenchExpanded || uploading || parsePolling || Boolean(parseTask) || Boolean(uploadError)"
@@ -664,7 +624,6 @@
 import type { UploadFile, UploadInstance, UploadRawFile } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowLeft,
   BriefcaseBusiness,
   CircleAlert,
   Clock3,
@@ -746,6 +705,7 @@ import {
 } from '@/features/async-operation-state'
 import { confirmDangerActionPreview } from '@/utils/dangerAction'
 import { toFriendlyMessage } from '@/utils/error'
+import { trackFunnelStep } from '@/utils/funnel'
 import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
@@ -1513,6 +1473,7 @@ const handleConfirmParse = async () => {
   confirmingParse.value = true
   try {
     const result = await confirmResumeParseResultApi(parseResult.value.analysisRecordId)
+    trackFunnelStep('funnel_resume_imported', { bizId: result.resumeId ?? undefined, sourcePage: 'resume-list' })
     ElMessage.success('解析结果已确认，简历已生成')
     parseDrawerVisible.value = false
     parseTask.value = {
@@ -1721,25 +1682,6 @@ onUnmounted(() => {
   gap: 18px;
 }
 
-.resume-hero.is-legacy-summary {
-  display: none;
-}
-
-.resume-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
-  gap: var(--user-space-6);
-  align-items: center;
-  padding: var(--user-space-6);
-  border: 1px solid var(--user-border);
-  border-radius: var(--user-radius-lg);
-  background: var(--user-surface-tint);
-  box-shadow: var(--user-shadow-sm);
-}
-
-.hero-kicker,
-.hero-actions,
-.hero-panel__stat,
 .section-title,
 .pipeline-step,
 .task-card,
@@ -1752,68 +1694,6 @@ onUnmounted(() => {
 .diff-head {
   display: flex;
   align-items: center;
-}
-
-.hero-kicker {
-  gap: 8px;
-  margin: 0;
-  color: var(--user-primary);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.hero-copy {
-  h1 {
-    margin: 10px 0 0;
-    color: var(--user-text);
-    font-size: 30px;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
-  }
-
-  p {
-    max-width: 680px;
-    margin: 10px 0 0;
-    color: var(--user-text-muted);
-    font-size: 14px;
-    line-height: 1.7;
-  }
-}
-
-.hero-actions {
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.hero-panel {
-  align-self: stretch;
-  padding-left: var(--user-space-5);
-  border-left: 1px solid var(--user-border);
-}
-
-.hero-panel__stat {
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 46px;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--user-border);
-
-  &:last-child {
-    border-bottom: 0;
-  }
-
-  span {
-    color: var(--user-text-muted);
-    font-size: 12px;
-  }
-
-  strong {
-    color: var(--user-text-secondary);
-    font-size: 15px;
-    font-weight: 700;
-    text-align: right;
-  }
 }
 
 .is-muted {
@@ -2754,16 +2634,8 @@ onUnmounted(() => {
 }
 
 @media (max-width: 1080px) {
-  .resume-hero,
   .upload-panel {
     grid-template-columns: 1fr;
-  }
-
-  .hero-panel {
-    padding-top: 12px;
-    padding-left: 0;
-    border-top: 1px solid var(--user-border);
-    border-left: 0;
   }
 
   .workspace-toolbar {
@@ -2777,14 +2649,6 @@ onUnmounted(() => {
 }
 
 @media (max-width: 720px) {
-  .resume-hero {
-    padding: 16px;
-  }
-
-  .hero-copy h1 {
-    font-size: 26px;
-  }
-
   .resume-card__header,
   .task-card,
   .optimize-recovery-card {

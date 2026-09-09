@@ -111,7 +111,7 @@ describe('ProjectEvidenceDetailView empty-state hardening', () => {
     detailApi.mockRejectedValue(notFoundWithTrace())
 
     const wrapper = await mountDetail()
-    const backButton = wrapper.findAll('button').find((b) => b.text().includes('返回项目证据库'))
+    const backButton = wrapper.findAll('button').find((b) => b.text().includes('返回我的项目'))
     expect(backButton).toBeTruthy()
     await backButton!.trigger('click')
     expect(routerPush).toHaveBeenCalledWith('/project-evidence')

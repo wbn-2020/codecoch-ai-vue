@@ -299,6 +299,7 @@ import {
   getQuestionRecommendationItemsFromGapBatchApi,
   getQuestionRecommendationItemsFromMatchReportBatchApi,
   getQuestionRecommendationItemsFromStudyPlanBatchApi,
+  getQuestionRecommendationsByJdApi,
   submitQuestionRecommendationsFromGapApi,
   submitQuestionRecommendationsFromMatchReportApi,
   submitQuestionRecommendationsFromStudyPlanApi
@@ -312,6 +313,7 @@ import {
   type QuestionRecommendationBatchDetailVO,
   type QuestionRecommendationGenerateVO,
   type QuestionRecommendationItemVO,
+  type QuestionRecommendationJdDTO,
   type QuestionRecommendationStatus
 } from '@/types/questionRecommendation'
 import { getErrorMessage } from '@/utils/error'
@@ -426,12 +428,14 @@ const sourceLabels: Record<string, string> = {
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP]: '能力短板',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH]: '匹配报告',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.STUDY_PLAN]: '学习计划',
+  [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_KEYWORD]: 'JD 关键词',
   FALLBACK: '通用练习'
 }
 const sourceTrustLabels: Record<string, string> = {
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP]: '来自岗位要求 / 能力画像',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH]: '来自简历匹配报告',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.STUDY_PLAN]: '来自学习计划',
+  [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_KEYWORD]: '来自岗位描述关键词',
   FALLBACK: '推荐依据不足'
 }
 
@@ -513,6 +517,7 @@ const generationSourceLabel = computed(() => {
 const contextStatusText = computed(() => {
   if (matchReportContextWarning.value) return matchReportContextWarning.value
   if (query.sourceId) return '已读取到可用上下文'
+  if (hasJdColdStartInput.value) return '已识别岗位描述，将按关键词匹配正式题库'
   if (loading.value) return '正在读取最近上下文'
   return '会自动查找最近的简历、岗位描述或学习计划'
 })
@@ -723,6 +728,9 @@ const fallbackEvidenceSummary = computed(() =>
     ? `暂时缺少可直接生成专项题的匹配报告，先围绕“${fallbackKeyword.value}”做岗位关键词练习。`
     : '暂时缺少可直接生成专项题的匹配报告，先做一组通用训练保持训练节奏。'
 )
+const targetJobId = getQueryNumber('targetJobId')
+const jdText = getQueryText('jdText', 'jobDescription', 'description')
+const hasJdColdStartInput = computed(() => Boolean(targetJobId || jdText))
 const compactRouterQuery = (params: Record<string, RouterQueryValue>) => {
   const result: LocationQueryRaw = {}
   Object.entries(params).forEach(([key, value]) => {
@@ -843,6 +851,32 @@ const setFallbackDiagnostic = (message?: string) => {
   }
 }
 
+/**
+ * JD 关键词规则版冷启动：新用户没有任何画像/报告/计划（sourceId 为空），
+ * 但路由携带 targetJobId 或 JD 文本时，直接按关键词匹配正式题库返回带理由的推荐题。
+ * 返回 true 表示成功拿到推荐题，调用方应直接渲染、不再走 random 兜底。
+ */
+const loadJdColdStartRecommendations = async () => {
+  if (!hasJdColdStartInput.value) return false
+  const payload: QuestionRecommendationJdDTO = {
+    targetJobId: targetJobId || undefined,
+    jdText: jdText || undefined,
+    limit: query.questionCount
+  }
+  const result = await getQuestionRecommendationsByJdApi(payload)
+  if (!result || !result.length) return false
+  items.value = result
+  generationDiagnostic.value = {
+    status: 'SUCCESS',
+    questionCount: result.length,
+    sourceType: QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_KEYWORD,
+    trustStatus: 'PARTIAL',
+    evidenceSummary: '根据岗位描述命中的知识点，从正式题库匹配出对应题目。',
+    fallback: false
+  }
+  return true
+}
+
 const loadRecommendations = async () => {
   loading.value = true
   loadError.value = ''
@@ -864,6 +898,13 @@ const loadRecommendations = async () => {
     }
 
     if (!query.sourceId) {
+      let coldStarted = false
+      try {
+        coldStarted = await loadJdColdStartRecommendations()
+      } catch (error) {
+        coldStarted = false
+      }
+      if (coldStarted) return
       setFallbackDiagnostic(matchReportContextWarning.value)
       items.value = []
       return
@@ -896,6 +937,16 @@ const generateRecommendations = async () => {
       }
     }
     if (!query.sourceId) {
+      let coldStarted = false
+      try {
+        coldStarted = await loadJdColdStartRecommendations()
+      } catch (error) {
+        coldStarted = false
+      }
+      if (coldStarted) {
+        ElMessage.success('已根据岗位描述匹配到推荐题目，可直接开始练习。')
+        return
+      }
       setFallbackDiagnostic(matchReportContextWarning.value)
       ElMessage.info(fallbackKeyword.value ? '暂未找到可信推荐依据，先按关键词练一组。' : '暂未找到可信推荐依据，先做一组通用训练。')
       startFallbackPractice()

@@ -272,6 +272,7 @@ const loading = ref(true)
 const taskError = ref('')
 const overviewError = ref('')
 const readinessError = ref('')
+const readinessPending = ref(false)
 const completingId = ref<number | null>(null)
 const tasks = ref<AgentTaskVO[]>([])
 const overview = ref<UserDashboardOverviewVO | null>(null)
@@ -351,6 +352,7 @@ const readinessSummary = computed(() => {
     const missing = Number(snapshot?.missingCount ?? 0)
     return missing > 0 ? `仍有 ${missing} 项岗位要求待补齐` : '当前快照未识别出待补齐的岗位要求'
   }
+  if (readinessPending.value && !snapshot) return '正在加载准备度快照…'
   return snapshot?.sampleInsufficient || snapshot?.fallback
     ? '当前证据不足，暂不展示准备度分数'
     : '尚未生成可解释的岗位准备度快照'
@@ -599,9 +601,13 @@ const retryTasks = () => {
 const loadAll = async (force = false) => {
   loading.value = true
   try {
-    const [overviewRes, v3OverviewRes] = await Promise.allSettled([
+    // 首屏三路独立数据并行拉取（2026-09-09 测评整改）：
+    // 资料概览 / V3 概览（含当前岗位）/ 今日任务彼此无依赖，
+    // 原串行实现把首屏拉长到 10 秒级，改为并行后按最慢一路结算。
+    const [overviewRes, v3OverviewRes, taskRes] = await Promise.allSettled([
       fetchCachedDashboardOverview(force),
-      getV3DashboardOverviewApi({ silentError: true })
+      getV3DashboardOverviewApi({ silentError: true }),
+      fetchCachedTodayAgentTasks(businessDate.value, force)
     ])
     if (overviewRes.status === 'fulfilled') {
       overview.value = overviewRes.value
@@ -609,36 +615,38 @@ const loadAll = async (force = false) => {
     } else {
       overviewError.value = getErrorMessage(overviewRes.reason, '资料概览加载失败，请稍后重试。')
     }
-    if (v3OverviewRes.status === 'fulfilled') {
-      v3Overview.value = v3OverviewRes.value
-      const targetJobId = Number(
-        v3Overview.value?.currentTargetJob?.targetJobId || v3Overview.value?.currentTargetJob?.id
-      )
-      if (Number.isFinite(targetJobId) && targetJobId > 0) {
-        try {
-          readinessSnapshot.value = await getLatestJobReadinessApi(targetJobId, {
-            silentError: true
-          })
-          readinessError.value = ''
-        } catch (error) {
-          readinessError.value = getErrorMessage(error, '准备度加载失败，请稍后重试。')
-        }
-      } else {
-        readinessSnapshot.value = null
-        readinessError.value = ''
-      }
-    } else {
-      readinessError.value = getErrorMessage(v3OverviewRes.reason, '准备度所需资料加载失败，请稍后重试。')
-    }
-    const [taskRes] = await Promise.allSettled([
-      fetchCachedTodayAgentTasks(businessDate.value, force)
-    ])
     if (taskRes.status === 'fulfilled') {
       tasks.value = Array.isArray(taskRes.value?.tasks) ? taskRes.value.tasks : []
       taskError.value = ''
       gameProfile.syncMissionTotal(tasks.value.length)
     } else {
       taskError.value = getErrorMessage(taskRes.reason, '今日任务加载失败，请稍后重试。')
+    }
+    if (v3OverviewRes.status === 'fulfilled') {
+      v3Overview.value = v3OverviewRes.value
+      const targetJobId = Number(
+        v3Overview.value?.currentTargetJob?.targetJobId || v3Overview.value?.currentTargetJob?.id
+      )
+      if (Number.isFinite(targetJobId) && targetJobId > 0) {
+        // 准备度快照依赖当前岗位结果，改为后台补齐、不阻塞首屏内容渲染
+        readinessPending.value = true
+        void getLatestJobReadinessApi(targetJobId, { silentError: true })
+          .then((snapshot) => {
+            readinessSnapshot.value = snapshot
+            readinessError.value = ''
+          })
+          .catch((error) => {
+            readinessError.value = getErrorMessage(error, '准备度加载失败，请稍后重试。')
+          })
+          .finally(() => {
+            readinessPending.value = false
+          })
+      } else {
+        readinessSnapshot.value = null
+        readinessError.value = ''
+      }
+    } else {
+      readinessError.value = getErrorMessage(v3OverviewRes.reason, '准备度所需资料加载失败，请稍后重试。')
     }
   } finally {
     loading.value = false
@@ -1149,6 +1157,23 @@ onMounted(async () => {
     &__guide {
       padding: 18px;
     }
+  }
+}
+
+/* 2026-09-09 测评整改：375px 下 KPI 卡文字挤压换行，收紧字号与内边距并截断辅助文案 */
+@media (max-width: 480px) {
+  .arena-home__kpi {
+    padding: 12px 14px;
+  }
+
+  .arena-home__kpi-val {
+    font-size: 24px;
+  }
+
+  .arena-home__kpi-delta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 </style>

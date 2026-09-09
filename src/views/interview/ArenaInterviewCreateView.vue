@@ -240,6 +240,9 @@
                     </el-form-item>
                     <el-form-item label="题目数量">
                       <el-input-number v-model="form.questionCount" :min="1" :max="20" />
+                      <small v-if="(form.questionCount ?? 0) < 6" class="arena-tiny" style="color: var(--arena-red, #b3423a); display: block; margin-top: 4px">
+                        题目少于 6 题时主动结束将无法生成可信评分报告（系统至少需要 6 条有效回答）
+                      </small>
                     </el-form-item>
                   </div>
                 </div>

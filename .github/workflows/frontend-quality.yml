@@ -25,3 +25,27 @@ jobs:
 
       - name: Run frontend quality gate
         run: npm run check:quality
+
+  acceptance:
+    # Phase 3：对测试环境跑 20 项验收（健康/冷启动/作答点评/错题调度/旧 URL/导航）。
+    # 依赖测试环境已部署；环境不可达时 fail 并标注，便于区分“环境挂了”与“代码回归”。
+    runs-on: ubuntu-latest
+    needs: quality
+    if: vars.RUN_ACCEPTANCE == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run acceptance checks against test environment
+        env:
+          ACCEPTANCE_BASE_URL: ${{ vars.ACCEPTANCE_BASE_URL || 'http://103.236.97.252:30080' }}
+          ACCEPTANCE_USERNAME: ${{ secrets.ACCEPTANCE_USERNAME }}
+          ACCEPTANCE_PASSWORD: ${{ secrets.ACCEPTANCE_PASSWORD }}
+        run: |
+          node scripts/acceptance-check.mjs "$ACCEPTANCE_BASE_URL" "$ACCEPTANCE_USERNAME" "$ACCEPTANCE_PASSWORD"

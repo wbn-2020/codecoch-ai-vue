@@ -111,9 +111,9 @@
           <button
             class="user-app-shell__icon-button user-app-shell__icon-button--help"
             type="button"
-            aria-label="打开帮助与记录工具"
-            title="帮助与工具"
-            @click="go('/tools')"
+            aria-label="打开通知中心"
+            title="通知中心"
+            @click="go('/notifications')"
           >
             <CircleHelp :size="18" aria-hidden="true" />
           </button>
@@ -770,7 +770,19 @@ onBeforeUnmount(() => {
 @media (max-width: 720px) {
   .user-app-shell__topbar {
     min-height: 56px;
-    padding-inline: 12px;
+    padding-inline: 12px max(12px, env(safe-area-inset-right));
+  }
+
+  // 2026-09-09 测评整改：移动端触控热区从 32px 提升到 40px，
+  // 并限制账户名宽度，避免顶栏头像/姓名被挤出可视区
+  .user-app-shell__menu-trigger,
+  .user-app-shell__icon-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .user-app-shell__avatar-name {
+    max-width: 76px;
   }
 
   .user-app-shell__topbar-actions {

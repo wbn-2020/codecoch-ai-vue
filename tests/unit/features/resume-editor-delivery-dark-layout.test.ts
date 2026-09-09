@@ -97,7 +97,8 @@ describe('resume editor and delivery workspace layout', () => {
     const workbench = readSource('src/views/resume/components/ResumeDeliveryWorkbench.vue')
     const artifactPanel = readSource('src/views/resume/components/ResumeArtifactDeliveryPanel.vue')
 
-    expect(list).toMatch(/\.resume-hero\s*\{[\s\S]*?grid-template-columns:/)
+    // 2026-09-09 测评整改：删除早已被 display:none 隐藏的 legacy hero（与 PageHeader 重复的双 h1 来源），
+    // 对应 .resume-hero/.hero-* 样式与守卫同步移除；720px 媒体块仍承载卡片类响应式规则。
     expect(list).toMatch(/@media\s*\(max-width:\s*720px\)/)
     expect(workbench).toMatch(/@media\s*\(max-width:\s*680px\)/)
     expect(workbench).toMatch(/\.delivery-grid\s*\{[\s\S]*?minmax\(0,\s*0\.72fr\)\s+minmax\(520px,\s*1\.28fr\)/)

@@ -196,6 +196,19 @@
                     {{ selectedPlan.startDate || '待重新生成确认' }}
                   </span>
                 </div>
+                <div class="plan-adjust-row">
+                  <el-button
+                    size="small"
+                    type="primary"
+                    plain
+                    :loading="adjusting"
+                    @click="handleAdjustPlan"
+                  >
+                    <Wand2 :size="14" />
+                    动态调整计划
+                  </el-button>
+                  <small>过期任务自动延期；到期错题自动排入今天复习。</small>
+                </div>
               </div>
               <el-tag :type="statusType(selectedPlan.planStatus)" effect="plain">
                 {{ statusText(selectedPlan.planStatus) }}
@@ -409,7 +422,7 @@
 <script setup lang="ts">
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { History, RefreshCcw, Route, Sparkles } from 'lucide-vue-next'
+import { History, RefreshCcw, Route, Sparkles, Wand2 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -419,7 +432,8 @@ import {
   getStudyPlanDetailApi,
   getStudyPlansApi,
   streamStudyPlanGenerateApi,
-  updateStudyTaskStatusApi
+  updateStudyTaskStatusApi,
+  adjustStudyPlanApi
 } from '@/api/studyPlan'
 import { getUserDashboardOverviewApi } from '@/api/dashboard'
 import AppState from '@/components/common/AppState.vue'
@@ -452,6 +466,29 @@ const detailLoading = ref(false)
 const generating = ref(false)
 const plans = ref<StudyPlanListVO[]>([])
 const selectedPlan = ref<StudyPlanDetailVO | null>(null)
+const adjusting = ref(false)
+
+const handleAdjustPlan = async () => {
+  const plan = selectedPlan.value
+  if (!plan?.id || adjusting.value) return
+  adjusting.value = true
+  try {
+    const result = await adjustStudyPlanApi(plan.id)
+    const parts: string[] = []
+    if (result.rescheduledCount) parts.push(`延期 ${result.rescheduledCount} 个过期任务`)
+    if (result.addedReviewCount) parts.push(`排入 ${result.addedReviewCount} 个到期错题复习`)
+    if (parts.length) {
+      ElMessage.success(`调整完成：${parts.join('，')}`)
+    } else {
+      ElMessage.info(result.message || '无需调整，所有任务按时完成')
+    }
+    await Promise.allSettled([fetchPlans(), fetchDailyView()])
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '计划调整失败，请稍后重试。'))
+  } finally {
+    adjusting.value = false
+  }
+}
 const tasks = ref<StudyTaskVO[]>([])
 const dailyView = ref<StudyPlanDailyViewVO | null>(null)
 const dailyLoading = ref(false)
@@ -1131,6 +1168,19 @@ onBeforeUnmount(() => {
 
 .form-actions {
   align-self: end;
+}
+
+.plan-adjust-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.plan-adjust-row small {
+  color: var(--user-text-muted, #6b6b66);
+  font-size: 12px;
 }
 
 .plan-config {

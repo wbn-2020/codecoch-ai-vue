@@ -3,17 +3,17 @@
     <PageHeader
       eyebrow="求职资料"
       :icon="Target"
-      title="项目证据库"
-      description="将真实项目沉淀为可用于简历表达、JD 匹配和面试追问的证据。"
+      title="我的项目"
+      description="沉淀项目事实与证据，供简历表达、岗位匹配和面试追问共同引用。简历里的项目经历也汇聚在这里。"
     >
       <template #actions>
-        <el-button @click="router.push('/resumes')">
+        <el-button @click="router.push('/resumes/manage')">
           <FileText :size="16" />
-          简历准备
+          简历管理
         </el-button>
         <el-button type="primary" @click="router.push('/project-evidence/create')">
           <Plus :size="16" />
-          新建项目证据
+          新建项目
         </el-button>
       </template>
     </PageHeader>
@@ -21,14 +21,14 @@
     <ModuleTabs :items="moduleTabs" />
 
     <section class="cc-metric-grid">
-      <MetricCard label="证据总量" :value="totalEvidenceCount" detail="来自当前查询结果，不额外推断项目数量。" />
+      <MetricCard label="项目总数" :value="totalEvidenceCount" detail="来自当前查询结果，不额外推断项目数量。" />
       <MetricCard label="可用于追问" :value="readyEvidenceCount" detail="完整度达到可复用状态的项目。" tone="success" />
-      <MetricCard label="待补充证据" :value="gapEvidenceCount" detail="仍缺背景、贡献、结果或能力证据。" :tone="gapEvidenceCount ? 'warning' : 'default'" />
+      <MetricCard label="待补充项目" :value="gapEvidenceCount" detail="仍缺背景、贡献、结果或能力证据。" :tone="gapEvidenceCount ? 'warning' : 'default'" />
     </section>
 
     <DataTableFrame
       title="项目证据"
-      description="先找到最需要补强的项目，再进入详情完善证据。"
+      description="先找到最需要补强的项目，再进入详情完善证据。简历中的项目经历可在简历工作台同步为项目证据。"
     >
       <template #filters>
         <FilterBar>
@@ -58,7 +58,7 @@
       >
         <div class="state-actions">
           <el-button type="primary" @click="fetchList">重新加载</el-button>
-          <el-button @click="router.push('/resumes')">返回准备</el-button>
+          <el-button @click="router.push('/resumes/workbench')">返回简历工作台</el-button>
         </div>
       </AppState>
 
@@ -129,15 +129,15 @@
 
       <EmptyState
         v-else
-        title="还没有可复用的项目证据"
-        description="先沉淀一个真实项目，补齐背景、个人贡献、技术难点和量化结果，后续才能支撑简历、JD 匹配和面试追问。"
+        title="还没有沉淀任何项目"
+        description="先添加一个真实项目，补齐背景、个人贡献、技术难点和量化结果，后续才能支撑简历表达、岗位匹配和面试追问。简历里的项目经历也可以在简历工作台一键转为项目证据。"
       >
         <template #icon>
           <BriefcaseBusiness :size="20" />
         </template>
         <template #actions>
-          <el-button type="primary" @click="router.push('/project-evidence/create')">新建项目证据</el-button>
-          <el-button @click="router.push('/resumes')">回到简历工作台</el-button>
+          <el-button type="primary" @click="router.push('/project-evidence/create')">新建项目</el-button>
+          <el-button @click="router.push('/resumes/workbench')">打开简历工作台</el-button>
         </template>
       </EmptyState>
 

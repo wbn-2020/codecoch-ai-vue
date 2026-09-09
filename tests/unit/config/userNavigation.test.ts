@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getAllUserNavigationGroups,
   getVisibleUserNavigationGroups,
+  mobilePrimaryNavigationKeys,
+  PRIMARY_NAVIGATION_KEYS,
   resolveUserNavigationGroup,
   resolveUserNavigationItem,
   userNavigationGroups,
@@ -16,55 +19,92 @@ const allFeatures: UserNavigationFeatureState = {
   v9EvidenceLearning: true
 }
 
-describe('userNavigation', () => {
-  it('defines job-search-oriented information architecture groups', () => {
-    expect(userNavigationGroups.map((group) => group.label)).toEqual([
+describe('userNavigation P0 six-entry IA', () => {
+  it('exposes exactly the six P0 primary groups in product order', () => {
+    const visible = getVisibleUserNavigationGroups(allFeatures)
+
+    expect(visible.map((group) => group.key)).toEqual(PRIMARY_NAVIGATION_KEYS)
+    expect(visible.map((group) => group.label)).toEqual([
       '今日',
-      '简历准备',
-      '岗位匹配',
-      '面试训练',
-      '模拟面试',
-      '投递管理',
-      '求职资料',
-      '成长分析'
+      '求职',
+      '资料',
+      '面试',
+      '训练',
+      '准备度'
     ])
   })
 
-  it('keeps applications as a first-class navigation group outside compact overflow', () => {
-    const applicationsGroup = userNavigationGroups.find((group) => group.key === 'progress')
+  it('keeps prepare/matching as non-primary logic groups for module tabs only', () => {
+    const visibleKeys = getVisibleUserNavigationGroups(allFeatures).map((group) => group.key)
 
-    expect(applicationsGroup?.label).toBe('投递管理')
-    expect(applicationsGroup?.compactOverflow).toBeUndefined()
-    expect(applicationsGroup?.items.map((item) => item.path)).toContain('/applications')
+    expect(visibleKeys).not.toContain('prepare')
+    expect(visibleKeys).not.toContain('matching')
+
+    const allKeys = userNavigationGroups.map((group) => group.key)
+    expect(allKeys).toContain('prepare')
+    expect(allKeys).toContain('matching')
   })
 
-  it('keeps feature-gated destinations out of the visible navigation', () => {
-    const groups = getVisibleUserNavigationGroups({
-      ...allFeatures,
-      v4Growth: false,
-      v4Knowledge: false,
-      v6WeeklyReport: false,
-      v9EvidenceLearning: false
-    })
-    const paths = groups.flatMap((group) => group.items.map((item) => item.path))
+  it('covers the P0 primary destinations in the visible navigation', () => {
+    const paths = getVisibleUserNavigationGroups(allFeatures)
+      .flatMap((group) => group.items.map((item) => item.path))
 
+    expect(paths).toContain('/dashboard')
+    expect(paths).toContain('/job-targets')
+    expect(paths).toContain('/resume-match')
+    expect(paths).toContain('/applications')
+    expect(paths).toContain('/career-calendar')
+    expect(paths).toContain('/resumes/workbench')
+    expect(paths).toContain('/project-evidence')
+    expect(paths).toContain('/interviews/create')
+    expect(paths).toContain('/interviews/history')
+    expect(paths).toContain('/questions/recommendations')
+    expect(paths).toContain('/questions/wrong-records')
+    expect(paths).toContain('/study-plans')
+    expect(paths).toContain('/ability-map')
+    expect(paths).toContain('/skill-profile')
+    expect(paths).toContain('/weakness-analysis')
+  })
+
+  it('keeps removed P0 destinations out of the visible navigation regardless of feature flags', () => {
+    const paths = getVisibleUserNavigationGroups(allFeatures)
+      .flatMap((group) => group.items.map((item) => item.path))
+
+    expect(paths).not.toContain('/agent/tasks')
     expect(paths).not.toContain('/agent/reviews')
     expect(paths).not.toContain('/agent/weekly-reports')
     expect(paths).not.toContain('/agent/memory')
     expect(paths).not.toContain('/knowledge')
     expect(paths).not.toContain('/evidence-assets')
-    expect(paths).toContain('/applications')
-    expect(paths).toContain('/project-evidence')
+    expect(paths).not.toContain('/portfolio-demo')
+    expect(paths).not.toContain('/job-experiments')
+    expect(paths).not.toContain('/arena/leaderboard')
+    expect(paths).not.toContain('/arena/battle')
+    expect(paths).not.toContain('/tools')
+    expect(paths).not.toContain('/daily-tasks')
+    expect(paths).not.toContain('/questions/favorites')
+    expect(paths).not.toContain('/analytics/personal')
+    expect(paths).not.toContain('/resume-versions')
+    expect(paths).not.toContain('/application-packages')
+    expect(paths).not.toContain('/onboarding')
   })
 
+  it('keeps mobile primary navigation within the P0 set', () => {
+    mobilePrimaryNavigationKeys.forEach((key) => {
+      expect(PRIMARY_NAVIGATION_KEYS).toContain(key)
+    })
+  })
+})
+
+describe('userNavigation route matching', () => {
   it('uses route name before exact path when ownership signals conflict', () => {
     const resolved = resolveUserNavigationItem({
-      name: 'AgentWeeklyReports',
-      path: '/agent/today'
+      name: 'InterviewRoom',
+      path: '/questions'
     })
 
-    expect(resolved?.group.key).toBe('progress')
-    expect(resolved?.item.key).toBe('weekly-reports')
+    expect(resolved?.group.key).toBe('interview')
+    expect(resolved?.item.key).toBe('interview-history')
   })
 
   it('uses an exact path before a broader matching prefix', () => {
@@ -72,20 +112,28 @@ describe('userNavigation', () => {
       path: '/resumes/manage'
     })
 
-    expect(resolved?.group.key).toBe('prepare')
+    expect(resolved?.group.key).toBe('resources')
     expect(resolved?.item.key).toBe('resume-management')
   })
 
   it('routes the resume workbench to an editable resume instead of the preparation guide', () => {
-    const workbench = userNavigationGroups
-      .find((group) => group.key === 'prepare')
-      ?.items.find((item) => item.key === 'resume-workbench')
-
-    expect(workbench?.path).toBe('/resumes/workbench')
     expect(resolveUserNavigationItem({ name: 'ResumeJobHub', path: '/resumes' })?.item.key)
       .not.toBe('resume-workbench')
     expect(resolveUserNavigationItem({ name: 'ResumeEdit', path: '/resumes/42/edit' })?.item.key)
       .toBe('resume-workbench')
+  })
+
+  it('does not select a navigation group for unrelated routes', () => {
+    expect(resolveUserNavigationGroup(
+      { path: '/profile' },
+      userNavigationGroups
+    )).toBeNull()
+  })
+
+  it('keeps compatibility routes owned without changing their paths', () => {
+    expect(resolveUserNavigationGroup({ name: 'ResumeEdit', path: '/resumes/42/edit' })?.key).toBe('resources')
+    expect(resolveUserNavigationGroup({ name: 'ApplicationWorkspace', path: '/applications/42' })?.key).toBe('progress')
+    expect(resolveUserNavigationGroup({ name: 'WeaknessAnalysis', path: '/weakness-analysis' })?.key).toBe('growth')
   })
 
   it('uses the longest matching prefix when no route name or exact path is available', () => {
@@ -134,10 +182,13 @@ describe('userNavigation', () => {
     expect(resolved?.group.key).toBe('progress')
     expect(resolved?.item.key).toBe('specific')
   })
+})
 
-  it('keeps compatibility routes owned without changing their paths', () => {
-    expect(resolveUserNavigationGroup({ name: 'RecordsTools', path: '/tools' })?.key).toBe('resources')
-    expect(resolveUserNavigationGroup({ name: 'ResumeEdit', path: '/resumes/42/edit' })?.key).toBe('prepare')
-    expect(resolveUserNavigationGroup({ name: 'ApplicationWorkspace', path: '/applications/42' })?.key).toBe('progress')
+describe('userNavigation module tabs compatibility', () => {
+  it('still exposes all logic groups for in-page module tabs', () => {
+    const all = getAllUserNavigationGroups(allFeatures)
+    const keys = all.map((group) => group.key)
+
+    expect(keys).toEqual(expect.arrayContaining(['prepare', 'matching', 'train', 'resources']))
   })
 })

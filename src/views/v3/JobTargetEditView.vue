@@ -71,6 +71,7 @@ import AppState from '@/components/common/AppState.vue'
 import PageHeader from '@/components/user-ui/PageHeader.vue'
 import type { TargetJobSaveDTO } from '@/types/jobTarget'
 import { getErrorMessage } from '@/utils/error'
+import { trackFunnelStep } from '@/utils/funnel'
 
 import JobTargetForm from './components/JobTargetForm.vue'
 
@@ -122,6 +123,9 @@ const handleSubmit = async (value: TargetJobSaveDTO) => {
     const saved = isEdit.value && targetId.value
       ? await updateJobTargetApi(targetId.value, value)
       : await createJobTargetApi(value)
+    if (!isEdit.value) {
+      trackFunnelStep('funnel_job_created', { bizId: saved?.id ?? undefined, sourcePage: 'job-target-edit' })
+    }
     ElMessage.success(isEdit.value ? '岗位目标已更新' : '岗位目标已创建')
     await router.push(`/job-targets/${saved.id}/analysis`)
   } finally {

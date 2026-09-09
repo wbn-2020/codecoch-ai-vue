@@ -91,7 +91,9 @@ describe('AbilityMapView layout', () => {
   it('uses the compact Direction D skill board and places the action rail within the visible grid', async () => {
     const wrapper = await mountAbilityMap(false)
 
-    expect(wrapper.find('.ability-summary').exists()).toBe(true)
+    // 2026-09-09 测评整改：移除方向 D 布局下已被 display:none 隐藏的 .growth-hero.ability-summary
+    // （与 PageHeader 重复的双 h1 来源），汇总职责由技能树头部承接
+    expect(wrapper.find('.ability-tree-head').exists()).toBe(true)
     expect(wrapper.find('.ability-tree-layout').exists()).toBe(true)
     expect(wrapper.find('.ability-node-board').exists()).toBe(true)
     expect(wrapper.find('.ability-action-rail').exists()).toBe(true)

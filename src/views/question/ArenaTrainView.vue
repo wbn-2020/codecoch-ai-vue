@@ -116,11 +116,13 @@ import {
   getQuestionRecommendationBatchesApi,
   getQuestionRecommendationItemsFromGapBatchApi,
   getQuestionRecommendationItemsFromStudyPlanBatchApi,
+  getQuestionRecommendationsByJdApi,
   submitQuestionRecommendationsFromGapApi,
   submitQuestionRecommendationsFromMatchReportApi,
   submitQuestionRecommendationsFromStudyPlanApi
 } from '@/api/questionRecommendation'
 import { getResumeJobMatchReportDetailApi, getResumeJobMatchReportsApi } from '@/api/resumeJobMatch'
+import { getCurrentJobTargetApi } from '@/api/jobTarget'
 import { generateSkillProfileApi, getSkillProfileOverviewApi } from '@/api/skillProfile'
 import { getStudyPlansApi } from '@/api/studyPlan'
 import HeroBand from '@/components/user-ui/HeroBand.vue'
@@ -133,9 +135,11 @@ import {
   type QuestionRecommendationBatchDetailVO,
   type QuestionRecommendationGenerateVO,
   type QuestionRecommendationItemVO,
+  type QuestionRecommendationJdDTO,
   type QuestionRecommendationStatus
 } from '@/types/questionRecommendation'
 import { getErrorMessage } from '@/utils/error'
+import { trackFunnelStep } from '@/utils/funnel'
 
 type Source = 'gap' | 'matchReport' | 'studyPlan'
 type RouterQueryValue = string | number | boolean | null | undefined
@@ -175,6 +179,7 @@ const sourceByRouteValue: Record<string, Source> = {
   JD_GAP: 'gap',
   matchReport: 'matchReport',
   RESUME_JOB_MATCH: 'matchReport',
+  resumeMatchReport: 'matchReport',
   studyPlan: 'studyPlan',
   STUDY_PLAN: 'studyPlan'
 }
@@ -251,12 +256,14 @@ const sourceLabels: Record<string, string> = {
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP]: '能力短板',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH]: '匹配报告',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.STUDY_PLAN]: '学习计划',
+  [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_KEYWORD]: 'JD 关键词',
   FALLBACK: '通用练习'
 }
 const sourceTrustLabels: Record<string, string> = {
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_GAP]: '来自岗位要求 / 能力画像',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.RESUME_JOB_MATCH]: '来自简历匹配报告',
   [QUESTION_RECOMMENDATION_SOURCE_TYPE.STUDY_PLAN]: '来自学习计划',
+  [QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_KEYWORD]: '来自岗位描述关键词',
   FALLBACK: '推荐依据不足'
 }
 
@@ -330,8 +337,7 @@ const todayPlanName = computed(() => {
 })
 const todayFocusTitle = computed(() => {
   if (hasPracticeQuestions.value) return `今天先练：${todayPlanName.value}`
-  if (query.sourceId && !items.value.length) return '推荐题还没准备好，先保留通用训练入口'
-  return '暂无可信专项来源，先做通用训练'
+  return '推荐训练'
 })
 const todayFocusLead = computed(() => {
   if (hasPracticeQuestions.value) {
@@ -341,7 +347,16 @@ const todayFocusLead = computed(() => {
   return '没有可靠简历、岗位、能力画像或学习计划时，不会伪造专项推荐；页面会诚实提供通用训练。'
 })
 const todayReasonText = computed(() => {
-  if (generationDiagnostic.value?.fallback || !query.sourceId) return fallbackEvidenceSummary.value
+  if (hasPracticeQuestions.value) {
+    const sourceText = generationDiagnostic.value?.evidenceSummary || sourceDescription.value
+    return `${sourceText} 练完后建议提交点评，并把错题或不稳回答带回下一轮训练。`
+  }
+  if (query.sourceId && !items.value.length) {
+    return '推荐题还没准备好，先保留通用训练入口。已经找到推荐依据，但当前没有返回可直接练的题；可以重新生成，或先做一组通用题保持节奏。'
+  }
+  if (generationDiagnostic.value?.fallback || !query.sourceId) {
+    return `暂无可信专项来源，先做通用训练。${fallbackEvidenceSummary.value}`
+  }
   const sourceText = generationDiagnostic.value?.evidenceSummary || sourceDescription.value
   return `${sourceText} 练完后建议提交点评，并把错题或不稳回答带回下一轮训练。`
 })
@@ -374,6 +389,10 @@ const generationSourceLabel = computed(() => {
 const contextStatusText = computed(() => {
   if (matchReportContextWarning.value) return matchReportContextWarning.value
   if (query.sourceId) return '已读取到可用上下文'
+  if (getQueryNumber('targetJobId') || getQueryText('jdText', 'jobDescription', 'description')) {
+    return '已识别岗位描述，将按关键词匹配正式题库'
+  }
+  if (resolvedCurrentJobId.value) return '已读取当前主岗位，按 JD 关键词匹配正式题库'
   if (loading.value) return '正在读取最近上下文'
   return '会自动查找最近的简历、岗位描述或学习计划'
 })
@@ -582,6 +601,29 @@ const fallbackEvidenceSummary = computed(() =>
     ? `暂时缺少可直接生成专项题的匹配报告，先围绕“${fallbackKeyword.value}”做岗位关键词练习。`
     : '暂时缺少可直接生成专项题的匹配报告，先做一组通用训练保持训练节奏。'
 )
+const jdColdStartTargetJobId = getQueryNumber('targetJobId')
+const jdColdStartText = getQueryText('jdText', 'jobDescription', 'description')
+/**
+ * 路由未携带冷启动参数（如从主导航直接进入）时，回退读取当前主岗位。
+ * 只有已解析（PARSED）岗位才有可用的 JD 关键词，未解析时保持原兜底路径，
+ * 避免把通用高频题伪装成岗位定向题。
+ */
+const resolvedCurrentJobId = ref<number | undefined>(undefined)
+const currentJobResolved = ref(false)
+const resolveCurrentJobForColdStart = async () => {
+  if (jdColdStartTargetJobId || jdColdStartText || currentJobResolved.value) return
+  currentJobResolved.value = true
+  try {
+    const current = await getCurrentJobTargetApi()
+    if (current?.id && String(current.parseStatus || '').toUpperCase() === 'PARSED') {
+      resolvedCurrentJobId.value = current.id
+    }
+  } catch {
+    /* 无当前岗位或接口异常时静默，按通用训练兜底 */
+  }
+}
+const effectiveJdTargetJobId = computed(() => jdColdStartTargetJobId || resolvedCurrentJobId.value)
+const hasEffectiveJdInput = computed(() => Boolean(jdColdStartTargetJobId || jdColdStartText || resolvedCurrentJobId.value))
 const compactRouterQuery = (params: Record<string, RouterQueryValue>) => {
   const result: LocationQueryRaw = {}
   Object.entries(params).forEach(([key, value]) => {
@@ -702,6 +744,36 @@ const setFallbackDiagnostic = (message?: string) => {
   }
 }
 
+/**
+ * JD 关键词规则版冷启动：新用户没有任何画像/报告/计划（sourceId 为空），
+ * 或已有画像但批次尚未产出可练题时，按岗位 JD 关键词匹配正式题库返回带理由的推荐题。
+ * 岗位来源优先级：路由 targetJobId > 当前主岗位（PARSED）；也支持直接粘贴 JD 文本。
+ * 返回 true 表示成功拿到推荐题，调用方应直接渲染、不再走 random 兜底。
+ */
+const loadJdColdStartRecommendations = async () => {
+  await resolveCurrentJobForColdStart()
+  if (!hasEffectiveJdInput.value) return false
+  const payload: QuestionRecommendationJdDTO = {
+    targetJobId: effectiveJdTargetJobId.value || undefined,
+    jdText: jdColdStartText || undefined,
+    limit: query.questionCount
+  }
+  const result = await getQuestionRecommendationsByJdApi(payload)
+  if (!result || !result.length) return false
+  items.value = result
+  generationDiagnostic.value = {
+    status: 'SUCCESS',
+    questionCount: result.length,
+    sourceType: QUESTION_RECOMMENDATION_SOURCE_TYPE.JD_KEYWORD,
+    trustStatus: 'PARTIAL',
+    evidenceSummary: resolvedCurrentJobId.value && !jdColdStartTargetJobId
+      ? '根据当前主岗位的岗位描述命中的知识点，从正式题库匹配出对应题目。'
+      : '根据岗位描述命中的知识点，从正式题库匹配出对应题目。',
+    fallback: false
+  }
+  return true
+}
+
 const loadRecommendations = async () => {
   loading.value = true
   loadError.value = ''
@@ -723,6 +795,13 @@ const loadRecommendations = async () => {
     }
 
     if (!query.sourceId) {
+      let coldStarted = false
+      try {
+        coldStarted = await loadJdColdStartRecommendations()
+      } catch (error) {
+        coldStarted = false
+      }
+      if (coldStarted) return
       setFallbackDiagnostic(matchReportContextWarning.value)
       items.value = []
       return
@@ -730,6 +809,14 @@ const loadRecommendations = async () => {
 
     if (query.source === 'gap') {
       items.value = await getQuestionRecommendationItemsFromGapBatchApi({ skillProfileId: query.sourceId })
+      if (!items.value.length) {
+        // 批次还没有可练题时，回退岗位 JD 关键词冷启动，避免"有岗位却空屏"
+        try {
+          if (await loadJdColdStartRecommendations()) return
+        } catch {
+          /* 冷启动失败时保留原空态与"重新生成"入口 */
+        }
+      }
     } else if (query.source === 'matchReport') {
       const page = await getQuestionRecommendationBatchesApi({
         pageNo: 1,
@@ -769,6 +856,16 @@ const generateRecommendations = async () => {
       }
     }
     if (!query.sourceId) {
+      let coldStarted = false
+      try {
+        coldStarted = await loadJdColdStartRecommendations()
+      } catch (error) {
+        coldStarted = false
+      }
+      if (coldStarted) {
+        ElMessage.success('已根据岗位描述匹配到推荐题目，可直接开始练习。')
+        return
+      }
       setFallbackDiagnostic(matchReportContextWarning.value)
       ElMessage.info(fallbackKeyword.value ? '暂未找到可信推荐依据，先按关键词练一组。' : '暂未找到可信推荐依据，先做一组通用训练。')
       startFallbackPractice()
@@ -939,6 +1036,10 @@ const handleSourceChange = async () => {
 
 onMounted(() => {
   void loadRecommendations()
+  trackFunnelStep('funnel_training_started', {
+    targetJobId: getQueryNumber('targetJobId'),
+    sourcePage: 'arena-train'
+  })
 })
 </script>
 

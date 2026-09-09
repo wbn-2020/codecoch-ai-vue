@@ -60,6 +60,14 @@
         <el-select v-model="query.difficulty" clearable placeholder="难度" @change="handleSearch">
           <el-option v-for="item in difficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
+        <el-button
+          :type="query.dueOnly ? 'primary' : 'default'"
+          :plain="!query.dueOnly"
+          @click="toggleDueOnly"
+        >
+          <CalendarClock :size="15" />
+          {{ query.dueOnly ? '只看到期复习' : '到期复习优先' }}
+        </el-button>
       </div>
 
       <div v-loading="loading" class="question-stream">
@@ -92,7 +100,10 @@
                 <span class="question-time">{{ formatDate(record.lastWrongAt) }}</span>
                 <h3>{{ record.title || '待复习题目' }}</h3>
               </div>
-              <StatusTag :status="record.masteryStatus" :map="masteryMap" />
+              <div class="question-head__tags">
+                <el-tag v-if="record.reviewDue" type="warning" effect="plain" size="small">到期复习</el-tag>
+                <StatusTag :status="record.masteryStatus" :map="masteryMap" />
+              </div>
             </div>
 
             <div class="tag-row">
@@ -144,7 +155,7 @@
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronRight, PenLine, RefreshCw, RotateCcw, Search, Sparkles } from 'lucide-vue-next'
+import { CalendarClock, ChevronRight, PenLine, RefreshCw, RotateCcw, Search, Sparkles } from 'lucide-vue-next'
 
 import { getWrongQuestionsApi, updateQuestionMasteryApi } from '@/api/question'
 import AppState from '@/components/common/AppState.vue'
@@ -169,6 +180,7 @@ const loadError = ref('')
 const query = reactive<WrongQuestionQueryDTO>({
   keyword: '',
   difficulty: '',
+  dueOnly: false,
   pageNo: 1,
   pageSize: 6
 })
@@ -179,9 +191,16 @@ const masteryMap: Record<string, string> = {
   UNKNOWN: '未掌握'
 }
 
-const hasFilters = computed(() => Boolean(query.keyword || query.difficulty))
+const hasFilters = computed(() => Boolean(query.keyword || query.difficulty || query.dueOnly))
 const repeatedWrongCount = computed(() => records.value.filter((record) => (record.wrongCount || 0) >= 2).length)
-const todayReviewCount = computed(() => records.value.filter((record) => shouldReviewToday(record)).length)
+const todayReviewCount = computed(() => {
+  // 到期数据由后端 1/3/7/15 调度给出（reviewDue）；无调度数据时退回旧的启发式判断
+  const withSchedule = records.value.filter((record) => record.nextReviewAt != null)
+  if (withSchedule.length) {
+    return withSchedule.filter((record) => record.reviewDue).length
+  }
+  return records.value.filter((record) => shouldReviewToday(record)).length
+})
 const wrongEmptyDescription = computed(() =>
   hasFilters.value ? '没有匹配当前筛选条件的错题。' : '完成刷题练习后，答错的题会自动沉淀到这里。'
 )
@@ -202,6 +221,11 @@ const formatDate = (value?: string) => {
 
 const reviewHint = (record: WrongQuestionVO) => {
   if (normalizeMastery(record.masteryStatus) === 'MASTERED') return '已掌握，可低频回看'
+  if (record.nextReviewAt != null) {
+    return record.reviewDue
+      ? `已到复习期（${record.reviewIntervalDays || 1} 天档），今天重练一次`
+      : `下一次复习：${formatDate(record.nextReviewAt)}（${record.reviewIntervalDays || 1} 天档）`
+  }
   if ((record.wrongCount || 0) >= 3) return '高频错题，建议今天重练'
   if (String(record.difficulty || '').toUpperCase() === 'HARD') return '先拆概念，再练表达'
   return '适合作为热身复盘'
@@ -242,6 +266,12 @@ const fetchRecords = async () => {
 }
 
 const handleSearch = () => {
+  query.pageNo = 1
+  fetchRecords()
+}
+
+const toggleDueOnly = () => {
+  query.dueOnly = !query.dueOnly
   query.pageNo = 1
   fetchRecords()
 }
@@ -304,6 +334,13 @@ onMounted(fetchRecords)
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.question-head__tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .section-kicker {

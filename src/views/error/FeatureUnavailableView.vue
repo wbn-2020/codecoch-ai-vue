@@ -77,7 +77,7 @@ const capabilityMap: Record<string, { availability: string; actions: FeatureActi
   个人知识库: {
     availability: '需要管理员开放个人知识库入口，并确认资料整理、检索和删除恢复流程稳定后再使用。',
     actions: [
-      { label: '整理项目经历', to: '/projects', type: 'primary' },
+      { label: '整理我的项目', to: '/project-evidence', type: 'primary' },
       { label: '管理简历资料', to: '/resumes/manage' }
     ]
   },

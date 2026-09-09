@@ -130,7 +130,6 @@ import { reactive, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
-import { firstAccessibleAdminPath } from '@/router/adminAccess'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginDTO } from '@/types/auth'
 import { getUserDashboardOverviewApi } from '@/api/dashboard'
@@ -213,19 +212,9 @@ const syncRouteReasonNotice = () => {
 }
 
 const getDefaultPostLoginRoute = async (): Promise<RouteLocationRaw> => {
-  if (authStore.canAccessAdmin) {
-    const adminPath = firstAccessibleAdminPath(authStore)
-    if (adminPath) return adminPath
-    return {
-      path: '/403',
-      query: {
-        reason: 'noAdminMenu',
-        target: '/admin',
-        title: '管理后台'
-      }
-    }
-  }
-
+  // 产品口径（2026-09-09 测评整改）：所有用户默认落地用户工作台，
+  // 避免管理员账号登录后直接跳进管理端造成"进错系统"的身份混淆。
+  // 管理端收敛为顶栏头像菜单「管理端」二级入口（UserAppShell 已按 canAccessAdmin 提供）。
   try {
     const overview = await getUserDashboardOverviewApi()
     return needsUserOnboarding(overview) ? '/onboarding' : '/dashboard'

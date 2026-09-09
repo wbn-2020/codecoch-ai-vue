@@ -17,6 +17,19 @@ tmp-smoke-*.png
 
 # Local editor/project metadata
 .idea/
+.codex/
+NUL
+
+# Local build/verification artifacts
+dist_build_check/
+dist_v15_layout/
+dist_v15_layout2/
+
+# Backup of corrupted .git object store (2026-09-10 rebuild incident)
+.git-corrupted-*/
+
+# Git hygiene analysis scratch output
+orphans.json
 
 # Local smoke-test and browser/debug artifacts
 .codex-logs/

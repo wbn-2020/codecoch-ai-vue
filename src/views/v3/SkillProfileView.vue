@@ -3,7 +3,7 @@
     <PageHeader
       eyebrow="成长分析"
       :icon="Network"
-      :title="overview?.profileName || detail?.profileName || '能力画像'"
+      title="能力画像"
       :description="overview?.summary || detail?.summary || '基于匹配报告和目标岗位展示技能节点、短板与下一步动作。'"
     >
       <template #actions>
