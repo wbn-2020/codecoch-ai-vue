@@ -66,10 +66,10 @@
         v-else-if="isAsyncPlanRunning"
         type="api-pending"
         title="今日计划正在生成"
-        description="计划已进入处理队列。可以先离开，稍后在任务中心查看进度。"
+        :description="planPollingDescription"
       >
-        <el-button type="primary" @click="goAsyncTaskCenter">查看任务进度</el-button>
-        <el-button :loading="loading" @click="loadPage(true)">刷新</el-button>
+        <el-button type="primary" :loading="true">正在为你生成…</el-button>
+        <el-button @click="goAsyncTaskCenter">在任务中心查看</el-button>
       </AppState>
 
       <AppState
@@ -91,7 +91,16 @@
           :closable="false"
           :title="planStatusTitle"
           :description="planStatusMessage"
-        />
+        >
+          <template v-if="dailyPlanSnapshot.operationState === 'SUCCEEDED_DEGRADED'" #default>
+            <div class="plan-status-alert__body">
+              <p>{{ planStatusMessage }}</p>
+              <el-button size="small" type="warning" plain :loading="generating" @click="openGenerateDialog">
+                重新生成完整计划
+              </el-button>
+            </div>
+          </template>
+        </el-alert>
 
         <div v-if="showAsyncTaskEntry" class="plan-async-row">
           <div>
@@ -459,7 +468,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { MoreHorizontal, RefreshCw, Sparkles, WandSparkles } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -498,7 +507,7 @@ import {
   resolveAgentTaskPlanChangeOrigin,
   resolveAgentWeekPlanChangeOrigin
 } from '@/features/agent-plan-change'
-import { preferTerminalAsyncOperationSnapshot } from '@/features/async-operation-state'
+import { isAsyncOperationPending, preferTerminalAsyncOperationSnapshot, resolveAsyncOperationState } from '@/features/async-operation-state'
 import { resolveDailyPlanState } from '@/features/daily-plan-state'
 import { buildAgentWeekPlan } from '@/features/agent-week-plan'
 import { buildAgentWeekPlanFromBackend, hasBackendWeekPlanItems } from '@/features/agent-week-plan-backend'
@@ -750,6 +759,97 @@ const allAgentTasksDone = computed(() => dailyPlanState.value === 'COMPLETED')
 const isPlanExecutionFailure = computed(() => dailyPlanState.value === 'FAILED')
 const isAsyncPlanRunning = computed(() => dailyPlanState.value === 'PROCESSING')
 const showAsyncTaskEntry = computed(() => hasAsyncReceipt.value || isAsyncPlanRunning.value)
+
+// ---- 生成中的自动轮询（2026-09-10 上手体验整改）----
+// 生成是异步的（实测约 7-10 秒到达终态）。此前用户点完生成只会看到"先离开，稍后再来"，
+// 页面不自动跟进，体感像卡住、只能生成一次。现在 PROCESSING/WAITING 期间自动轮询：
+// 首间隔 3 秒，之后每 4 秒，上限 90 秒；到达终态或用户离开页面即停。
+const PLAN_POLL_FIRST_DELAY_MS = 3000
+const PLAN_POLL_INTERVAL_MS = 4000
+const PLAN_POLL_MAX_MS = 90000
+let planPollTimer: ReturnType<typeof setTimeout> | null = null
+const planPollStartedAt = ref(0)
+const isPlanPolling = ref(false)
+
+const stopPlanPolling = () => {
+  if (planPollTimer) {
+    clearTimeout(planPollTimer)
+    planPollTimer = null
+  }
+  isPlanPolling.value = false
+}
+
+const schedulePlanPoll = () => {
+  stopPlanPolling()
+  if (planPollStartedAt.value === 0) planPollStartedAt.value = Date.now()
+  if (Date.now() - planPollStartedAt.value > PLAN_POLL_MAX_MS) {
+    // 超过 90 秒仍无终态：停止自动轮询，交还手动刷新，避免无限打点
+    isPlanPolling.value = false
+    return
+  }
+  const planOperation = resolveAsyncOperationState({
+    executionStatus: plan.value?.executionStatus,
+    status: plan.value?.status,
+    consumable: plan.value?.consumable,
+    deliveryQuality: plan.value?.deliveryQuality,
+    fallback: plan.value?.fallback,
+    hasExecution: Boolean(plan.value?.runId || plan.value?.executionId || plan.value?.idempotencyKey),
+    hasReceipt: Boolean(plan.value?.asyncMessageId || plan.value?.asyncTraceId || plan.value?.asyncBizType || plan.value?.asyncReceiptStatus)
+  })
+  if (!isAsyncOperationPending(planOperation)) {
+    isPlanPolling.value = false
+    return
+  }
+  isPlanPolling.value = true
+  const delay = planPollStartedAt.value === Date.now() ? PLAN_POLL_FIRST_DELAY_MS : PLAN_POLL_INTERVAL_MS
+  planPollTimer = setTimeout(async () => {
+    try {
+      await loadPage(true)
+    } finally {
+      if (planPollTimer) schedulePlanPoll()
+    }
+  }, delay)
+}
+
+// 生成状态一进入非终态就开始轮询；回终态自动停
+watch(isAsyncPlanRunning, (running) => {
+  if (running) {
+    planPollStartedAt.value = planPollStartedAt.value || Date.now()
+    schedulePlanPoll()
+  } else {
+    stopPlanPolling()
+    planPollStartedAt.value = 0
+  }
+}, { immediate: true })
+
+const planPollElapsedText = computed(() => {
+  if (!planPollStartedAt.value) return ''
+  const seconds = Math.max(0, Math.round((Date.now() - planPollStartedAt.value) / 1000))
+  return `${seconds} 秒`
+})
+
+// 轮询期间秒级跳动
+watch(isPlanPolling, (polling) => {
+  if (!polling) return
+  const tick = () => {
+    if (!isPlanPolling.value) return
+    pollTickTimer = setTimeout(tick, 1000)
+  }
+  tick()
+})
+
+let pollTickTimer: ReturnType<typeof setTimeout> | null = null
+onBeforeUnmount(() => {
+  if (pollTickTimer) clearTimeout(pollTickTimer)
+})
+
+const planPollingDescription = computed(() => {
+  if (isPlanPolling.value) {
+    return `AI 正在根据你的目标岗位和近期训练记录编排今天的任务，通常 10 秒左右完成（已等待 ${planPollElapsedText.value}）。生成完成后会自动出现在这里，不需要离开页面。`
+  }
+  return '计划已进入处理队列，正在等待结果；页面会自动刷新，也可以在任务中心查看。'
+})
+
 const hasPlanDataError = computed(() => sourceFailed(dataSourceLabels.plan) || sourceFailed(dataSourceLabels.tasks))
 const showPlanDataError = computed(() =>
   !loading.value
@@ -996,7 +1096,10 @@ const planStatusMessage = computed(() => {
     return `业务日 ${queryDate.value} 的任务当前均为已跳过、已推迟、已过期或已取消状态，不会计入已完成。`
   }
   if (dailyPlanSnapshot.value.operationState === 'SUCCEEDED_DEGRADED') {
-    return '本次计划使用了降级结果，任务仍可执行；建议在任务依据中核对证据来源。'
+    const summary = String(plan.value?.summary || '').trim()
+    return summary
+      ? `${summary} 任务仍可执行并记录进度；也可以点上方"重新生成"再试一次完整计划。`
+      : '本次计划使用了降级结果，任务仍可执行并记录进度；也可以点上方"重新生成"再试一次完整计划。'
   }
   return ''
 })
@@ -1938,6 +2041,17 @@ onMounted(() => {
 
 .plan-status-alert {
   margin-bottom: 16px;
+}
+
+.plan-status-alert__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+
+  p {
+    margin: 0;
+  }
 }
 
 .plan-async-row {

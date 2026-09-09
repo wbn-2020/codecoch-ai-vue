@@ -335,7 +335,7 @@ import {
   Sparkles
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
@@ -486,7 +486,7 @@ const todayFocusCards = computed(() => {
       key: 'agent-processing',
       index: 1,
       title: '今日计划正在生成',
-      desc: '生成任务已进入处理流程，可以离开页面后稍后再查看。',
+      desc: 'AI 正在编排今天的任务，通常 10 秒左右完成；页面会自动刷新结果，无需手动操作。',
       reason: '状态来自最新计划运行记录',
       path: '/agent/today',
       badge: '生成中'
@@ -815,6 +815,46 @@ const fetchAgentTasks = async (force: unknown = true) => {
 
   agentTasksLoading.value = false
 }
+
+// ---- 计划生成中的自动轮询（与 AgentTodayView 同口径）----
+// 总览页 PROCESSING 时自动跟进生成结果，用户不再需要手动来回刷新。
+const PLAN_POLL_FIRST_DELAY_MS = 3000
+const PLAN_POLL_INTERVAL_MS = 4000
+const PLAN_POLL_MAX_MS = 90000
+let dashboardPlanPollTimer: ReturnType<typeof setTimeout> | null = null
+const dashboardPlanPollStartedAt = ref(0)
+
+const stopDashboardPlanPolling = () => {
+  if (dashboardPlanPollTimer) {
+    clearTimeout(dashboardPlanPollTimer)
+    dashboardPlanPollTimer = null
+  }
+}
+
+watch(dailyPlanState, (state) => {
+  if (state !== 'PROCESSING') {
+    stopDashboardPlanPolling()
+    dashboardPlanPollStartedAt.value = 0
+    return
+  }
+  if (dashboardPlanPollTimer || dashboardPlanPollStartedAt.value === 0) {
+    dashboardPlanPollStartedAt.value = dashboardPlanPollStartedAt.value || Date.now()
+  }
+  if (Date.now() - dashboardPlanPollStartedAt.value > PLAN_POLL_MAX_MS) return
+  stopDashboardPlanPolling()
+  const elapsed = Date.now() - dashboardPlanPollStartedAt.value
+  const delay = elapsed === 0 ? PLAN_POLL_FIRST_DELAY_MS : PLAN_POLL_INTERVAL_MS
+  dashboardPlanPollTimer = setTimeout(async () => {
+    dashboardPlanPollTimer = null
+    try {
+      await fetchAgentTasks(true)
+    } finally {
+      // fetchAgentTasks 会更新 dailyPlanState，watch 会继续接力或停止
+    }
+  }, delay)
+}, { immediate: true })
+
+onBeforeUnmount(stopDashboardPlanPolling)
 
 const deferSecondaryDashboardData = (callback: () => void, timeout = 1200, fallbackDelay = 240) => {
   const run = () => {
