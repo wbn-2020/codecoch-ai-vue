@@ -2605,9 +2605,10 @@ onBeforeUnmount(() => {
     gap: 8px;
   }
 
+  // 移动端窄屏：提示文字独占一行，两个按钮并排铺满，避免按钮被压缩裁字
   .practice-answer-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.25fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: center;
     gap: 8px;
   }
@@ -2621,14 +2622,23 @@ onBeforeUnmount(() => {
   }
 
   .practice-answer-actions > div > span {
-    grid-column: 2;
+    grid-column: 1 / -1;
+    grid-row: 1;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .practice-answer-actions__skip {
+    grid-row: 2;
   }
 
   .practice-answer-actions > div :deep(.el-button) {
-    grid-column: 3;
+    grid-column: 2;
+    grid-row: 2;
     width: 100%;
     margin-left: 0;
+    white-space: nowrap;
   }
 
   .practice-review__actions {

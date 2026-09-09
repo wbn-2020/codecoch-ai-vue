@@ -10,8 +10,9 @@ describe('interview room responsive layout', () => {
     expect(source).not.toContain('@media (max-width: 1280px)')
     expect(source).toContain('@media (max-width: 960px)')
     expect(source).toMatch(/WAITING_ANSWER:\s*'等待作答'/)
-    expect(source).toMatch(/\.conversation-scroll\s*\{[\s\S]*?min-height:\s*160px;/)
-    expect(source).toMatch(/\.answer-console\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow-y:\s*auto;/)
+    // 聊天式布局：问题流是主滚动区（flex 主导 + min-height:0），回答台固定底部独立滚动
+    expect(source).toMatch(/\.conversation-scroll\s*\{[\s\S]*?flex:\s*1 1 auto;[\s\S]*?min-height:\s*0;[\s\S]*?overflow-y:\s*auto;/)
+    expect(source).toMatch(/\.answer-console\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?overflow-y:\s*auto;/)
     expect(source).toContain('class="question-briefbar"')
     expect(source).toContain('剩余 / 建议时间')
     expect(source).toMatch(/\.question-briefbar\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/)

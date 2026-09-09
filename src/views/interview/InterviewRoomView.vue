@@ -2224,11 +2224,12 @@ onBeforeUnmount(() => {
 }
 
 .conversation-scroll {
-  flex: 1 1 42%;
-  min-height: 160px;
+  /* 聊天式布局：问题流是主滚动区，占满剩余空间；回答台固定高度不再参与挤压 */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
-  scroll-padding-bottom: 260px;
+  scroll-padding-bottom: 24px;
 }
 
 .panel-title,
@@ -2838,13 +2839,14 @@ onBeforeUnmount(() => {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  flex: 1 1 58%;
-  min-height: 0;
+  /* 聊天式输入台：固定底部、自然高度，内部不再独立滚动；语音抽屉展开时整个控制台可滚 */
+  flex: 0 0 auto;
+  max-height: min(72vh, 640px);
   overflow-y: auto;
   padding: 14px;
   border-radius: 14px;
   background: var(--user-surface-raised);
-  box-shadow: none;
+  box-shadow: 0 -8px 24px rgba(2, 6, 23, 0.35);
 }
 
 .console-head {
@@ -2949,8 +2951,8 @@ onBeforeUnmount(() => {
 }
 
 :deep(.answer-console .el-textarea__inner) {
-  min-height: 144px !important;
-  max-height: 28vh;
+  min-height: 120px !important;
+  max-height: 32vh;
   border-color: rgba(148, 163, 184, 0.24);
   background: rgba(2, 6, 23, 0.72);
   color: #e5edf8;
@@ -5734,7 +5736,9 @@ onBeforeUnmount(() => {
   }
 
   .message-card.ai.question-card h2 {
-    font-size: 26px;
+    /* 聊天式消息卡片：题目是流内一条消息的正文，而非页面大标题 */
+    font-size: 20px;
+    line-height: 1.55;
     text-wrap: balance;
   }
 }
@@ -5804,7 +5808,7 @@ onBeforeUnmount(() => {
     }
 
     .message-card.ai.question-card h2 {
-      font-size: 21px;
+      font-size: 19px;
     }
 
     .voice-tool-summary {

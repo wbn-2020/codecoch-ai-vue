@@ -221,14 +221,14 @@
             </button>
           </section>
 
-          <details class="arena-match-settlement__evidence">
+          <details class="arena-match-settlement__evidence" open>
             <summary>AI 匹配依据</summary>
             <p>{{ trustPanelDescription }}</p>
           </details>
         </aside>
       </section>
 
-      <details v-if="isSuccessReport" class="arena-match-detail__more">
+      <details v-if="isSuccessReport" class="arena-match-detail__more" open>
         <summary>报告依据与详细指标</summary>
         <div class="arena-match-detail__more-body">
           <div class="arena-match-detail__more-actions">

@@ -176,7 +176,7 @@
           </section>
         </div>
 
-        <details class="report-detail-summary">
+        <details class="report-detail-summary" open>
           <summary>报告依据与详细指标</summary>
           <div class="report-detail-summary__body">
             <div class="report-support-strip">
