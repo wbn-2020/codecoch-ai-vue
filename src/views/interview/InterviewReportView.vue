@@ -1344,7 +1344,7 @@ const goJdGapPractice = async () => {
 const failureReason = computed(() => toFriendlyMessage(
   report.value?.failedReason || report.value?.failureReason || report.value?.errorMessage,
   isUnscorable.value
-    ? '本次面试有效作答少于 6 题，暂时无法生成可信评分。系统至少需要 6 条有效回答才能拆分维度与评分；建议完整答完一轮（或创建题目数 ≥6 的面试）后重新生成报告。'
+    ? '这份报告暂时无法评分：通常是回答过于简短或缺少具体细节。回到房间把回答补充得更具体（概念 + 项目实践 + 结果）后重新生成；有效回答达 3 条可先出体验版报告，6 条出正式计分报告。'
     : '报告生成失败，请稍后重试。'
 ))
 const recoveryStatusLabel = computed(() => {

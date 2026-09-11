@@ -522,25 +522,27 @@ const scoreHint = (row: InterviewListVO) => {
 }
 
 /**
- * 报告未成功时的可理解解释（2026-09-09 测评整改）。
- * 后端出分要求至少 REPORT_MIN_ANSWERS 条有效回答，历史页此前只展示
- * "未生成/失败"状态标签，用户既不知道原因也不知道下一步该做什么。
+ * 报告未成功时的可理解解释（2026-09-09 测评整改；2026-09-11 分层口径更新）。
+ * 2026-09-11 分层：3 条有效回答可出体验版报告（评分仅供参考），6 条出正式计分报告。
+ * UNSCORABLE 的原因不再是"数量不足"，而是回答质量/完整性未达出分标准——
+ * 文案引导用户回到房间把回答补充得更具体后再重试。
  */
 const REPORT_MIN_ANSWERS = 6
+const REPORT_TRIAL_MIN_ANSWERS = 3
 const reportBlockedHint = (row: InterviewListVO) => {
   const report = normalizeStatus(row.reportStatus)
   if (report === 'GENERATED' || report === 'SUCCESS') return ''
   if (isReportInProgress(report)) return '报告正在生成，稍后刷新即可；不需要重复提交。'
   if (report === 'UNSCORABLE') {
-    return `有效回答不足 ${REPORT_MIN_ANSWERS} 条，报告暂时不出分；回到房间继续作答后可重新生成。`
+    return '这份报告暂时无法评分：通常是因为回答过于简短或缺少具体细节。回到房间把回答补充得更具体（概念 + 项目实践 + 结果），再重新生成即可。'
   }
   if (isReportFailed(report)) {
-    return `报告生成失败。常见原因是有效回答不足 ${REPORT_MIN_ANSWERS} 条；可回到房间继续作答后重新生成。`
+    return `报告生成失败。可回到房间继续作答后重新生成；有效回答达到 ${REPORT_TRIAL_MIN_ANSWERS} 条即可先出体验版报告，${REPORT_MIN_ANSWERS} 条出正式计分报告。`
   }
   if (isInterviewDone(row.status)) {
-    return `本场还没出报告。报告需要至少 ${REPORT_MIN_ANSWERS} 条有效回答，也可以直接生成后查看结果。`
+    return `本场还没出报告。有效回答达到 ${REPORT_TRIAL_MIN_ANSWERS} 条可先出体验版报告，${REPORT_MIN_ANSWERS} 条出正式计分报告；也可回到房间继续作答。`
   }
-  return `本场还没结束。报告需要至少 ${REPORT_MIN_ANSWERS} 条有效回答，先回到房间完成答题。`
+  return `本场还没结束。有效回答达到 ${REPORT_TRIAL_MIN_ANSWERS} 条可先出体验版报告，先回到房间完成答题。`
 }
 
 const interviewModeLabel = (mode?: string) => {
