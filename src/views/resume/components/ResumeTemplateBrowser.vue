@@ -65,7 +65,7 @@
             }"
             :style="{ '--template-index': index }"
           >
-            <div class="template-card__cover">
+            <div class="template-card__cover template-card__primary">
               <button
                 type="button"
                 class="template-card__select"
@@ -109,7 +109,7 @@
               </button>
             </div>
 
-            <footer class="template-card__name">
+            <footer class="template-card__name template-card__secondary">
               <strong>{{ template.name }}</strong>
               <span :class="{ 'is-formal': isFormalExportTemplate(template.code) }">
                 {{ isFormalExportTemplate(template.code) ? '正式导出' : '仅预览' }}

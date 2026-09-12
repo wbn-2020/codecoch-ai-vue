@@ -79,8 +79,16 @@ describe('resume editor and delivery workspace layout', () => {
     expect(shellSource).toMatch(
       /@media \(max-width: 1260px\)[\s\S]*?\.resume-workbench-layout > :slotted\(\.resume-workbench-pane--editor\),[\s\S]*?height:\s*min\(780px,\s*calc\(100dvh\s*-\s*194px\)\);[\s\S]*?overflow:\s*auto;/
     )
-    expect(source).toContain('ResumeDocumentPreview')
     expect(source).toContain('ResumeTemplateBrowser')
+    // 2026-09-11：编辑器纸张渲染链 = ResumeEditView -> ResumePreviewCanvas -> ResumeDocumentPreview，
+    // 打印设计版 = PrintPreviewOverlay -> ResumeDocumentPreview。契约改为保护整条渲染链
+    // 而非要求主文件字面引用组件名（PrintPreviewOverlay/Canvas 均已封装该组件）。
+    expect(source).toContain('ResumePreviewCanvas')
+    expect(source).toContain('PrintPreviewOverlay')
+    const canvasSource = readSource('src/views/resume/components/ResumePreviewCanvas.vue')
+    expect(canvasSource).toContain('ResumeDocumentPreview')
+    const printOverlaySource = readSource('src/views/resume/workbench/dialogs/PrintPreviewOverlay.vue')
+    expect(printOverlaySource).toContain('ResumeDocumentPreview')
     const preview = readSource('src/views/resume/components/ResumeDocumentPreview.vue')
     expect(preview).toContain(
       "import { Circle, FileText, Link, Mail, MapPin, Phone } from 'lucide-vue-next'"
@@ -118,12 +126,14 @@ describe('resume editor and delivery workspace layout', () => {
     expect(templateGallery).toContain('class="template-browser"')
     expect(templateGallery).toContain('class="template-browser__grid"')
     expect(templateGallery).toContain('aspect-ratio: 210 / 297')
-    expect(templateGallery).toContain('class="template-card__secondary"')
-    expect(templateGallery).toContain('class="template-card__primary"')
+    expect(templateGallery).toContain('template-card__secondary')
+    expect(templateGallery).toContain('template-card__primary')
     expect(templateGallery).toContain('class="template-preview__renderer"')
     expect(templateGallery).toContain('setInterval(() =>')
     expect(editor).toContain('这里不生成真实 ATS 分数')
-    expect(editor).toContain('A4 预览 · 分页以导出为准')
+    // 2026-09-11：分页口径文案升级为动态 A4 页数提示（previewPageStatus 驱动），意图等价
+    expect(editor).toContain('A4 · ')
+    expect(editor).toMatch(/previewPageStatus/)
     expect(editor).toContain('打开稳定版本分页与导出工作台')
     expect(editor).toContain('v-show="inspectorMode === \'review\'" class="content-card side-panel export-check-panel"')
     expect(templateGallery).toMatch(/@media \(max-width: 639px\)[\s\S]*?grid-template-columns:\s*1fr;/)

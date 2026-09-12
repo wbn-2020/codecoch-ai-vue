@@ -4553,9 +4553,9 @@ onBeforeUnmount(() => {
   gap: 10px;
   margin: 16px 16px 12px;
   padding: 14px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--arena-line);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--arena-card);
 }
 
 .magic-module-card__icon {
@@ -4599,24 +4599,24 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 11px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--arena-line);
   border-radius: 8px;
-  background: #ffffff;
-  color: #6b7280;
+  background: var(--arena-card);
+  color: var(--arena-sub);
   cursor: pointer;
   font-size: 12.5px;
 
   &:hover {
-    background: #f9fafb;
-    color: #111827;
+    background: var(--arena-sunken);
+    color: var(--arena-ink);
   }
 }
 
 .magic-basic-wrap {
   margin: 0 16px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--arena-line);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--arena-card);
 }
 
 /* 编辑列子卡不参与 flex 收缩：超出高度交给列本身滚动，避免 overflow:hidden 静默裁切。 */
@@ -4647,9 +4647,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--arena-line);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--arena-card);
 }
 
 .magic-cert-row:hover {
@@ -5371,7 +5371,7 @@ onBeforeUnmount(() => {
   }
 
   .live-feedback-strip {
-    background: #ffffff;
+    background: var(--arena-card);
 
     article {
       padding: 14px 16px;
@@ -5385,7 +5385,7 @@ onBeforeUnmount(() => {
 
   .resume-template-strip {
     padding: 14px 16px;
-    background: #ffffff;
+    background: var(--arena-card);
   }
 
   .resume-template-strip__head {
