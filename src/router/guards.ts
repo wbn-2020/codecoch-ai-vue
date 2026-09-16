@@ -230,10 +230,6 @@ export const setupRouterGuards = (router: Router) => {
       )
     }
 
-    if (authStore.mustChangePassword && !isPasswordChangeAllowedRoute(to)) {
-      return passwordChangeRoute()
-    }
-
     if (isAdminRoute && !authStore.canAccessAdmin) {
       return forbiddenRoute(to, 'requiresAdmin')
     }

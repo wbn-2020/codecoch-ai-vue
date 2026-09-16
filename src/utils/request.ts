@@ -160,12 +160,6 @@ const isRefreshAuthFailure = (error: unknown) => {
     || isHttpAuthFailure(error)
 }
 
-const redirectToPasswordChange = () => {
-  if (typeof window === 'undefined') return
-  if (window.location.pathname === '/password') return
-  window.location.assign('/password')
-}
-
 const createApiCodeError = (message: string, code?: number) => {
   const error = new Error(message) as ApiCodeError
   error.code = code
@@ -663,7 +657,6 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
     }
 
     if (result.code === HTTP_STATUS_CODE.PASSWORD_CHANGE_REQUIRED) {
-      redirectToPasswordChange()
       if (!silentError) {
         const diagnostic = emitResponseDiagnostic(config, {
           code: result.code,
@@ -745,7 +738,6 @@ const handleResponseError = async (error: AxiosError<RequestErrorPayload | Blob>
 
     if (error.response?.status === 403) {
       if (isPasswordChangeRequiredCode(responsePayload?.code)) {
-        redirectToPasswordChange()
         if (!silentError) {
           const diagnostic = emitResponseDiagnostic(config, {
             status: error.response.status,

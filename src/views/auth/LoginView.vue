@@ -244,10 +244,6 @@ const handleSubmit = async () => {
 
     try {
       ElMessage.success('登录成功')
-      if (authStore.mustChangePassword) {
-        await router.replace('/password')
-        return
-      }
       const redirect = sanitizeLocalRedirectPath(route.query.redirect)
       const targetRoute = redirect || await getDefaultPostLoginRoute()
       await router.replace(targetRoute)
