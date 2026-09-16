@@ -68,7 +68,16 @@
         title="今日计划正在生成"
         :description="planPollingDescription"
       >
-        <el-button type="primary" :loading="true">正在为你生成…</el-button>
+        <el-button
+          v-if="planPollTimedOut"
+          type="primary"
+          :loading="loading"
+          data-test="plan-poll-refresh"
+          @click="retryPlanPolling"
+        >
+          立即刷新
+        </el-button>
+        <el-button v-else type="primary" :loading="true">正在为你生成…</el-button>
         <el-button @click="goAsyncTaskCenter">在任务中心查看</el-button>
       </AppState>
 
@@ -468,7 +477,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
 import { MoreHorizontal, RefreshCw, Sparkles, WandSparkles } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -507,7 +516,8 @@ import {
   resolveAgentTaskPlanChangeOrigin,
   resolveAgentWeekPlanChangeOrigin
 } from '@/features/agent-plan-change'
-import { isAsyncOperationPending, preferTerminalAsyncOperationSnapshot, resolveAsyncOperationState } from '@/features/async-operation-state'
+import { preferTerminalAsyncOperationSnapshot } from '@/features/async-operation-state'
+import { usePlanPolling } from '@/features/agent-today/use-plan-polling'
 import { resolveDailyPlanState } from '@/features/daily-plan-state'
 import { buildAgentWeekPlan } from '@/features/agent-week-plan'
 import { buildAgentWeekPlanFromBackend, hasBackendWeekPlanItems } from '@/features/agent-week-plan-backend'
@@ -760,94 +770,17 @@ const isPlanExecutionFailure = computed(() => dailyPlanState.value === 'FAILED')
 const isAsyncPlanRunning = computed(() => dailyPlanState.value === 'PROCESSING')
 const showAsyncTaskEntry = computed(() => hasAsyncReceipt.value || isAsyncPlanRunning.value)
 
-// ---- 生成中的自动轮询（2026-09-10 上手体验整改）----
-// 生成是异步的（实测约 7-10 秒到达终态）。此前用户点完生成只会看到"先离开，稍后再来"，
-// 页面不自动跟进，体感像卡住、只能生成一次。现在 PROCESSING/WAITING 期间自动轮询：
-// 首间隔 3 秒，之后每 4 秒，上限 90 秒；到达终态或用户离开页面即停。
-const PLAN_POLL_FIRST_DELAY_MS = 3000
-const PLAN_POLL_INTERVAL_MS = 4000
-const PLAN_POLL_MAX_MS = 90000
-let planPollTimer: ReturnType<typeof setTimeout> | null = null
-const planPollStartedAt = ref(0)
-const isPlanPolling = ref(false)
-
-const stopPlanPolling = () => {
-  if (planPollTimer) {
-    clearTimeout(planPollTimer)
-    planPollTimer = null
-  }
-  isPlanPolling.value = false
-}
-
-const schedulePlanPoll = () => {
-  stopPlanPolling()
-  if (planPollStartedAt.value === 0) planPollStartedAt.value = Date.now()
-  if (Date.now() - planPollStartedAt.value > PLAN_POLL_MAX_MS) {
-    // 超过 90 秒仍无终态：停止自动轮询，交还手动刷新，避免无限打点
-    isPlanPolling.value = false
-    return
-  }
-  const planOperation = resolveAsyncOperationState({
-    executionStatus: plan.value?.executionStatus,
-    status: plan.value?.status,
-    consumable: plan.value?.consumable,
-    deliveryQuality: plan.value?.deliveryQuality,
-    fallback: plan.value?.fallback,
-    hasExecution: Boolean(plan.value?.runId || plan.value?.executionId || plan.value?.idempotencyKey),
-    hasReceipt: Boolean(plan.value?.asyncMessageId || plan.value?.asyncTraceId || plan.value?.asyncBizType || plan.value?.asyncReceiptStatus)
-  })
-  if (!isAsyncOperationPending(planOperation)) {
-    isPlanPolling.value = false
-    return
-  }
-  isPlanPolling.value = true
-  const delay = planPollStartedAt.value === Date.now() ? PLAN_POLL_FIRST_DELAY_MS : PLAN_POLL_INTERVAL_MS
-  planPollTimer = setTimeout(async () => {
-    try {
-      await loadPage(true)
-    } finally {
-      if (planPollTimer) schedulePlanPoll()
-    }
-  }, delay)
-}
-
-// 生成状态一进入非终态就开始轮询；回终态自动停
-watch(isAsyncPlanRunning, (running) => {
-  if (running) {
-    planPollStartedAt.value = planPollStartedAt.value || Date.now()
-    schedulePlanPoll()
-  } else {
-    stopPlanPolling()
-    planPollStartedAt.value = 0
-  }
-}, { immediate: true })
-
-const planPollElapsedText = computed(() => {
-  if (!planPollStartedAt.value) return ''
-  const seconds = Math.max(0, Math.round((Date.now() - planPollStartedAt.value) / 1000))
-  return `${seconds} 秒`
-})
-
-// 轮询期间秒级跳动
-watch(isPlanPolling, (polling) => {
-  if (!polling) return
-  const tick = () => {
-    if (!isPlanPolling.value) return
-    pollTickTimer = setTimeout(tick, 1000)
-  }
-  tick()
-})
-
-let pollTickTimer: ReturnType<typeof setTimeout> | null = null
-onBeforeUnmount(() => {
-  if (pollTickTimer) clearTimeout(pollTickTimer)
-})
-
-const planPollingDescription = computed(() => {
-  if (isPlanPolling.value) {
-    return `AI 正在根据你的目标岗位和近期训练记录编排今天的任务，通常 10 秒左右完成（已等待 ${planPollElapsedText.value}）。生成完成后会自动出现在这里，不需要离开页面。`
-  }
-  return '计划已进入处理队列，正在等待结果；页面会自动刷新，也可以在任务中心查看。'
+// ---- 生成中的自动轮询（2026-09-10 上手体验整改；2026-09-16 抽出为 usePlanPolling）----
+// PROCESSING/WAITING 期间自动轮询：首间隔 3 秒，之后每 4 秒，上限 90 秒；
+// 到达终态或用户离开页面即停。超时后不再虚假承诺"页面会自动刷新"，改为提供手动刷新入口。
+const {
+  planPollTimedOut,
+  planPollingDescription,
+  retryPlanPolling
+} = usePlanPolling({
+  plan: () => plan.value,
+  isRunning: () => isAsyncPlanRunning.value,
+  refresh: () => loadPage(true)
 })
 
 const hasPlanDataError = computed(() => sourceFailed(dataSourceLabels.plan) || sourceFailed(dataSourceLabels.tasks))

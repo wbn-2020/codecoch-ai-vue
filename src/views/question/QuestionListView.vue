@@ -138,7 +138,7 @@
           </div>
 
           <div class="question-card__footer">
-            <p>{{ item.experienceLevel || '进入训练页后先用自己的话回答，再看 AI 点评、参考思路和下一步。' }}</p>
+            <p>{{ experienceLevelText(item) || '进入训练页后先用自己的话回答，再看 AI 点评、参考思路和下一步。' }}</p>
             <div class="side-actions">
               <el-button type="primary" @click.stop="openQuestion(item)">
                 <PlayCircle :size="16" />
@@ -188,6 +188,7 @@ import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import PageHeader from '@/components/user-ui/PageHeader.vue'
 import StatCard from '@/components/user-ui/StatCard.vue'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
+import { questionExperienceLevelOptions } from '@/constants/enums'
 import type { QuestionCategoryVO, QuestionQueryDTO, QuestionTagVO, QuestionVO } from '@/types/question'
 import { toFriendlyMessage } from '@/utils/error'
 
@@ -215,6 +216,12 @@ const masteryMap = {
   MASTERED: '已掌握',
   VAGUE: '模糊',
   UNKNOWN: '未掌握'
+}
+
+const experienceLevelText = (item: QuestionVO) => {
+  const value = String(item.experienceLevel || '').trim().toUpperCase()
+  if (!value) return ''
+  return questionExperienceLevelOptions.find((option) => option.value === value)?.label || item.experienceLevel || ''
 }
 
 const collectQuestionOptions = (items: QuestionVO[]) => {

@@ -14,7 +14,15 @@ export const QUESTION_DIFFICULTY = {
 export const QUESTION_TYPE = {
   SHORT_ANSWER: 'SHORT_ANSWER',
   SCENARIO: 'SCENARIO',
-  CODING: 'CODING'
+  CODING: 'CODING',
+  CASE_ANALYSIS: 'CASE_ANALYSIS'
+} as const
+
+/** 题目职级（question.experience_level）标准枚举：数据层存英文，展示层统一中文 */
+export const QUESTION_EXPERIENCE_LEVEL = {
+  JUNIOR: 'JUNIOR',
+  MID: 'MID',
+  SENIOR: 'SENIOR'
 } as const
 
 export const MASTERY_STATUS = {
@@ -84,7 +92,15 @@ export const difficultyOptions: SelectOption[] = [
 export const questionTypeOptions: SelectOption[] = [
   { label: '简答题', value: QUESTION_TYPE.SHORT_ANSWER },
   { label: '场景题', value: QUESTION_TYPE.SCENARIO },
-  { label: '编码题', value: QUESTION_TYPE.CODING }
+  { label: '编码题', value: QUESTION_TYPE.CODING },
+  { label: '案例分析', value: QUESTION_TYPE.CASE_ANALYSIS }
+]
+
+/** 题卡职级标签中文化映射（与题库浏览页英文枚举 JUNIOR/MID/SENIOR 对应） */
+export const questionExperienceLevelOptions: SelectOption[] = [
+  { label: '初级', value: QUESTION_EXPERIENCE_LEVEL.JUNIOR },
+  { label: '中级', value: QUESTION_EXPERIENCE_LEVEL.MID },
+  { label: '高级', value: QUESTION_EXPERIENCE_LEVEL.SENIOR }
 ]
 
 export const masteryOptions: SelectOption[] = [

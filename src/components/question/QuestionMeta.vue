@@ -39,7 +39,8 @@ const questionTypeLabel = computed(() => {
   const map: Record<string, string> = {
     SHORT_ANSWER: '表达题',
     SCENARIO: '场景拆解',
-    CODING: '代码思路'
+    CODING: '代码思路',
+    CASE_ANALYSIS: '案例分析'
   }
   return props.questionType ? map[props.questionType] || '题型待确认' : ''
 })
