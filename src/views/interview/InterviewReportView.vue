@@ -1359,7 +1359,7 @@ const recoveryTitle = computed(() => {
 })
 const recoveryLead = computed(() => {
   if (isUnscorable.value) return '已保留本轮问答明细；在缺少足够证据时，系统不会补写分数、短板或推荐题。'
-  if (isFailed.value) return '本轮面试记录仍然保留。重新生成后，系统会基于已有问答重新整理复盘结果。'
+  if (isFailed.value) return '最低可用复盘已基于已保存问答生成，不含综合得分。重新生成后才会整理优缺点与评分。'
   return '页面没有拿到可展示的复盘结果，因此不会补写分数、短板或推荐题。'
 })
 const recoveryReason = computed(() => {

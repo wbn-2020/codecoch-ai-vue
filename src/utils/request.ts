@@ -143,15 +143,28 @@ const getErrorCode = (error: unknown) => {
 const isAuthFailureCode = (code?: number) =>
   code === HTTP_STATUS_CODE.UNAUTHENTICATED || code === HTTP_STATUS_CODE.TOKEN_INVALID
 
+const isPasswordChangeRequiredCode = (code?: number) =>
+  code === HTTP_STATUS_CODE.PASSWORD_CHANGE_REQUIRED
+
 const isHttpAuthFailure = (error: unknown) => {
   const status = (error as AxiosError)?.response?.status
   return status === 401 || status === 403
 }
 
-const isRefreshAuthFailure = (error: unknown) =>
-  isAuthFailureCode(getErrorCode(error))
-  || getErrorCode(error) === HTTP_STATUS_CODE.FORBIDDEN
-  || isHttpAuthFailure(error)
+const isRefreshAuthFailure = (error: unknown) => {
+  if (isPasswordChangeRequiredCode(getErrorCode(error))) {
+    return false
+  }
+  return isAuthFailureCode(getErrorCode(error))
+    || getErrorCode(error) === HTTP_STATUS_CODE.FORBIDDEN
+    || isHttpAuthFailure(error)
+}
+
+const redirectToPasswordChange = () => {
+  if (typeof window === 'undefined') return
+  if (window.location.pathname === '/password') return
+  window.location.assign('/password')
+}
 
 const createApiCodeError = (message: string, code?: number) => {
   const error = new Error(message) as ApiCodeError
@@ -649,6 +662,19 @@ const unwrapResponse = async (response: AxiosResponse<ApiResult>) => {
       return Promise.reject(result)
     }
 
+    if (result.code === HTTP_STATUS_CODE.PASSWORD_CHANGE_REQUIRED) {
+      redirectToPasswordChange()
+      if (!silentError) {
+        const diagnostic = emitResponseDiagnostic(config, {
+          code: result.code,
+          message: result.message || '请先修改密码后再继续使用',
+          traceId: responseTraceId(result.traceId, response)
+        })
+        showResponseError(diagnostic)
+      }
+      return Promise.reject(result)
+    }
+
     if (result.code === HTTP_STATUS_CODE.FORBIDDEN) {
       if (!silentError) {
         const diagnostic = emitResponseDiagnostic(response.config as InternalAxiosRequestConfig, {
@@ -718,6 +744,22 @@ const handleResponseError = async (error: AxiosError<RequestErrorPayload | Blob>
     const silentError = config?.silentError
 
     if (error.response?.status === 403) {
+      if (isPasswordChangeRequiredCode(responsePayload?.code)) {
+        redirectToPasswordChange()
+        if (!silentError) {
+          const diagnostic = emitResponseDiagnostic(config, {
+            status: error.response.status,
+            code: HTTP_STATUS_CODE.PASSWORD_CHANGE_REQUIRED,
+            message: toFriendlyMessage(
+              responsePayload?.message,
+              '请先修改密码后再继续使用'
+            ),
+            traceId: responseTraceId(responsePayload?.traceId, error.response)
+          })
+          showResponseError(diagnostic)
+        }
+        return Promise.reject(responsePayload || error)
+      }
       const message = toFriendlyMessage(
         responsePayload?.message || error.message,
         '当前账号无权执行该操作，操作未提交。'

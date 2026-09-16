@@ -6,14 +6,16 @@
           <KeyRound :size="16" />
           账户安全
         </p>
-        <h1 class="page-title">修改密码</h1>
+        <h1 class="page-title">{{ forcedChange ? '请先修改密码' : '修改密码' }}</h1>
         <p class="page-subtitle">
-          提交旧密码和新密码；会话需要重新验证时，系统会引导你回到登录页。
+          {{ forcedChange
+            ? '当前账号使用了弱口令或管理员重置的临时密码，必须先改成更强的密码后才能继续使用。'
+            : '提交旧密码和新密码；会话需要重新验证时，系统会引导你回到登录页。' }}
         </p>
       </div>
 
       <div class="hero-actions">
-        <el-button @click="router.push('/profile')">
+        <el-button v-if="!forcedChange" @click="router.push('/profile')">
           <UserRound :size="16" />
           返回资料页
         </el-button>
@@ -53,10 +55,12 @@
 
           <el-alert
             class="security-alert"
-            type="warning"
+            :type="forcedChange ? 'error' : 'warning'"
             :closable="false"
             show-icon
-            title="提交后如果当前会话失效，下一次需要身份确认时会自动引导你重新登录。"
+            :title="forcedChange
+              ? '在改密完成前，除修改密码、查看当前账号和退出登录外，其他接口会被拦截。'
+              : '提交后如果当前会话失效，下一次需要身份确认时会自动引导你重新登录。'"
           />
 
           <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
@@ -84,17 +88,20 @@
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { KeyRound, PencilLine, UserRound } from 'lucide-vue-next'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { updatePasswordApi } from '@/api/user'
+import { useAuthStore } from '@/stores/auth'
 import { getErrorMessage } from '@/utils/error'
 import type { PasswordUpdateDTO } from '@/types/user'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const formAnchor = ref<HTMLElement | null>(null)
 const loading = ref(false)
+const forcedChange = computed(() => authStore.mustChangePassword)
 
 const form = reactive<PasswordUpdateDTO>({
   oldPassword: '',
@@ -145,8 +152,14 @@ const handleSubmit = async () => {
   loading.value = true
   try {
     await updatePasswordApi(form)
-    ElMessage.success('密码已修改，请根据页面提示继续使用或重新登录')
+    ElMessage.success(forcedChange.value ? '密码已更新，可以继续使用系统' : '密码已修改，请根据页面提示继续使用或重新登录')
     formRef.value?.resetFields()
+    if (forcedChange.value) {
+      await authStore.verifyToken({ force: true })
+      if (!authStore.mustChangePassword) {
+        await router.replace('/dashboard')
+      }
+    }
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '密码修改失败，请稍后重试。'))
   } finally {

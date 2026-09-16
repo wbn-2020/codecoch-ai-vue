@@ -22,6 +22,16 @@ const isForbiddenFailure = (error: unknown) => {
   return code === HTTP_STATUS_CODE.FORBIDDEN || status === 403
 }
 
+const isPasswordChangeRequiredFailure = (error: unknown) => {
+  const code = (error as { code?: number })?.code
+  return code === HTTP_STATUS_CODE.PASSWORD_CHANGE_REQUIRED
+}
+
+const passwordChangeRoute = () => ({ path: '/password' })
+
+const isPasswordChangeAllowedRoute = (to: RouteLocationNormalized) =>
+  to.path === '/password'
+
 const isFeatureEnabled = (featureFlag: string) => {
   if (featureFlag === 'v4Preview') return isV4PreviewAccessEnabled()
   if (featureFlag === 'v4Growth') return appConfig.enableV4GrowthPreview
@@ -80,6 +90,9 @@ const verificationFailureRoute = (
   authStore.syncFromStorage()
   if (!authStore.isLoggedIn) {
     return loginRoute(to)
+  }
+  if (isPasswordChangeRequiredFailure(error)) {
+    return passwordChangeRoute()
   }
   if (isForbiddenFailure(error)) {
     return forbiddenRoute(to, 'serverForbidden')
@@ -215,6 +228,10 @@ export const setupRouterGuards = (router: Router) => {
         error,
         verificationSession
       )
+    }
+
+    if (authStore.mustChangePassword && !isPasswordChangeAllowedRoute(to)) {
+      return passwordChangeRoute()
     }
 
     if (isAdminRoute && !authStore.canAccessAdmin) {

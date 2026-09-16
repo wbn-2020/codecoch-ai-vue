@@ -285,7 +285,8 @@ export const useAuthStore = defineStore('auth', {
           )
         })
       }
-    }
+    },
+    mustChangePassword: (state) => Boolean(state.userInfo?.mustChangePassword)
   },
 
   actions: {

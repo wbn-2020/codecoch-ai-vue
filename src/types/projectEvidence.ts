@@ -123,6 +123,7 @@ export interface ProjectStoryGenerationVO {
   id?: number
   userId?: number
   projectEvidenceId: number
+  projectTitle?: string
   generationType: ProjectStoryGenerationType
   targetJobId?: number
   promptVersion?: string

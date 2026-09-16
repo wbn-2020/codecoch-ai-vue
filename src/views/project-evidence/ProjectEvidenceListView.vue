@@ -20,6 +20,49 @@
 
     <ModuleTabs :items="moduleTabs" />
 
+    <section class="story-bank content-card" v-loading="storiesLoading">
+      <div class="content-card__body">
+        <div class="story-bank__head">
+          <div>
+            <p class="section-kicker">STAR 故事库</p>
+            <h2>已采纳的项目故事</h2>
+            <p>复用各项目里已确认的 STAR 叙述，不另开入口。生成与采纳仍在项目详情完成。</p>
+          </div>
+          <el-button @click="fetchStories">刷新故事</el-button>
+        </div>
+        <AppState
+          v-if="storiesError"
+          type="error"
+          title="故事库加载失败"
+          :description="storiesError"
+        >
+          <el-button type="primary" @click="fetchStories">重新加载</el-button>
+        </AppState>
+        <div v-else-if="stories.length" class="story-grid">
+          <article v-for="story in stories" :key="story.id || `${story.projectEvidenceId}-${story.createdAt}`" class="story-card">
+            <div class="story-card__meta">
+              <strong>{{ story.projectTitle || '未命名项目' }}</strong>
+              <span>已采纳 STAR</span>
+            </div>
+            <p>{{ story.resultText || '该条目尚未返回故事正文。' }}</p>
+            <el-button
+              v-if="story.projectEvidenceId"
+              type="primary"
+              plain
+              @click="router.push(`/project-evidence/${story.projectEvidenceId}`)"
+            >
+              打开项目
+            </el-button>
+          </article>
+        </div>
+        <EmptyState
+          v-else
+          title="还没有已采纳的 STAR 故事"
+          description="进入项目详情生成 STAR 叙述并采纳后，会汇总到这里，方便跨项目复用。"
+        />
+      </div>
+    </section>
+
     <section class="cc-metric-grid">
       <MetricCard label="项目总数" :value="totalEvidenceCount" detail="来自当前查询结果，不额外推断项目数量。" />
       <MetricCard label="可用于追问" :value="readyEvidenceCount" detail="完整度达到可复用状态的项目。" tone="success" />
@@ -172,7 +215,7 @@ import {
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { getProjectEvidenceListApi } from '@/api/projectEvidence'
+import { getAcceptedProjectStoriesApi, getProjectEvidenceListApi } from '@/api/projectEvidence'
 import AppState from '@/components/common/AppState.vue'
 import DataTableFrame from '@/components/user-ui/DataTableFrame.vue'
 import EmptyState from '@/components/user-ui/EmptyState.vue'
@@ -182,13 +225,16 @@ import ModuleTabs from '@/components/user-ui/ModuleTabs.vue'
 import PageHeader from '@/components/user-ui/PageHeader.vue'
 import { useUserModuleTabs } from '@/composables/useUserModuleTabs'
 import { getCompletenessTone, normalizeMissingFields, summarizeSourceState } from '@/features/project-evidence'
-import type { ProjectEvidenceListVO, ProjectEvidenceQueryDTO } from '@/types/projectEvidence'
+import type { ProjectEvidenceListVO, ProjectEvidenceQueryDTO, ProjectStoryGenerationVO } from '@/types/projectEvidence'
 import { toFriendlyMessage } from '@/utils/error'
 
 const router = useRouter()
 const loading = ref(false)
 const loadError = ref('')
 const items = ref<ProjectEvidenceListVO[]>([])
+const storiesLoading = ref(false)
+const storiesError = ref('')
+const stories = ref<ProjectStoryGenerationVO[]>([])
 const query = reactive<ProjectEvidenceQueryDTO>({
   pageNo: 1,
   pageSize: 8,
@@ -232,6 +278,20 @@ const proofSummary = (item: ProjectEvidenceListVO) => {
   if (item.role) return `${item.role}职责，需要继续补能力证据`
   if (item.skillEvidenceCount) return '已有能力证据，但项目角色仍需补齐'
   return '项目价值待补齐，暂不能包装成强证明'
+}
+
+const fetchStories = async () => {
+  storiesLoading.value = true
+  storiesError.value = ''
+  try {
+    const result = await getAcceptedProjectStoriesApi()
+    stories.value = Array.isArray(result) ? result : []
+  } catch (error) {
+    stories.value = []
+    storiesError.value = toFriendlyMessage(error, '暂时无法读取已采纳的 STAR 故事。')
+  } finally {
+    storiesLoading.value = false
+  }
 }
 
 const fetchList = async () => {
@@ -278,7 +338,10 @@ const openDetail = (item: ProjectEvidenceListVO) => {
   })
 }
 
-onMounted(fetchList)
+onMounted(() => {
+  fetchList()
+  fetchStories()
+})
 </script>
 
 <style scoped lang="scss">
@@ -287,6 +350,74 @@ onMounted(fetchList)
   gap: 16px;
   min-width: 0;
   color: var(--user-text);
+}
+
+.story-bank {
+  border: 1px solid var(--user-border);
+  border-radius: var(--user-radius-xl, 16px);
+  background: var(--user-surface);
+}
+
+.story-bank__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+
+  h2 {
+    margin: 6px 0 0;
+    font-size: 20px;
+  }
+
+  p {
+    margin: 8px 0 0;
+    color: var(--user-text-muted);
+    line-height: 1.6;
+  }
+}
+
+.section-kicker {
+  margin: 0;
+  color: var(--user-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.story-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.story-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--user-border);
+  border-radius: 12px;
+  background: var(--user-surface-tint, transparent);
+
+  p {
+    margin: 0;
+    white-space: pre-wrap;
+    color: var(--user-text);
+    line-height: 1.65;
+  }
+}
+
+.story-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  span {
+    color: var(--user-text-muted);
+    font-size: 12px;
+  }
 }
 
 .cc-metric-grid {

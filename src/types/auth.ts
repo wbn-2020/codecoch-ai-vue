@@ -22,6 +22,7 @@ export interface CurrentUserVO {
   email?: string | null
   roles: RoleCode[]
   permissions?: string[]
+  mustChangePassword?: boolean
 }
 
 export interface LoginVO {

@@ -108,6 +108,12 @@ export const getProjectStoryGenerationsApi = (projectId: number, params?: Projec
   )
 }
 
+export const getAcceptedProjectStoriesApi = () => {
+  return request.get<ProjectStoryGenerationVO[], ProjectStoryGenerationVO[]>(
+    '/project-evidence/stories'
+  )
+}
+
 export const acceptProjectStoryGenerationApi = (projectId: number, generationId: number) => {
   return request.post<ProjectStoryGenerationVO, ProjectStoryGenerationVO>(
     `/project-evidence/${projectId}/generations/${generationId}/accept`
