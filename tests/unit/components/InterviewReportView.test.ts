@@ -121,6 +121,29 @@ describe('InterviewReportView metrics', () => {
     expect(recordAgentMetricEventApi).not.toHaveBeenCalled()
   })
 
+  it.each([undefined, [], [null, {}, 123], [{ questionContent: ' ', userAnswer: ' ' }]])(
+    'does not promise a minimum replay without displayable evidence: %j', async (qaReview) => {
+      vi.mocked(getInterviewReportApi).mockResolvedValue({
+        interviewId: 42, reportStatus: 'FAILED', qaReview
+      } as never)
+      const wrapper = await mountReport()
+      expect(wrapper.text()).toContain('暂未读取到可复盘问答')
+      expect(wrapper.text()).not.toContain('最低可用复盘已基于已保存问答生成')
+      wrapper.unmount()
+    }
+  )
+
+  it('shows minimum replay only when saved question and answer are displayable', async () => {
+    vi.mocked(getInterviewReportApi).mockResolvedValue({
+      interviewId: 42, reportStatus: 'FAILED', questionReviews: [],
+      qaReview: [{ questionContent: '问题一', userAnswer: '回答一' }]
+    } as never)
+    const wrapper = await mountReport()
+    expect(wrapper.text()).toContain('最低可用复盘已基于已保存问答生成')
+    expect(wrapper.text()).toContain('回答一')
+    wrapper.unmount()
+  })
+
   it('records one shown metric when backend nextActions are already displayed', async () => {
     vi.mocked(getInterviewReportApi).mockResolvedValue({
       id: 100,

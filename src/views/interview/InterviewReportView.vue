@@ -1120,9 +1120,18 @@ const primaryNextActionMeta = computed(() => {
   if (primaryNextAction.value.actionType === 'RESUME_OPTIMIZE') return '用于补齐项目证据、简历和面试表达之间的闭环。'
   return '当前证据不足，先用完整面试补样本。'
 })
-const qaMessages = computed<InterviewMessageVO[]>(() =>
-  objectItems<InterviewMessageVO>(report.value?.questionReviews || report.value?.qaReview || report.value?.messages)
-)
+const qaMessages = computed<InterviewMessageVO[]>(() => {
+  for (const source of [report.value?.questionReviews, report.value?.qaReview, report.value?.messages]) {
+    const items = objectItems<InterviewMessageVO>(source).filter((item) => {
+      const fields = item as unknown as Record<string, unknown>
+      const hasText = (keys: string[]) => keys.some((key) =>
+        typeof fields[key] === 'string' && (fields[key] as string).trim().length > 0)
+      return hasText(['question', 'questionContent']) && hasText(['answer', 'userAnswer'])
+    })
+    if (items.length) return items
+  }
+  return []
+})
 const recommendedQuestionIds = computed(() =>
   recommendedQuestions.value
     .map((item) => Number(item.questionId || item.id))
@@ -1358,6 +1367,9 @@ const recoveryTitle = computed(() => {
   return '暂时没有可验证的面试报告'
 })
 const recoveryLead = computed(() => {
+  if ((isUnscorable.value || isFailed.value) && !qaMessages.value.length) {
+    return '暂未读取到可复盘问答，无法确认最低可用复盘已生成。可重新查询或重新生成报告。'
+  }
   if (isUnscorable.value) return '已保留本轮问答明细；在缺少足够证据时，系统不会补写分数、短板或推荐题。'
   if (isFailed.value) return '最低可用复盘已基于已保存问答生成，不含综合得分。重新生成后才会整理优缺点与评分。'
   return '页面没有拿到可展示的复盘结果，因此不会补写分数、短板或推荐题。'

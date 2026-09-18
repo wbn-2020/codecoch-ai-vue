@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const routerPush = vi.hoisted(() => vi.fn())
 const detailApi = vi.hoisted(() => vi.fn())
 const listApi = vi.hoisted(() => vi.fn())
+const storiesApi = vi.hoisted(() => vi.fn().mockResolvedValue({
+  records: [], total: 0, pageNo: 1, pageSize: 8, pages: 0
+}))
 const routeState = vi.hoisted(() => ({
   params: { id: '9701708' },
   query: {} as Record<string, string>
@@ -16,7 +19,8 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api/projectEvidence', () => ({
   getProjectEvidenceDetailApi: detailApi,
-  getProjectEvidenceListApi: listApi
+  getProjectEvidenceListApi: listApi,
+  getAcceptedProjectStoriesApi: storiesApi
 }))
 
 import ProjectEvidenceDetailView from '@/views/project-evidence/ProjectEvidenceDetailView.vue'
@@ -118,11 +122,86 @@ describe('ProjectEvidenceDetailView empty-state hardening', () => {
   })
 })
 
+describe('ProjectEvidenceListView story pagination', () => {
+  const page = (pageNo: number, total = 105) => ({
+    records: [{ id: pageNo, projectEvidenceId: 31, projectTitle: '故事项目', resultText: `故事-${pageNo}` }],
+    total, pageNo, pageSize: 8, pages: Math.ceil(total / 8)
+  })
+  const mountStories = () => shallowMount(ProjectEvidenceListView, {
+    global: {
+      directives: { loading: () => undefined },
+      stubs: {
+        'el-pagination': {
+          props: ['currentPage', 'pageSize', 'total', 'disabled'],
+          emits: ['update:current-page', 'current-change'],
+          template: '<button class="next-story-page" @click="$emit(\'update:current-page\', currentPage + 1); $emit(\'current-change\', currentPage + 1)">next</button>'
+        }
+      }
+    }
+  })
+
+  beforeEach(() => {
+    listApi.mockResolvedValue({ records: [], total: 0, pageNo: 1, pageSize: 8, pages: 0 })
+    storiesApi.mockReset()
+  })
+
+  it('loads server pages independently and renders stories beyond the first 100', async () => {
+    storiesApi.mockResolvedValueOnce(page(1)).mockResolvedValueOnce(page(2)).mockResolvedValueOnce(page(14))
+    const wrapper = mountStories()
+    await flushPromises()
+    expect(storiesApi).toHaveBeenLastCalledWith({ pageNo: 1, pageSize: 8 })
+    expect(wrapper.find('.story-card').text()).toContain('故事-1')
+    await wrapper.find('.next-story-page').trigger('click')
+    await flushPromises()
+    expect(storiesApi).toHaveBeenLastCalledWith({ pageNo: 2, pageSize: 8 })
+    expect(wrapper.find('.story-card').text()).toContain('故事-2')
+    const state = wrapper.vm.$.setupState
+    state.storiesQuery.pageNo = 14
+    await state.fetchStories()
+    expect(storiesApi).toHaveBeenLastCalledWith({ pageNo: 14, pageSize: 8 })
+    expect(wrapper.find('.story-card').text()).toContain('故事-14')
+    expect(state.query.pageNo).toBe(1)
+    wrapper.unmount()
+  })
+
+  it('keeps the requested page for retry after a failure', async () => {
+    storiesApi.mockResolvedValueOnce(page(1)).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(page(2))
+    const wrapper = mountStories()
+    await flushPromises()
+    await wrapper.find('.next-story-page').trigger('click')
+    await flushPromises()
+    const state = wrapper.vm.$.setupState
+    expect(state.storiesError).toBeTruthy()
+    expect(wrapper.find('.story-card').exists()).toBe(false)
+    await state.fetchStories()
+    expect(storiesApi).toHaveBeenLastCalledWith({ pageNo: 2, pageSize: 8 })
+    expect(state.storiesError).toBe('')
+    expect(wrapper.find('.story-card').text()).toContain('故事-2')
+    wrapper.unmount()
+  })
+
+  it('returns to the last available page after stories disappear', async () => {
+    storiesApi.mockResolvedValueOnce(page(1))
+      .mockResolvedValueOnce({ ...page(14, 8), records: [] })
+      .mockResolvedValueOnce(page(1, 8))
+    const wrapper = mountStories()
+    await flushPromises()
+    const state = wrapper.vm.$.setupState
+    state.storiesQuery.pageNo = 14
+    await state.fetchStories()
+    expect(storiesApi).toHaveBeenLastCalledWith({ pageNo: 1, pageSize: 8 })
+    expect(state.storiesLoading).toBe(false)
+    expect(wrapper.find('.story-card').text()).toContain('故事-1')
+    wrapper.unmount()
+  })
+})
+
 describe('ProjectEvidenceListView list-context handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     routerPush.mockClear()
     listApi.mockReset()
+    storiesApi.mockReset().mockResolvedValue({ records: [], total: 0, pageNo: 1, pageSize: 8, pages: 0 })
   })
 
   it('passes list context via route query when opening a detail', async () => {

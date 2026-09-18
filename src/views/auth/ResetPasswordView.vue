@@ -50,7 +50,7 @@
             v-model="form.newPassword"
             size="large"
             type="password"
-            placeholder="请输入新密码（至少 6 位）"
+            placeholder="请输入新密码（6-16 位）"
             show-password
           />
         </el-form-item>
@@ -144,7 +144,7 @@ const validateConfirm = (_rule: unknown, value: string, callback: (error?: Error
 const rules: FormRules = {
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码至少 6 位', trigger: 'blur' }
+    { min: 6, max: 16, message: '密码长度为 6-16 位', trigger: 'blur' }
   ],
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },

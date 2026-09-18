@@ -92,7 +92,7 @@ const rules: FormRules<RegisterDTO> = {
   email: [{ type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 32, message: '密码长度为 6-32 位', trigger: 'blur' }
+    { min: 6, max: 16, message: '密码长度为 6-16 位', trigger: 'blur' }
   ],
   confirmPassword: [{ validator: validateConfirmPassword, trigger: 'blur' }]
 }

@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { PageResult } from '@/types/api'
+import type { PageQuery, PageResult } from '@/types/api'
 import type {
   ProjectEvidenceDetailVO,
   ProjectEvidenceDTO,
@@ -108,9 +108,10 @@ export const getProjectStoryGenerationsApi = (projectId: number, params?: Projec
   )
 }
 
-export const getAcceptedProjectStoriesApi = () => {
-  return request.get<ProjectStoryGenerationVO[], ProjectStoryGenerationVO[]>(
-    '/project-evidence/stories'
+export const getAcceptedProjectStoriesApi = (params?: PageQuery) => {
+  return request.get<PageResult<ProjectStoryGenerationVO>, PageResult<ProjectStoryGenerationVO>>(
+    '/project-evidence/stories',
+    { params }
   )
 }
 

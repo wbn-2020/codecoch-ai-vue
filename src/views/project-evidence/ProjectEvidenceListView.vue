@@ -60,6 +60,17 @@
           title="还没有已采纳的 STAR 故事"
           description="进入项目详情生成 STAR 叙述并采纳后，会汇总到这里，方便跨项目复用。"
         />
+        <div v-if="storiesTotal > storiesQuery.pageSize" class="pagination-wrap story-pagination">
+          <el-pagination
+            v-model:current-page="storiesQuery.pageNo"
+            :page-size="storiesQuery.pageSize"
+            :total="storiesTotal"
+            :disabled="storiesLoading"
+            background
+            layout="total, prev, pager, next"
+            @current-change="fetchStories"
+          />
+        </div>
       </div>
     </section>
 
@@ -235,6 +246,9 @@ const items = ref<ProjectEvidenceListVO[]>([])
 const storiesLoading = ref(false)
 const storiesError = ref('')
 const stories = ref<ProjectStoryGenerationVO[]>([])
+const storiesQuery = reactive({ pageNo: 1, pageSize: 8 })
+const storiesTotal = ref(0)
+let storiesRequestId = 0
 const query = reactive<ProjectEvidenceQueryDTO>({
   pageNo: 1,
   pageSize: 8,
@@ -281,16 +295,28 @@ const proofSummary = (item: ProjectEvidenceListVO) => {
 }
 
 const fetchStories = async () => {
+  const requestId = ++storiesRequestId
   storiesLoading.value = true
   storiesError.value = ''
   try {
-    const result = await getAcceptedProjectStoriesApi()
-    stories.value = Array.isArray(result) ? result : []
+    const page = await getAcceptedProjectStoriesApi({ ...storiesQuery })
+    if (requestId !== storiesRequestId) return
+    storiesTotal.value = page.total
+    storiesQuery.pageSize = page.pageSize
+    const lastPage = Math.max(1, page.pages)
+    if (storiesQuery.pageNo > lastPage) {
+      storiesQuery.pageNo = lastPage
+      await fetchStories()
+      return
+    }
+    storiesQuery.pageNo = page.pageNo
+    stories.value = page.records
   } catch (error) {
+    if (requestId !== storiesRequestId) return
     stories.value = []
     storiesError.value = toFriendlyMessage(error, '暂时无法读取已采纳的 STAR 故事。')
   } finally {
-    storiesLoading.value = false
+    if (requestId === storiesRequestId) storiesLoading.value = false
   }
 }
 
@@ -352,6 +378,22 @@ onMounted(() => {
   color: var(--user-text);
 }
 
+.story-bank,
+.story-bank > .content-card__body,
+.story-grid,
+.story-card,
+.story-card__meta,
+.story-card__meta strong,
+.story-card p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.story-pagination {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .story-bank {
   border: 1px solid var(--user-border);
   border-radius: var(--user-radius-xl, 16px);
@@ -388,7 +430,7 @@ onMounted(() => {
 
 .story-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 12px;
 }
 
@@ -402,6 +444,7 @@ onMounted(() => {
 
   p {
     margin: 0;
+    overflow-wrap: anywhere;
     white-space: pre-wrap;
     color: var(--user-text);
     line-height: 1.65;
@@ -410,9 +453,13 @@ onMounted(() => {
 
 .story-card__meta {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+
+  strong {
+    overflow-wrap: anywhere;
+  }
 
   span {
     color: var(--user-text-muted);
